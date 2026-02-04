@@ -17,8 +17,8 @@ type ResponseAnswerRepository interface {
 	// Create saves a new admin
 	Create(ctx context.Context, answer *entities.ResponseAnswer) error
 	// Bulk insert
-	CreateBulk(ctx context.Context, tx Transaction, answers []*entities.ResponseAnswer) error
-	GetByID(ctx context.Context, tx Transaction, id uuid.UUID) (*entities.ResponseAnswer, error)
-	List(ctx context.Context, tx Transaction, filter ResponseAnswerFilter) ([]*entities.ResponseAnswer, error)
-	Delete(ctx context.Context, tx Transaction, id uuid.UUID) error
+	CreateBulk(ctx context.Context, answers []*entities.ResponseAnswer) error
+	GetByID(ctx context.Context, id uuid.UUID) (*entities.ResponseAnswer, error)
+	List(ctx context.Context, filter ResponseAnswerFilter) ([]*entities.ResponseAnswer, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }

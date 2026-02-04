@@ -38,10 +38,7 @@ func NewResponseRepository(base *BaseRepository) *ResponseRepository {
 // Behavior:
 // - Generates UUID if missing
 // - submitted_at is set by database (NOW())
-func (r *ResponseRepository) Create(
-	ctx context.Context,
-	response *entities.Response,
-) error {
+func (r *ResponseRepository) Create(ctx context.Context, response *entities.Response) error {
 
 	if response.ID == uuid.Nil {
 		response.ID = uuid.New()
@@ -70,10 +67,7 @@ func (r *ResponseRepository) Create(
 }
 
 // GetByID retrieves a response by its ID.
-func (r *ResponseRepository) GetByID(
-	ctx context.Context,
-	id uuid.UUID,
-) (*entities.Response, error) {
+func (r *ResponseRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.Response, error) {
 
 	const query = `
 		SELECT
@@ -103,10 +97,7 @@ func (r *ResponseRepository) GetByID(
 // ListByFormID retrieves all responses for a specific form.
 //
 // Results are ordered by submission time (latest first).
-func (r *ResponseRepository) ListByFormID(
-	ctx context.Context,
-	formID uuid.UUID,
-) ([]*entities.Response, error) {
+func (r *ResponseRepository) ListByFormID(ctx context.Context, formID uuid.UUID) ([]*entities.Response, error) {
 
 	if formID == uuid.Nil {
 		return nil, errors.New("responseRepository.ListByFormID: missing formID")
@@ -149,10 +140,7 @@ func (r *ResponseRepository) ListByFormID(
 }
 
 // Delete removes a response by its ID.
-func (r *ResponseRepository) Delete(
-	ctx context.Context,
-	id uuid.UUID,
-) error {
+func (r *ResponseRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	const query = `
 		DELETE FROM responses

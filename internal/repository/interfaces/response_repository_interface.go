@@ -13,8 +13,8 @@ type ResponseFilter struct {
 }
 
 type ResponseRepository interface {
-	Create(ctx context.Context, tx Transaction, response *entities.Response) error
-	GetByID(ctx context.Context, tx Transaction, id uuid.UUID) (*entities.Response, error)
-	Delete(ctx context.Context, tx Transaction, id uuid.UUID) error
-	ListByFormID(ctx context.Context, tx Transaction, formID uuid.UUID) ([]*entities.Response, error)
+	Create(ctx context.Context, response *entities.Response) error
+	GetByID(ctx context.Context, id uuid.UUID) (*entities.Response, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	ListByFormID(ctx context.Context, formID uuid.UUID) ([]*entities.Response, error)
 }

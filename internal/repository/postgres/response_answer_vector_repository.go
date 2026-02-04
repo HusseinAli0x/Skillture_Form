@@ -38,10 +38,7 @@ func NewResponseAnswerVectorRepository(base *BaseRepository) *ResponseAnswerVect
 // Behavior:
 // - Generates UUID if missing
 // - Stores embedding vector (e.g. pgvector)
-func (r *ResponseAnswerVectorRepository) Create(
-	ctx context.Context,
-	vector *entities.ResponseAnswerVector,
-) error {
+func (r *ResponseAnswerVectorRepository) Create(ctx context.Context, vector *entities.ResponseAnswerVector) error {
 
 	if vector.ID == uuid.Nil {
 		vector.ID = uuid.New()
@@ -72,10 +69,7 @@ func (r *ResponseAnswerVectorRepository) Create(
 }
 
 // GetByID retrieves a vector embedding by its ID.
-func (r *ResponseAnswerVectorRepository) GetByID(
-	ctx context.Context,
-	id uuid.UUID,
-) (*entities.ResponseAnswerVector, error) {
+func (r *ResponseAnswerVectorRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.ResponseAnswerVector, error) {
 
 	const query = `
 		SELECT
@@ -110,9 +104,7 @@ func (r *ResponseAnswerVectorRepository) GetByID(
 // Assumption:
 // - One vector per response answer
 func (r *ResponseAnswerVectorRepository) GetByResponseAnswerID(
-	ctx context.Context,
-	responseAnswerID uuid.UUID,
-) (*entities.ResponseAnswerVector, error) {
+	ctx context.Context, responseAnswerID uuid.UUID) (*entities.ResponseAnswerVector, error) {
 
 	const query = `
 		SELECT
@@ -142,10 +134,7 @@ func (r *ResponseAnswerVectorRepository) GetByResponseAnswerID(
 }
 
 // Delete removes a vector embedding by its ID.
-func (r *ResponseAnswerVectorRepository) Delete(
-	ctx context.Context,
-	id uuid.UUID,
-) error {
+func (r *ResponseAnswerVectorRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	const query = `
 		DELETE FROM response_answer_vectors
@@ -161,10 +150,7 @@ func (r *ResponseAnswerVectorRepository) Delete(
 
 // DeleteByResponseAnswerID removes vector embedding
 // associated with a specific response answer.
-func (r *ResponseAnswerVectorRepository) DeleteByResponseAnswerID(
-	ctx context.Context,
-	responseAnswerID uuid.UUID,
-) error {
+func (r *ResponseAnswerVectorRepository) DeleteByResponseAnswerID(ctx context.Context, responseAnswerID uuid.UUID) error {
 
 	if responseAnswerID == uuid.Nil {
 		return errors.New("responseAnswerVectorRepository.DeleteByResponseAnswerID: missing responseAnswerID")

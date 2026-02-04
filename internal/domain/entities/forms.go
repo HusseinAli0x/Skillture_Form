@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Forms struct {
+type Form struct {
 	ID          uuid.UUID        `db:"id" json:"id"`
 	Title       string           `db:"title" json:"title"`
 	Description string           `db:"description" json:"description"`
@@ -20,23 +20,23 @@ var ErrInvalidFormStatus = errors.New("invalid form status")
 
 // TableName returns the DB table name
 
-func (Forms) TableName() string {
+func (Form) TableName() string {
 	return "forms"
 }
 
 // IsActive checks if the form is active
 
-func (f *Forms) IsActive() bool {
+func (f *Form) IsActive() bool {
 	return f.Status == 1
 }
 
 // Deactivate marks the form as inactive
-func (f *Forms) Deactivate() {
+func (f *Form) Deactivate() {
 	f.Status = 0
 }
 
 // IsValid validates domain rules
-func (f *Forms) IsValid() error {
+func (f *Form) IsValid() error {
 	if !f.Status.IsValid() {
 		return ErrInvalidFormStatus
 	}

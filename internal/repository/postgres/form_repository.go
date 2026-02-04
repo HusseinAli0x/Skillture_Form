@@ -38,10 +38,7 @@ func NewFormsRepository(base *BaseRepository) *FormsRepository {
 // Behavior:
 // - Generates UUID if missing
 // - Sets created_at at DB level (recommended)
-func (r *FormsRepository) Create(
-	ctx context.Context,
-	form *entities.Forms,
-) error {
+func (r *FormsRepository) Create(ctx context.Context, form *entities.Form) error {
 
 	if form.ID == uuid.Nil {
 		form.ID = uuid.New()
@@ -72,10 +69,7 @@ func (r *FormsRepository) Create(
 }
 
 // GetByID retrieves a form by its ID.
-func (r *FormsRepository) GetByID(
-	ctx context.Context,
-	id uuid.UUID,
-) (*entities.Forms, error) {
+func (r *FormsRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.Form, error) {
 
 	const query = `
 		SELECT
@@ -90,7 +84,7 @@ func (r *FormsRepository) GetByID(
 
 	row := r.base.QueryRow(ctx, query, id)
 
-	var form entities.Forms
+	var form entities.Form
 	if err := row.Scan(
 		&form.ID,
 		&form.Title,
@@ -105,10 +99,7 @@ func (r *FormsRepository) GetByID(
 }
 
 // Update modifies an existing form.
-func (r *FormsRepository) Update(
-	ctx context.Context,
-	form *entities.Forms,
-) error {
+func (r *FormsRepository) Update(ctx context.Context, form *entities.Form) error {
 
 	if form.ID == uuid.Nil {
 		return errors.New("formsRepository.Update: missing ID")
@@ -138,10 +129,7 @@ func (r *FormsRepository) Update(
 }
 
 // Delete removes a form by ID.
-func (r *FormsRepository) Delete(
-	ctx context.Context,
-	id uuid.UUID,
-) error {
+func (r *FormsRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	const query = `
 		DELETE FROM forms
@@ -156,9 +144,7 @@ func (r *FormsRepository) Delete(
 }
 
 // List retrieves all forms ordered by creation date.
-func (r *FormsRepository) List(
-	ctx context.Context,
-) ([]*entities.Forms, error) {
+func (r *FormsRepository) List(ctx context.Context) ([]*entities.Form, error) {
 
 	const query = `
 		SELECT
@@ -177,10 +163,10 @@ func (r *FormsRepository) List(
 	}
 	defer rows.Close()
 
-	var forms []*entities.Forms
+	var forms []*entities.Form
 
 	for rows.Next() {
-		var form entities.Forms
+		var form entities.Form
 		if err := rows.Scan(
 			&form.ID,
 			&form.Title,
