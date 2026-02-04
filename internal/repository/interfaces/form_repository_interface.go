@@ -16,13 +16,13 @@ type FormFilter struct {
 
 type FormRepository interface {
 	// Create saves
-	Create(ctx context.Context, form *entities.Forms) error
+	Create(ctx context.Context, tx Transaction, form *entities.Form) error
 	// GetByID retrieves an admin by their ID
-	GetByID(ctx context.Context, id uuid.UUID) (*entities.Forms, error)
+	GetByID(ctx context.Context, tx Transaction, id uuid.UUID) (*entities.Form, error)
 	// Update modifies admin details
-	Update(ctx context.Context, form *entities.Forms) error
+	Update(ctx context.Context, tx Transaction, form *entities.Form) error
 	// Delete removes an admin
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, tx Transaction, id uuid.UUID) error
 	// List retrieves forms based on optional filter
-	List(ctx context.Context, filter FormFilter) ([]*entities.Forms, error)
+	List(ctx context.Context, tx Transaction, filter FormFilter) ([]*entities.Form, error)
 }
