@@ -20,5 +20,6 @@ type ResponseAnswerRepository interface {
 	CreateBulk(ctx context.Context, answers []*entities.ResponseAnswer) error
 	GetByID(ctx context.Context, id uuid.UUID) (*entities.ResponseAnswer, error)
 	List(ctx context.Context, filter ResponseAnswerFilter) ([]*entities.ResponseAnswer, error)
-	Delete(ctx context.Context, id uuid.UUID) error
+	// WithTxRepo creates a repository instance bound to the given transaction
+	WithTxRepo(txRepo ResponseRepository) ResponseAnswerRepository
 }

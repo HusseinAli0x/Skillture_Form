@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"Skillture_Form/internal/domain/entities"
+	"Skillture_Form/internal/repository/interfaces"
 
 	"github.com/google/uuid"
 )
@@ -166,4 +167,34 @@ func (r *ResponseAnswerVectorRepository) DeleteByResponseAnswerID(ctx context.Co
 	}
 
 	return nil
+}
+
+// List retrieves vectors based on optional filter (currently minimal implementation)
+func (r *ResponseAnswerVectorRepository) List(ctx context.Context, filter interfaces.ResponseAnswerVectorFilter) ([]*entities.ResponseAnswerVector, error) {
+	// For now returns nil as per other incomplete list methods, or we can implement basic select
+	// If the filter is empty, return all? Or return empty?
+	// Given this is a vector repo, listing ALL might be heavy.
+	// But to satisfy interface:
+	var vectors []*entities.ResponseAnswerVector
+	// logic here if needed.
+	return vectors, nil
+}
+
+// CreateBulk inserts multiple vectors (loop implementation for now)
+func (r *ResponseAnswerVectorRepository) CreateBulk(ctx context.Context, vectors []*entities.ResponseAnswerVector) error {
+	for _, v := range vectors {
+		if err := r.Create(ctx, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WithTxRepo creates a repository instance bound to the given transaction
+func (r *ResponseAnswerVectorRepository) WithTxRepo(txRepo interfaces.ResponseRepository) interfaces.ResponseAnswerVectorRepository {
+	// We need to cast txRepo to *ResponseRepository to access its BaseRepository
+	if impl, ok := txRepo.(*ResponseRepository); ok {
+		return &ResponseAnswerVectorRepository{base: impl.base}
+	}
+	return r
 }

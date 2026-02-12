@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"Skillture_Form/internal/domain/entities"
+	"Skillture_Form/internal/repository/interfaces"
 
 	"github.com/google/uuid"
 )
@@ -23,7 +24,7 @@ func NewResponseRepository(base *BaseRepository) *ResponseRepository {
 }
 
 // WithTx executes the given function inside a database transaction.
-func (r *ResponseRepository) WithTx(ctx context.Context, fn func(txRepo *ResponseRepository) error) error {
+func (r *ResponseRepository) WithTx(ctx context.Context, fn func(txRepo interfaces.ResponseRepository) error) error {
 	return r.base.WithTx(ctx, func(txBase *BaseRepository) error {
 		txRepo := &ResponseRepository{base: txBase}
 		return fn(txRepo)

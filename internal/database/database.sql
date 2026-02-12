@@ -115,5 +115,5 @@ CREATE INDEX idx_form_fields_form_id ON form_fields(form_id);
 CREATE INDEX idx_responses_form_id ON responses(form_id);
 CREATE INDEX idx_response_answers_response_id ON response_answers(response_id);
 CREATE INDEX idx_response_answers_field_id ON response_answers(field_id);
-CREATE INDEX idx_response_answers_value USING GIN (value); -- JSONB search
-CREATE INDEX idx_response_answer_vectors_embedding USING hnsw (embedding vector_cosine_ops); -- Vector similarity
+CREATE INDEX idx_response_answers_value ON response_answers USING GIN (value); -- JSONB search
+CREATE INDEX idx_response_answer_vectors_embedding ON response_answer_vectors USING hnsw (embedding vector_cosine_ops); -- Vector similarity

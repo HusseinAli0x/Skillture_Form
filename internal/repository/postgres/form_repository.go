@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"Skillture_Form/internal/domain/entities"
+	"Skillture_Form/internal/repository/interfaces"
 
 	"github.com/google/uuid"
 )
@@ -144,7 +145,7 @@ func (r *FormsRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // List retrieves all forms ordered by creation date.
-func (r *FormsRepository) List(ctx context.Context) ([]*entities.Form, error) {
+func (r *FormsRepository) List(ctx context.Context, filter interfaces.FormFilter) ([]*entities.Form, error) {
 
 	const query = `
 		SELECT

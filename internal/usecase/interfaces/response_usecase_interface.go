@@ -9,10 +9,9 @@ import (
 
 // ResponseUseCase defines operations for form submissions
 type ResponseUseCase interface {
-	Create(ctx context.Context, response *entities.Response) error
 
 	// Submit creates a new response with its answers
-	Submit(ctx context.Context, response *entities.Response) error
+	Submit(ctx context.Context, response *entities.Response, answers []*entities.ResponseAnswer, vectors []*entities.ResponseAnswerVector) error
 
 	// GetByID fetches a response by its ID
 	GetByID(ctx context.Context, id uuid.UUID) (*entities.Response, error)

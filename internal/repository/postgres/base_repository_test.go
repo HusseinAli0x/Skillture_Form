@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -13,12 +14,30 @@ func TestBaseRepository_CRUD(t *testing.T) {
 	// =========================
 	//    DB test
 	// =========================
-	dbHost := "localhost"
-	dbPort := "5432"
-	dbUser := "hussein"
-	dbPassword := "hussein"
-	dbName := "skillture_test"
-	dbSSLMode := "disable"
+	dbHost := os.Getenv("DB_HOST")
+	if dbHost == "" {
+		dbHost = "localhost"
+	}
+	dbPort := os.Getenv("DB_PORT")
+	if dbPort == "" {
+		dbPort = "5432"
+	}
+	dbUser := os.Getenv("DB_USER")
+	if dbUser == "" {
+		dbUser = "cpper"
+	}
+	dbPassword := os.Getenv("DB_PASSWORD")
+	if dbPassword == "" {
+		dbPassword = "0770"
+	}
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		dbName = "skillture_form"
+	}
+	dbSSLMode := os.Getenv("DB_SSL_MODE")
+	if dbSSLMode == "" {
+		dbSSLMode = "disable"
+	}
 
 	connStr :=
 		"host=" + dbHost +

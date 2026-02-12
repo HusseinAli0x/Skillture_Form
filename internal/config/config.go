@@ -122,7 +122,7 @@ func LoadDatabaseConfig() DatabaseConfig {
 		Port:     getEnv("DB_PORT", "5432"),
 		User:     getEnv("DB_USER", "cpper"),
 		Password: getEnv("DB_PASSWORD", "0770"),
-		DBName:   getEnv("DB_NAME", "nahjdbv"),
+		DBName:   getEnv("DB_NAME", "skillture_form"),
 		SSLMode:  getEnv("DB_SSL_MODE", "disable"),
 
 		MaxOpenConns:      getEnvInt("DB_MAX_OPEN_CONNS", 50),

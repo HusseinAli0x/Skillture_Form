@@ -34,7 +34,7 @@ func validateSubmit(
 	}
 
 	for _, a := range answers {
-		delete(required, a.FormFieldID.String())
+		delete(required, a.FieldID.String())
 	}
 
 	if len(required) > 0 {

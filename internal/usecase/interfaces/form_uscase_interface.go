@@ -28,4 +28,7 @@ type FormUseCase interface {
 
 	// GetByID returns a form with its fields
 	GetByID(ctx context.Context, formID uuid.UUID) (*entities.Form, error)
+
+	// List retrieves all forms
+	List(ctx context.Context) ([]*entities.Form, error)
 }

@@ -20,7 +20,7 @@ func TestFormField_LabelAndPlaceholderAndHelpText(t *testing.T) {
 		},
 		Placeholder: map[string]string{
 			"en": "Enter your name",
-			"ar": "سيب",
+			"ar": "اكتب اسمك",
 		},
 		HelpText: map[string]string{
 			"en": "Please provide your full name",
@@ -47,8 +47,8 @@ func TestFormField_LabelAndPlaceholderAndHelpText(t *testing.T) {
 	if ff.GetPlaceholder("en") != "Enter your name" {
 		t.Errorf("expected English placeholder, got '%s'", ff.GetPlaceholder("en"))
 	}
-	if ff.GetPlaceholder("ar") != "سيب" {
-		t.Errorf("expected empty Arabic placeholder, got '%s'", ff.GetPlaceholder("ar"))
+	if ff.GetPlaceholder("ar") != "اكتب اسمك" {
+		t.Errorf("expected 'اكتب اسمك', got '%s'", ff.GetPlaceholder("ar"))
 	}
 	if ff.GetPlaceholder("fr") != "Enter your name" {
 		t.Errorf("expected fallback English placeholder, got '%s'", ff.GetPlaceholder("fr"))

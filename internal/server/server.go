@@ -1,29 +1,46 @@
 package server
 
-// import (
-// 	"log"
-// 	"os"
+import (
+	"log"
+	"os"
 
-// 	"github.com/gin-gonic/gin"
-// )
+	"Skillture_Form/internal/server/handlers"
 
-// // Start initializes and starts the HTTP server
-// func Start() {
-// 	// Create a default Gin router
-// 	r := gin.Default()
+	"github.com/gin-gonic/gin"
+)
 
-// 	// Setup middleware
-// 	setupMiddleware(r)
+// Server represents the HTTP server
+type Server struct {
+	router *gin.Engine
+}
 
-// 	// Setup routes
-// 	setupRoutes(r)
+// NewServer creates a new server instance with wired handlers
+func NewServer(
+	adminHandler *handlers.AdminHandler,
+	formHandler *handlers.FormHandler,
+	fieldHandler *handlers.FormFieldHandler,
+	responseHandler *handlers.ResponseHandler,
+) *Server {
 
-// 	// Get port from environment or default to 8080
-// 	port := os.Getenv("SERVER_PORT")
-// 	if port == "" {
-// 		port = "8080"
-// 	}
+	r := gin.Default()
 
-// 	log.Printf("Server running on port %s", port)
-// 	r.Run(":" + port) // Run the server
-// }
+	// Apply Middleware (CORS, etc.) if needed
+	// r.Use(corsMiddleware())
+
+	SetupRoutes(r, adminHandler, formHandler, fieldHandler, responseHandler)
+
+	return &Server{
+		router: r,
+	}
+}
+
+// Run starts the server
+func (s *Server) Run() error {
+	port := os.Getenv("SERVER_PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Server running on port %s", port)
+	return s.router.Run(":" + port)
+}

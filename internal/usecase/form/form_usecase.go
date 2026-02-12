@@ -138,3 +138,8 @@ func (u *formUseCase) GetByID(ctx context.Context, formID uuid.UUID) (*entities.
 
 	return u.formRepo.GetByID(ctx, formID)
 }
+
+// List retrieves all forms.
+func (u *formUseCase) List(ctx context.Context) ([]*entities.Form, error) {
+	return u.formRepo.List(ctx, repo.FormFilter{})
+}
