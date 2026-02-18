@@ -1,8 +1,9 @@
 package interfaces
 
 import (
-	"Skillture_Form/internal/domain/entities"
 	"context"
+
+	"Skillture_Form/internal/domain/entities"
 
 	"github.com/google/uuid"
 )
@@ -14,12 +15,10 @@ type ResponseAnswerFilter struct {
 }
 
 type ResponseAnswerRepository interface {
-	// Create saves a new admin
 	Create(ctx context.Context, answer *entities.ResponseAnswer) error
-	// Bulk insert
 	CreateBulk(ctx context.Context, answers []*entities.ResponseAnswer) error
 	GetByID(ctx context.Context, id uuid.UUID) (*entities.ResponseAnswer, error)
 	List(ctx context.Context, filter ResponseAnswerFilter) ([]*entities.ResponseAnswer, error)
-	// WithTxRepo creates a repository instance bound to the given transaction
-	WithTxRepo(txRepo ResponseRepository) ResponseAnswerRepository
+	// WithTx executes operations in a transaction
+	WithTx(ctx context.Context, fn func(txRepo ResponseAnswerRepository) error) error
 }

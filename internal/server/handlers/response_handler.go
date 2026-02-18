@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"Skillture_Form/internal/domain/entities"
 	"Skillture_Form/internal/domain/enums"
+	domainErr "Skillture_Form/internal/domain/errors"
 	"Skillture_Form/internal/usecase/interfaces"
 
 	"github.com/gin-gonic/gin"
@@ -63,12 +65,21 @@ func (h *ResponseHandler) Submit(c *gin.Context) {
 		})
 	}
 
-	// NOTE: vectors are currently not handled in the request payload as per usecase signature,
+	// NOTE: vectors are currently not represented in the request payload as per usecase signature,
 	// but can be added if the client generates them. For now passing empty slice.
 	// If the backend should generate them, that logic should be in the UseCase.
 	vectors := []*entities.ResponseAnswerVector{}
 
 	if err := h.responseUC.Submit(c.Request.Context(), response, answers, vectors); err != nil {
+		// Return 400 for known domain/business errors, 500 for unexpected errors
+		if errors.Is(err, domainErr.ErrFormNotPublished) ||
+			errors.Is(err, domainErr.ErrFormClosed) ||
+			errors.Is(err, domainErr.ErrMissingRequiredField) ||
+			errors.Is(err, domainErr.ErrInvalidInput) ||
+			errors.Is(err, domainErr.ErrNotFound) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -96,7 +107,7 @@ func (h *ResponseHandler) GetByID(c *gin.Context) {
 
 // ListByForm handles listing responses for a form
 func (h *ResponseHandler) ListByForm(c *gin.Context) {
-	formIDStr := c.Param("form_id")
+	formIDStr := c.Param("id")
 	formID, err := uuid.Parse(formIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid form_id"})

@@ -14,5 +14,12 @@ type ResponseRepository interface {
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]*entities.Response, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	// WithTx executes a function inside a transaction
-	WithTx(ctx context.Context, fn func(tx ResponseRepository) error) error
+	WithTx(
+		ctx context.Context,
+		fn func(
+			responseRepo ResponseRepository,
+			answerRepo ResponseAnswerRepository,
+			vectorRepo ResponseAnswerVectorRepository,
+		) error,
+	) error
 }

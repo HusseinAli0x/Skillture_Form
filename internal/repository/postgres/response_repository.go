@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"Skillture_Form/internal/domain/entities"
@@ -11,27 +10,36 @@ import (
 	"github.com/google/uuid"
 )
 
-// ResponseRepository provides PostgreSQL implementation
-// for managing form responses.
-// It supports transactions via BaseRepository.
+// ResponseRepository implements PostgreSQL operations for Responses
+// It supports transactional operations involving responses, answers, and vectors.
 type ResponseRepository struct {
 	base *BaseRepository
 }
 
-// NewResponseRepository creates a new ResponseRepository instance.
+// NewResponseRepository creates a new instance of ResponseRepository
 func NewResponseRepository(base *BaseRepository) *ResponseRepository {
 	return &ResponseRepository{base: base}
 }
 
 // WithTx executes the given function inside a database transaction.
-func (r *ResponseRepository) WithTx(ctx context.Context, fn func(txRepo interfaces.ResponseRepository) error) error {
+func (r *ResponseRepository) WithTx(
+	ctx context.Context,
+	fn func(
+		responseRepo interfaces.ResponseRepository,
+		answerRepo interfaces.ResponseAnswerRepository,
+		vectorRepo interfaces.ResponseAnswerVectorRepository,
+	) error,
+) error {
 	return r.base.WithTx(ctx, func(txBase *BaseRepository) error {
-		txRepo := &ResponseRepository{base: txBase}
-		return fn(txRepo)
+		return fn(
+			NewResponseRepository(txBase),
+			NewResponseAnswerRepository(txBase),
+			NewResponseAnswerVectorRepository(txBase),
+		)
 	})
 }
 
-// Create inserts a new response record.
+// Create inserts a new response
 func (r *ResponseRepository) Create(ctx context.Context, response *entities.Response) error {
 	if response.ID == uuid.Nil {
 		response.ID = uuid.New()
@@ -39,86 +47,64 @@ func (r *ResponseRepository) Create(ctx context.Context, response *entities.Resp
 
 	const query = `
 		INSERT INTO responses (
-			id,
-			form_id,
-			respondent,
-			submitted_at
-		) VALUES ($1, $2, $3, NOW())
+			id, form_id, respondent, status, submitted_at
+		) VALUES ($1, $2, $3, $4, $5)
 	`
 
-	if err := r.base.Exec(ctx, query, response.ID, response.FormID, response.Respondent); err != nil {
-		return fmt.Errorf("responseRepository.Create: %w", err)
-	}
-
-	return nil
+	return r.base.Exec(ctx, query, response.ID, response.FormID, response.Respondent, response.Status, response.SubmittedAt)
 }
 
-// GetByID retrieves a response by its ID.
+// GetByID retrieves a response by ID
 func (r *ResponseRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.Response, error) {
 	const query = `
-		SELECT
-			id,
-			form_id,
-			respondent,
-			submitted_at
+		SELECT id, form_id, respondent, status, submitted_at
 		FROM responses
-		WHERE id = $1
+		WHERE id=$1
 	`
 
 	row := r.base.QueryRow(ctx, query, id)
-	var response entities.Response
-	if err := row.Scan(&response.ID, &response.FormID, &response.Respondent, &response.SubmittedAt); err != nil {
-		return nil, fmt.Errorf("responseRepository.GetByID: %w", err)
+	var resp entities.Response
+	if err := row.Scan(&resp.ID, &resp.FormID, &resp.Respondent, &resp.Status, &resp.SubmittedAt); err != nil {
+		return nil, fmt.Errorf("GetByID: %w", err)
 	}
 
-	return &response, nil
+	return &resp, nil
 }
 
-// ListByFormID retrieves all responses for a specific form.
+// ListByFormID lists all responses of a form
 func (r *ResponseRepository) ListByFormID(ctx context.Context, formID uuid.UUID) ([]*entities.Response, error) {
-	if formID == uuid.Nil {
-		return nil, errors.New("responseRepository.ListByFormID: missing formID")
-	}
-
 	const query = `
-		SELECT
-			id,
-			form_id,
-			respondent,
-			submitted_at
+		SELECT id, form_id, respondent, status, submitted_at
 		FROM responses
-		WHERE form_id = $1
+		WHERE form_id=$1
 		ORDER BY submitted_at DESC
 	`
 
 	rows, err := r.base.Query(ctx, query, formID)
 	if err != nil {
-		return nil, fmt.Errorf("responseRepository.ListByFormID: %w", err)
+		return nil, fmt.Errorf("ListByFormID: %w", err)
 	}
 	defer rows.Close()
 
 	var responses []*entities.Response
 	for rows.Next() {
-		var response entities.Response
-		if err := rows.Scan(&response.ID, &response.FormID, &response.Respondent, &response.SubmittedAt); err != nil {
-			return nil, fmt.Errorf("responseRepository.ListByFormID.Scan: %w", err)
+		var resp entities.Response
+		if err := rows.Scan(&resp.ID, &resp.FormID, &resp.Respondent, &resp.Status, &resp.SubmittedAt); err != nil {
+			return nil, fmt.Errorf("ListByFormID.Scan: %w", err)
 		}
-		responses = append(responses, &response)
+		responses = append(responses, &resp)
 	}
 
 	return responses, nil
 }
 
-// Delete removes a response by its ID.
+// Delete removes a response by ID
 func (r *ResponseRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	const query = `DELETE FROM responses WHERE id = $1`
-
-	if err := r.base.Exec(ctx, query, id); err != nil {
-		return fmt.Errorf("responseRepository.Delete: %w", err)
-	}
-
-	return nil
+	const query = `DELETE FROM responses WHERE id=$1`
+	return r.base.Exec(ctx, query, id)
 }
-func (r *ResponseRepository) BaseRepo() *BaseRepository {
+
+// Base returns the underlying BaseRepository
+func (r *ResponseRepository) Base() *BaseRepository {
 	return r.base
 }

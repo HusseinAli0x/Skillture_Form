@@ -1,0 +1,15 @@
+# ============================================
+# Skillture - Manual Deployment Configuration
+# ============================================
+
+:80 {
+    # Serve React Frontend
+    root * /opt/skillture/web/dist
+    file_server
+    try_files {path} /index.html
+
+    # Proxy API Requests to Backend
+    handle /api/* {
+        reverse_proxy localhost:8080
+    }
+}

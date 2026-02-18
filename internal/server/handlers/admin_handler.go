@@ -94,3 +94,28 @@ func (h *AdminHandler) Delete(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+// LoginAdmin authenticates an admin and returns a simple response
+func (h *AdminHandler) LoginAdmin(c *gin.Context) {
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	admin, err := h.adminUC.Authenticate(c.Request.Context(), req.Username, req.Password)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+
+	// TODO: issue JWT token here
+	c.JSON(http.StatusOK, gin.H{
+		"id":       admin.ID,
+		"username": admin.Username,
+	})
+}

@@ -1,0 +1,52 @@
+:root {
+  /* Skillture Brand Colors */
+  --color-bg: #000000;
+  /* Black - main background */
+  --color-surface: #0a0a0a;
+  /* Near-black - cards, panels */
+  --color-primary: #0ccccc;
+  /* Teal/Cyan - primary actions */
+  --color-primary-hover: #01a3a3;
+  /* Dark Teal - hover states */
+  --color-text: #FFFFFF;
+  /* White - main text */
+  --color-text-muted: rgba(255, 255, 255, 0.6);
+  --color-border: #01a3a3;
+  /* Dark Teal - borders */
+  --color-danger: #FF4D4D;
+  /* Red - delete, errors */
+  --color-success: #22c55e;
+
+  --font-family: 'Berlin Sans FB', sans-serif;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}

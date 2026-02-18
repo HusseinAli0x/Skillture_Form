@@ -77,7 +77,8 @@ func (u *formUseCase) Update(ctx context.Context, form *entities.Form) error {
 	return u.formRepo.Update(ctx, form)
 }
 
-// Publish changes form status from Draft to Published.
+// Publish changes form status to Published (active).
+// Allows activation from both Draft and Closed states.
 func (u *formUseCase) Publish(ctx context.Context, formID uuid.UUID) error {
 
 	// Retrieve the form
@@ -86,9 +87,9 @@ func (u *formUseCase) Publish(ctx context.Context, formID uuid.UUID) error {
 		return err
 	}
 
-	// Only draft forms can be published
-	if form.Status != enums.FormStatusDraft {
-		return errors.New("only draft forms can be published")
+	// Already published — nothing to do
+	if form.Status == enums.FormStatusPublished {
+		return nil
 	}
 
 	// Change status to Published
@@ -140,6 +141,9 @@ func (u *formUseCase) GetByID(ctx context.Context, formID uuid.UUID) (*entities.
 }
 
 // List retrieves all forms.
-func (u *formUseCase) List(ctx context.Context) ([]*entities.Form, error) {
-	return u.formRepo.List(ctx, repo.FormFilter{})
+func (u *formUseCase) List(ctx context.Context, filter formUC.FormFilter) ([]*entities.Form, error) {
+	return u.formRepo.List(ctx, repo.FormFilter{
+		Status: filter.Status,
+		Title:  filter.Title,
+	})
 }

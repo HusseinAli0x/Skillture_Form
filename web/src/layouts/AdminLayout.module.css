@@ -1,0 +1,81 @@
+.container {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 260px;
+    background-color: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+}
+
+.logo {
+    margin-bottom: 2rem;
+    padding: 0.5rem 0;
+}
+
+.logoImg {
+    height: 36px;
+    width: auto;
+    display: block;
+}
+
+.nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.navItem {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    transition: all 0.2s;
+}
+
+.navItem:hover {
+    background-color: var(--color-bg);
+    text-decoration: none;
+    color: var(--color-text);
+}
+
+.navItem.active {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.footer {
+    margin-top: auto;
+}
+
+.logoutBtn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    border-radius: var(--radius-md);
+    transition: all 0.2s;
+}
+
+.logoutBtn:hover {
+    background-color: var(--color-danger);
+    color: white;
+}
+
+.main {
+    flex: 1;
+    padding: 2rem;
+    background-color: var(--color-bg);
+    overflow-y: auto;
+}

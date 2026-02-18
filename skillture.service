@@ -1,0 +1,15 @@
+[Unit]
+Description=Skillture Form Backend
+After=network.target postgresql.service
+
+[Service]
+User=skillture
+Group=skillture
+WorkingDirectory=/opt/skillture
+ExecStart=/opt/skillture/skillture-server
+Restart=always
+RestartSec=5
+EnvironmentFile=/opt/skillture/.env
+
+[Install]
+WantedBy=multi-user.target

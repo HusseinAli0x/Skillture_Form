@@ -15,9 +15,7 @@ type FormHandler struct {
 }
 
 func NewFormHandler(formUC interfaces.FormUseCase) *FormHandler {
-	return &FormHandler{
-		formUC: formUC,
-	}
+	return &FormHandler{formUC: formUC}
 }
 
 // Create handles form creation
@@ -47,7 +45,10 @@ func (h *FormHandler) Create(c *gin.Context) {
 
 // List handles listing forms
 func (h *FormHandler) List(c *gin.Context) {
-	forms, err := h.formUC.List(c.Request.Context())
+	// Simple filter extraction (can be enhanced)
+	filter := interfaces.FormFilter{}
+
+	forms, err := h.formUC.List(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

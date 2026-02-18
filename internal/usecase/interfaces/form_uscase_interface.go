@@ -1,11 +1,18 @@
 package interfaces
 
 import (
-	"Skillture_Form/internal/domain/entities"
 	"context"
+
+	"Skillture_Form/internal/domain/entities"
 
 	"github.com/google/uuid"
 )
+
+// FormFilter used for listing forms
+type FormFilter struct {
+	Status *int16
+	Title  *string
+}
 
 // FormUseCase defines all business operations related to forms
 // This represents the Application Layer (Use Cases)
@@ -26,9 +33,9 @@ type FormUseCase interface {
 	// Delete deletes a form even if it has responses
 	Delete(ctx context.Context, formID uuid.UUID) error
 
-	// GetByID returns a form with its fields
+	// GetByID returns a form by ID
 	GetByID(ctx context.Context, formID uuid.UUID) (*entities.Form, error)
 
-	// List retrieves all forms
-	List(ctx context.Context) ([]*entities.Form, error)
+	// List returns forms based on filter
+	List(ctx context.Context, filter FormFilter) ([]*entities.Form, error)
 }

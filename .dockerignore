@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Node modules (rebuilt in Docker)
+web/node_modules
+
+# Logo source files
+Skillture/
+
+# Test & debug files
+*.test
+*.out
+*.log
+*.txt
+coverage.*
+*.coverprofile
+profile.cov
+TestEndpoints.json
+
+# Environment (passed at runtime)
+.env
+
+# Docker
+docker-compose.yml
+
+# Go workspace
+go.work
+go.work.sum
+
+# Documentation artifacts
+docs/
+
+# Gemini
+.gemini/

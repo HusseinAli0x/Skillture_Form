@@ -64,3 +64,17 @@ func (u *adminUseCase) List(ctx context.Context) ([]*entities.Admin, error) {
 func (u *adminUseCase) Delete(ctx context.Context, id uuid.UUID) error {
 	return u.adminRepo.Delete(ctx, id)
 }
+
+// Authenticate validates an admin login attempt
+func (u *adminUseCase) Authenticate(ctx context.Context, username, password string) (*entities.Admin, error) {
+	admin, err := u.adminRepo.GetByUsername(ctx, username)
+	if err != nil {
+		return nil, errors.New("invalid username or password")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(admin.HashedPassword), []byte(password)); err != nil {
+		return nil, errors.New("invalid username or password")
+	}
+
+	return admin, nil
+}

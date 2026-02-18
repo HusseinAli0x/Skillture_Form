@@ -8,12 +8,12 @@ import (
 	"Skillture_Form/internal/domain/entities"
 	"Skillture_Form/internal/domain/enums"
 	repo "Skillture_Form/internal/repository/interfaces"
+	val "Skillture_Form/internal/validation"
 
 	"github.com/google/uuid"
 )
 
-// ResponseUsecase handles all business logic related to form responses
-// It orchestrates validation, domain rules, and persistence
+// ResponseUsecase handles all business logic for responses
 type ResponseUsecase struct {
 	formRepo      repo.FormRepository
 	formFieldRepo repo.FormFieldRepository
@@ -22,9 +22,14 @@ type ResponseUsecase struct {
 	vectorRepo    repo.ResponseAnswerVectorRepository
 }
 
-// NewResponseUsecase creates a new instance of ResponseUsecase
-// All required repositories are injected via dependency injection
-func NewResponseUsecase(formRepo repo.FormRepository, formFieldRepo repo.FormFieldRepository, responseRepo repo.ResponseRepository, answerRepo repo.ResponseAnswerRepository, vectorRepo repo.ResponseAnswerVectorRepository) *ResponseUsecase {
+// NewResponseUsecase creates a new ResponseUsecase
+func NewResponseUsecase(
+	formRepo repo.FormRepository,
+	formFieldRepo repo.FormFieldRepository,
+	responseRepo repo.ResponseRepository,
+	answerRepo repo.ResponseAnswerRepository,
+	vectorRepo repo.ResponseAnswerVectorRepository,
+) *ResponseUsecase {
 	return &ResponseUsecase{
 		formRepo:      formRepo,
 		formFieldRepo: formFieldRepo,
@@ -34,12 +39,7 @@ func NewResponseUsecase(formRepo repo.FormRepository, formFieldRepo repo.FormFie
 	}
 }
 
-// Submit handles the full lifecycle of submitting a form response:
-// - validates the response
-// - validates the form state
-// - persists the response
-// - persists answers
-// - persists optional vectors (bulk insert)
+// Submit handles a form submission with transaction support
 func (u *ResponseUsecase) Submit(
 	ctx context.Context,
 	response *entities.Response,
@@ -47,72 +47,90 @@ func (u *ResponseUsecase) Submit(
 	vectors []*entities.ResponseAnswerVector,
 ) error {
 
-	// ===== Domain validation =====
-	if err := response.IsValid(); err != nil {
+	// -------------------
+	// 1️⃣ Domain Validation
+	// -------------------
+	if err := val.ValidateResponseDomain(response); err != nil {
 		return err
 	}
 
+	// NOTE: Answer domain validation is deferred to inside the transaction,
+	// because ResponseID is assigned there.
+
+	for _, vec := range vectors {
+		if err := val.ValidateResponseVectorDomain(vec); err != nil {
+			return err
+		}
+	}
+
+	// -------------------
+	// 2️⃣ Check form existence & business rules
+	// -------------------
 	form, err := u.formRepo.GetByID(ctx, response.FormID)
 	if err != nil {
 		return err
 	}
 
-	fields, err := u.formFieldRepo.List(ctx, repo.FormFieldFilter{
-		FormID: &response.FormID,
-	})
+	if err := val.ValidateResponseBusiness(response, form); err != nil {
+		return err
+	}
+
+	// -------------------
+	// 3️⃣ Fetch form fields
+	// -------------------
+	fields, err := u.formFieldRepo.List(ctx, repo.FormFieldFilter{FormID: &form.ID})
 	if err != nil {
 		return err
 	}
-
-	if err := validateSubmit(form, fields, response, answers); err != nil {
-		return err
+	if len(fields) == 0 {
+		return errors.New("form has no fields")
 	}
 
-	// ===== Prepare data =====
-	if response.ID == uuid.Nil {
-		response.ID = uuid.New()
-	}
-	response.Status = enums.ResponseSubmitted
-	response.SubmittedAt = time.Now()
+	// -------------------
+	// 4️⃣ Transaction: Response + Answers + Vectors
+	// -------------------
+	return u.responseRepo.WithTx(ctx, func(txResponseRepo repo.ResponseRepository,
+		txAnswerRepo repo.ResponseAnswerRepository,
+		txVectorRepo repo.ResponseAnswerVectorRepository) error {
 
-	for _, a := range answers {
-		if a.ID == uuid.Nil {
-			a.ID = uuid.New()
+		// Response
+		if response.ID == uuid.Nil {
+			response.ID = uuid.New()
 		}
-		a.ResponseID = response.ID
-		a.CreatedAt = time.Now()
+		response.Status = enums.ResponseSubmitted
+		response.SubmittedAt = time.Now()
 
-		if err := a.IsValid(); err != nil {
-			return err
-		}
-	}
-
-	for _, v := range vectors {
-		if v.ID == uuid.Nil {
-			v.ID = uuid.New()
-		}
-		v.CreatedAt = time.Now()
-
-		if err := v.IsValid(); err != nil {
-			return err
-		}
-	}
-
-	// ===== Transaction =====
-	return u.responseRepo.WithTx(ctx, func(tx repo.ResponseRepository) error {
-
-		if err := tx.Create(ctx, response); err != nil {
+		if err := txResponseRepo.Create(ctx, response); err != nil {
 			return err
 		}
 
-		for _, a := range answers {
-			if err := u.answerRepo.WithTxRepo(tx).Create(ctx, a); err != nil {
+		// Answers
+		for _, ans := range answers {
+			if ans.ID == uuid.Nil {
+				ans.ID = uuid.New()
+			}
+			ans.ResponseID = response.ID
+			ans.CreatedAt = time.Now()
+
+			// Validate after ResponseID is set
+			if err := val.ValidateResponseAnswerDomain(ans); err != nil {
+				return err
+			}
+
+			if err := txAnswerRepo.Create(ctx, ans); err != nil {
 				return err
 			}
 		}
 
+		// Vectors
+		for _, vec := range vectors {
+			if vec.ID == uuid.Nil {
+				vec.ID = uuid.New()
+			}
+			vec.CreatedAt = time.Now()
+		}
 		if len(vectors) > 0 {
-			if err := u.vectorRepo.WithTxRepo(tx).CreateBulk(ctx, vectors); err != nil {
+			if err := txVectorRepo.CreateBulk(ctx, vectors); err != nil {
 				return err
 			}
 		}
@@ -121,44 +139,44 @@ func (u *ResponseUsecase) Submit(
 	})
 }
 
-// GetByID retrieves a single response by its ID
-func (u *ResponseUsecase) GetByID(
-	ctx context.Context,
-	id uuid.UUID,
-) (*entities.Response, error) {
-
+// GetByID retrieves a single response
+func (u *ResponseUsecase) GetByID(ctx context.Context, id uuid.UUID) (*entities.Response, error) {
 	if id == uuid.Nil {
 		return nil, errors.New("response id is required")
 	}
-
 	return u.responseRepo.GetByID(ctx, id)
 }
 
-// ListByForm returns all responses associated with a specific form
-func (u *ResponseUsecase) ListByForm(
-	ctx context.Context,
-	formID uuid.UUID,
-) ([]*entities.Response, error) {
-
+// ListByForm lists all responses of a form with their answers
+func (u *ResponseUsecase) ListByForm(ctx context.Context, formID uuid.UUID) ([]*entities.Response, error) {
 	if formID == uuid.Nil {
 		return nil, errors.New("form id is required")
 	}
+	responses, err := u.responseRepo.ListByFormID(ctx, formID)
+	if err != nil {
+		return nil, err
+	}
 
-	return u.responseRepo.ListByFormID(ctx, formID)
+	// Enrich each response with its answers
+	for _, resp := range responses {
+		answers, err := u.answerRepo.List(ctx, repo.ResponseAnswerFilter{
+			ResponseID: &resp.ID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		resp.Answers = answers
+	}
+
+	return responses, nil
 }
 
-// Delete removes a response by its ID
-// It first checks existence before deletion
-func (u *ResponseUsecase) Delete(
-	ctx context.Context,
-	id uuid.UUID,
-) error {
-
+// Delete removes a response
+func (u *ResponseUsecase) Delete(ctx context.Context, id uuid.UUID) error {
 	if id == uuid.Nil {
 		return errors.New("response id is required")
 	}
 
-	// Ensure response exists before deleting
 	_, err := u.responseRepo.GetByID(ctx, id)
 	if err != nil {
 		return err

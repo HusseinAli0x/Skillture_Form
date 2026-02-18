@@ -6,6 +6,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// import (
+// 	"Skillture_Form/internal/server/handlers"
+
+// 	"github.com/gin-gonic/gin"
+// )
+
+// // setupRoutes configures all route groups and endpoints
+// func setupRoutes(r *gin.Engine) {
+// 	// Admin group routes
+// 	adminGroup := r.Group("/admin")
+// 	{
+// 		adminGroup.GET("/", handlers.AdminListHandler)    // GET /admin
+// 		adminGroup.POST("/", handlers.AdminCreateHandler) // POST /admin
+// 	}
+
+// 	// TODO: Add more route groups (forms, responses, etc.)
+// }
+
 // SetupRoutes configures all route groups and endpoints
 func SetupRoutes(
 	r *gin.Engine,
@@ -21,6 +39,7 @@ func SetupRoutes(
 	admin := v1.Group("/admins")
 	{
 		admin.POST("/", adminHandler.Create)
+		admin.POST("/login", adminHandler.LoginAdmin) // Added based on AdminHandler
 		admin.GET("/", adminHandler.List)
 		admin.GET("/:id", adminHandler.GetByID)
 		admin.DELETE("/:id", adminHandler.Delete)

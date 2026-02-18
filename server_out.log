@@ -1,0 +1,31 @@
+nohup: ignoring input
+2026/02/13 02:59:54 Connected to database
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] POST   /api/v1/admins/           --> Skillture_Form/internal/server/handlers.(*AdminHandler).Create-fm (4 handlers)
+[GIN-debug] POST   /api/v1/admins/login      --> Skillture_Form/internal/server/handlers.(*AdminHandler).LoginAdmin-fm (4 handlers)
+[GIN-debug] GET    /api/v1/admins/           --> Skillture_Form/internal/server/handlers.(*AdminHandler).List-fm (4 handlers)
+[GIN-debug] GET    /api/v1/admins/:id        --> Skillture_Form/internal/server/handlers.(*AdminHandler).GetByID-fm (4 handlers)
+[GIN-debug] DELETE /api/v1/admins/:id        --> Skillture_Form/internal/server/handlers.(*AdminHandler).Delete-fm (4 handlers)
+[GIN-debug] POST   /api/v1/forms/            --> Skillture_Form/internal/server/handlers.(*FormHandler).Create-fm (4 handlers)
+[GIN-debug] GET    /api/v1/forms/            --> Skillture_Form/internal/server/handlers.(*FormHandler).List-fm (4 handlers)
+[GIN-debug] GET    /api/v1/forms/:id         --> Skillture_Form/internal/server/handlers.(*FormHandler).GetByID-fm (4 handlers)
+[GIN-debug] PUT    /api/v1/forms/:id         --> Skillture_Form/internal/server/handlers.(*FormHandler).Update-fm (4 handlers)
+[GIN-debug] DELETE /api/v1/forms/:id         --> Skillture_Form/internal/server/handlers.(*FormHandler).Delete-fm (4 handlers)
+[GIN-debug] POST   /api/v1/forms/:id/publish --> Skillture_Form/internal/server/handlers.(*FormHandler).Publish-fm (4 handlers)
+[GIN-debug] POST   /api/v1/forms/:id/close   --> Skillture_Form/internal/server/handlers.(*FormHandler).Close-fm (4 handlers)
+[GIN-debug] GET    /api/v1/forms/:id/fields  --> Skillture_Form/internal/server/handlers.(*FormFieldHandler).ListByFormID-fm (4 handlers)
+[GIN-debug] GET    /api/v1/forms/:id/responses --> Skillture_Form/internal/server/handlers.(*ResponseHandler).ListByForm-fm (4 handlers)
+[GIN-debug] POST   /api/v1/fields/           --> Skillture_Form/internal/server/handlers.(*FormFieldHandler).Create-fm (4 handlers)
+[GIN-debug] PUT    /api/v1/fields/:id        --> Skillture_Form/internal/server/handlers.(*FormFieldHandler).Update-fm (4 handlers)
+[GIN-debug] DELETE /api/v1/fields/:id        --> Skillture_Form/internal/server/handlers.(*FormFieldHandler).Delete-fm (4 handlers)
+[GIN-debug] POST   /api/v1/responses/        --> Skillture_Form/internal/server/handlers.(*ResponseHandler).Submit-fm (4 handlers)
+[GIN-debug] GET    /api/v1/responses/:id     --> Skillture_Form/internal/server/handlers.(*ResponseHandler).GetByID-fm (4 handlers)
+[GIN-debug] DELETE /api/v1/responses/:id     --> Skillture_Form/internal/server/handlers.(*ResponseHandler).Delete-fm (4 handlers)
+2026/02/13 02:59:54 Server running on port 8080
+[GIN-debug] Listening and serving HTTP on :8080
+[GIN] 2026/02/13 - 02:59:56 | 200 |     1.29482ms |             ::1 | GET      "/api/v1/forms/d1ef7ab7-700c-4310-a2c8-a7befbc8ecc9/fields"

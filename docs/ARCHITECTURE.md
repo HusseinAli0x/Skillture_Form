@@ -1,48 +1,64 @@
-# Architecture Overview
+# System Architecture & Frontend Integration
 
-The project follows **Clean Architecture** principles to separate concerns and ensure maintainability.
+## Is this a website?
+**No, currently this application is a "Headless API".**
 
-## Layers
+It provides the back-end logic, database storage, and security, but it does **not** have a visual user interface (HTML/CSS). It speaks purely in **JSON**.
 
-1.  **Domain (`internal/domain`)**
-    -   Contains core business entities (`entities/`, `enums/`).
-    -   Pure Go structs, no external dependencies (like DB or HTTP).
+## Can I make a website over it?
+**Yes, absolutely!** This is exactly how modern web applications are built. You can build **two separate frontend applications** (or one large one) that communicate with this API.
 
-2.  **Repository (`internal/repository`)**
-    -   Handles data persistence.
-    -   **Interfaces (`interfaces/`)**: Defines the contract for data access.
-    -   **Implementation (`postgres/`)**: Concrete implementation using `pgx` driver.
-    -   **PGVector**: Special handling for vector operations.
+### The Vision: A Dual-Interface System
 
-3.  **UseCase (`internal/usecase`)**
-    -   Contains business logic / application rules.
-    -   Orchestrates data flow between Repositories and Domain entities.
-    -   Implements `interfaces/` defined in the usecase layer.
-    -   Business validation occurs here (e.g., checking if form is open before submission).
+You can build two distinct user experiences on top of this single API:
 
-4.  **Delivery / Interface (`internal/server`)**
-    -   **Handlers (`server/handlers`)**: HTTP handlers (Controllers) using Gin framework.
-    -   Parses JSON requests, calls UseCases, and formats JSON responses.
-    -   **Router (`server/server.go`)**: Setup of routes and middleware.
+1.  **Admin Dashboard (Private)**
+    *   **Who uses it?**: System Administrators.
+    *   **Features**: Login, Create Forms, Edit Questions, View Responses.
+    *   **API Endpoints Used**:
+        *   `POST /admins/login`
+        *   `GET /forms`
+        *   `POST /forms` (Builder UI)
+        *   `GET /forms/:id/responses` (Analysis UI)
 
-## Tech Stack
--   **Language**: Go (Golang)
--   **Web Framework**: Gin Gonic
--   **Database**: PostgreSQL
--   **Driver**: `pgx/v5`
--   **Vector Search**: `pgvector` extension
--   **Configuration**: `kelseyhightower/envconfig` pattern / `godotenv`
+2.  **User Form (Public)**
+    *   **Who uses it?**: End-users / Respondents.
+    *   **Features**: View the list of questions, Submit answers.
+    *   **API Endpoints Used**:
+        *   `GET /forms/:id/fields` (To render the form structure)
+        *   `POST /responses` (To submit their answers)
 
-## Directory Structure
+## Architecture Diagram
+
+```mermaid
+graph TD
+    subgraph "Frontend Layer (What you build next)"
+        AdminDash["Admin Dashboard\n(React/Vue/Next.js)"]
+        PublicForm["Public Form Page\n(React/Vue/HTML)"]
+    end
+
+    subgraph "Backend Layer (This Project)"
+        API["Skillture Form API\n(Go/Gin)"]
+        DB[(PostgreSQL)]
+    end
+
+    AdminDash --"1. Login & Manage Forms"--> API
+    PublicForm --"2. Get Questions & Submit Answers"--> API
+    API --"Reads/Writes"--> DB
 ```
-cmd/
-  api/          # Entry point (main.go)
-internal/
-  config/       # Configuration loading
-  database/     # SQL schemas and migration scripts
-  domain/       # Entities
-  repository/   # Database access
-  server/       # HTTP handlers & router
-  usecase/      # Business logic
-docs/           # Project documentation
-```
+
+## How it works
+
+### Scenario: Admin creates a form
+1.  Admin logs into your **Dashboard Website**.
+2.  They click "Create Form".
+3.  Your website sends a `POST /api/v1/forms` request to this API.
+4.  The API saves it to the database.
+
+### Scenario: User takes a survey
+1.  User visits `your-site.com/forms/123`.
+2.  Your website sends a `GET /api/v1/forms/123/fields` request to this API.
+3.  The API returns the list of questions in JSON (e.g., `[{"label": "Name", "type": "text"}]`).
+4.  Your website loops through that JSON and renders HTML inputs.
+5.  User clicks "Submit".
+6.  Your website sends a `POST /api/v1/responses` request to this API.

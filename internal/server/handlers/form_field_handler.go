@@ -1,15 +1,18 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
 	"Skillture_Form/internal/domain/entities"
 	"Skillture_Form/internal/domain/enums"
 	"Skillture_Form/internal/usecase/interfaces"
+	"Skillture_Form/internal/validation"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type FormFieldHandler struct {
@@ -87,6 +90,21 @@ func (h *FormFieldHandler) Create(c *gin.Context) {
 	}
 
 	if err := h.fieldUC.Create(c.Request.Context(), field); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "form not found"})
+			return
+		}
+
+		if errors.Is(err, validation.ErrInvalidFieldType) ||
+			errors.Is(err, validation.ErrMissingOptions) ||
+			errors.Is(err, validation.ErrInvalidFieldOrder) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Log error to console for debugging
+		// TODO: Use proper logger
+		println("Error creating field:", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -172,7 +190,7 @@ func (h *FormFieldHandler) Delete(c *gin.Context) {
 
 // ListByFormID handles listing fields for a form
 func (h *FormFieldHandler) ListByFormID(c *gin.Context) {
-	formIDStr := c.Param("form_id")
+	formIDStr := c.Param("id")
 	formID, err := uuid.Parse(formIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid form_id"})

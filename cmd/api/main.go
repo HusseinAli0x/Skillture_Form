@@ -45,7 +45,7 @@ func main() {
 	baseRepo := postgres.NewBaseRepository(pool, 5000000000) // 5s timeout
 
 	adminRepo := postgres.NewAdminRepository(baseRepo)
-	formRepo := postgres.NewFormsRepository(baseRepo)
+	formRepo := postgres.NewFormRepository(baseRepo)
 	fieldRepo := postgres.NewFormFieldRepository(baseRepo)
 	responseRepo := postgres.NewResponseRepository(baseRepo)
 	answerRepo := postgres.NewResponseAnswerRepository(baseRepo)

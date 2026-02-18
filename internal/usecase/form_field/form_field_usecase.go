@@ -9,18 +9,18 @@ import (
 	"Skillture_Form/internal/domain/enums"
 	repo "Skillture_Form/internal/repository/interfaces"
 	uc "Skillture_Form/internal/usecase/interfaces"
+	val "Skillture_Form/internal/validation"
 
 	"github.com/google/uuid"
 )
 
-// formFieldUseCase is the concrete implementation of FormFieldUseCase.
+// formFieldUseCase implements the FormFieldUseCase interface
 type formFieldUseCase struct {
 	formRepo      repo.FormRepository
 	formFieldRepo repo.FormFieldRepository
 }
 
-// NewFormFieldUseCase creates a new FormFieldUseCase.
-// Repositories are injected to follow dependency inversion.
+// NewFormFieldUseCase creates a new instance of formFieldUseCase
 func NewFormFieldUseCase(
 	formRepo repo.FormRepository,
 	formFieldRepo repo.FormFieldRepository,
@@ -31,57 +31,67 @@ func NewFormFieldUseCase(
 	}
 }
 
-// Create adds a new field to a form.
+// Create adds a new field to a form with domain validation
 func (u *formFieldUseCase) Create(ctx context.Context, field *entities.FormField) error {
 
-	// Ensure the parent form exists
+	// -------------------
+	//  Domain validation
+	// -------------------
+	if err := val.ValidateFormFieldDomain(field); err != nil {
+		return err
+	}
+
+	// -------------------
+	// Business rules
+	// -------------------
 	form, err := u.formRepo.GetByID(ctx, field.FormID)
 	if err != nil {
 		return err
 	}
-
-	// Business rule: cannot add fields to a closed form
 	if form.Status == enums.FormStatusClosed {
 		return errors.New("cannot add field to a closed form")
 	}
 
-	// Generate ID if not provided
+	// -------------------
+	// Defaults & timestamps
+	// -------------------
 	if field.ID == uuid.Nil {
 		field.ID = uuid.New()
 	}
-
-	// Validate required field properties
-	if !field.Type.IsValid() {
-		return errors.New("field type is required")
-	}
-
-	if field.FieldOrder <= 0 {
-		return errors.New("field position must be greater than zero")
-	}
-
-	// Set timestamps
 	field.CreatedAt = time.Now()
 	field.UpdatedAt = time.Now()
 
-	// Persist the field
+	// -------------------
+	//  Persist
+	// -------------------
 	return u.formFieldRepo.Create(ctx, field)
 }
 
-// Update updates an existing form field.
+// Update updates an existing form field
 func (u *formFieldUseCase) Update(ctx context.Context, field *entities.FormField) error {
 
-	// Load existing field
+	// -------------------
+	//  Load existing
+	// -------------------
 	existing, err := u.formFieldRepo.GetByID(ctx, field.ID)
 	if err != nil {
 		return err
 	}
 
-	// Ensure the parent form is not closed
+	// -------------------
+	//  Domain validation
+	// -------------------
+	if err := val.ValidateFormFieldDomain(field); err != nil {
+		return err
+	}
+
+	// -------------------
+	//  Business rules
+	// -------------------
 	form, err := u.formRepo.GetByID(ctx, existing.FormID)
 	if err != nil {
 		return err
 	}
-
 	if form.Status == enums.FormStatusClosed {
 		return errors.New("cannot update field of a closed form")
 	}
@@ -89,34 +99,28 @@ func (u *formFieldUseCase) Update(ctx context.Context, field *entities.FormField
 	// Preserve immutable fields
 	field.FormID = existing.FormID
 	field.CreatedAt = existing.CreatedAt
-
-	// Update timestamp
 	field.UpdatedAt = time.Now()
 
-	// Persist changes
+	// -------------------
+	//  Persist
+	// -------------------
 	return u.formFieldRepo.Update(ctx, field)
 }
 
-// Delete removes a form field.
+// Delete removes a form field
 func (u *formFieldUseCase) Delete(ctx context.Context, fieldID uuid.UUID) error {
 
-	// Ensure the field exists
+	// Ensure field exists
 	_, err := u.formFieldRepo.GetByID(ctx, fieldID)
 	if err != nil {
 		return err
 	}
 
-	// Delete the field
+	// Delete
 	return u.formFieldRepo.Delete(ctx, fieldID)
 }
 
-// ListByFormID returns all fields for a specific form ordered by position.
-func (u *formFieldUseCase) ListByFormID(
-	ctx context.Context,
-	formID uuid.UUID,
-) ([]*entities.FormField, error) {
-
-	return u.formFieldRepo.List(ctx, repo.FormFieldFilter{
-		FormID: &formID,
-	})
+// ListByFormID returns all fields of a form
+func (u *formFieldUseCase) ListByFormID(ctx context.Context, formID uuid.UUID) ([]*entities.FormField, error) {
+	return u.formFieldRepo.List(ctx, repo.FormFieldFilter{FormID: &formID})
 }

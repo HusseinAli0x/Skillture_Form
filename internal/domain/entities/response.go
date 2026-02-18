@@ -22,6 +22,7 @@ type Response struct {
 	Respondent  map[string]any       `db:"respondent" json:"respondent"` // JSONB: {"email": "...", "name": "...", "phone": "..."}
 	Status      enums.ResponseStatus `db:"status" json:"status"`         // Enum: Pending, Submitted, Reviewed
 	SubmittedAt time.Time            `db:"submitted_at" json:"submitted_at"`
+	Answers     []*ResponseAnswer    `json:"answers,omitempty"` // Populated by usecase, not stored in DB
 }
 
 // TableName returns the DB table name

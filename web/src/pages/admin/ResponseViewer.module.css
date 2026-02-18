@@ -1,0 +1,84 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.headerLeft {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+}
+
+.count {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+}
+
+.exportBtn {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+
+.tableWrapper {
+    overflow-x: auto;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: var(--color-surface);
+    min-width: 800px;
+}
+
+.table th,
+.table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.table th {
+    background-color: var(--color-bg);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.respondent {
+    display: flex;
+    flex-direction: column;
+}
+
+.email {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.answerCell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.empty {
+    text-align: center;
+    padding: 3rem;
+    color: var(--color-text-muted);
+}
