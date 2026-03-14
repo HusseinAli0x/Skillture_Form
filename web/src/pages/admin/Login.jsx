@@ -9,6 +9,10 @@ import styles from './Login.module.css';
 
 const Login = () => {
     const { login } = useAuth();
+    const navigate = useNavigate();
+    const [formData, setFormData] = useState({ username: '', password: '' });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
