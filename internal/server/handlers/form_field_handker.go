@@ -22,9 +22,9 @@ func NewFormFieldHandler(formUC interfaces.FormFieldUseCase) *FormFieldHandler {
 	}
 }
 
-// Create handles POST /forms/:formID/fields
+// Create handles POST /forms/:id/fields
 func (h *FormFieldHandler) Create(c *gin.Context) {
-	formIDStr := c.Param("formID")
+	formIDStr := c.Param("id")
 	formID, err := uuid.Parse(formIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid form ID"})
@@ -89,9 +89,9 @@ func (h *FormFieldHandler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// ListByFormID handles GET /forms/:formID/fields
+// ListByFormID handles GET /forms/:id/fields
 func (h *FormFieldHandler) ListByFormID(c *gin.Context) {
-	formIDStr := c.Param("formID")
+	formIDStr := c.Param("id")
 	formID, err := uuid.Parse(formIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid form ID"})

@@ -36,7 +36,7 @@ CREATE TABLE form_fields (
 
     label JSONB NOT NULL,                 -- {"en": "Name", "ar": "الاسم"}
     type VARCHAR(50) NOT NULL,            -- text, textarea, select, radio, checkbox, number, email ...
-    position INT NOT NULL,                -- Question order
+    field_order INT NOT NULL,             -- Question order
     is_required BOOLEAN NOT NULL DEFAULT false,
     placeholder JSONB,                    -- {"en": "...", "ar": "..."} optional
     help_text JSONB,                      -- {"en": "...", "ar": "..."} optional
@@ -52,7 +52,7 @@ CREATE TABLE form_fields (
 
 -- Ensure unique position inside form
 CREATE UNIQUE INDEX uq_form_fields_form_position
-ON form_fields(form_id, position);
+ON form_fields(form_id, field_order);
 
 -- =====================================================
 -- Table: responses

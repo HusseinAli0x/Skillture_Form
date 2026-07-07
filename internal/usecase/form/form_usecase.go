@@ -138,3 +138,14 @@ func (u *formUseCase) GetByID(ctx context.Context, formID uuid.UUID) (*entities.
 
 	return u.formRepo.GetByID(ctx, formID)
 }
+
+// List returns forms based on filter.
+func (u *formUseCase) List(ctx context.Context, filter formUC.FormFilter) ([]*entities.Form, error) {
+	// Map the usecase filter to the repository filter if needed, or pass directly
+	// For now, assuming the repository filter is similar. Let's build a repo filter.
+	repoFilter := repo.FormFilter{
+		Status: filter.Status,
+		Title:  filter.Title,
+	}
+	return u.formRepo.List(ctx, repoFilter)
+}
