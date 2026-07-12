@@ -3,13 +3,7 @@ import { Plus, Search, FileText, Trash2, Eye, Edit3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import type { Form } from '../api/types';
-
-// 0=draft, 1=published, 2=closed
-const statusStyle: Record<number, { bg: string; color: string; border: string; label: string }> = {
-  0: { bg: 'rgba(136,136,136,0.1)', color: '#888',    border: 'rgba(136,136,136,0.25)', label: 'Draft' },
-  1: { bg: 'rgba(34,201,122,0.1)',  color: '#22c97a', border: 'rgba(34,201,122,0.25)', label: 'Published' },
-  2: { bg: 'rgba(224,85,85,0.1)',   color: '#e05555', border: 'rgba(224,85,85,0.25)', label: 'Closed' },
-};
+import StatusDropdown from '../components/StatusDropdown';
 
 const FormsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -64,7 +58,7 @@ const FormsPage: React.FC = () => {
       </div>
 
       {/* Table Card */}
-      <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
+      <div className="rounded-xl border" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
         {/* Toolbar */}
         <div className="flex items-center gap-4 px-5 py-4 border-b" style={{ borderColor: '#2a2a2a' }}>
           <div className="relative flex-1 max-w-xs">
@@ -109,7 +103,7 @@ const FormsPage: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full">
             <table className="w-full text-left">
               <thead>
                 <tr style={{ borderBottom: '1px solid #2a2a2a', backgroundColor: 'rgba(255,255,255,0.02)' }}>
@@ -121,7 +115,6 @@ const FormsPage: React.FC = () => {
               </thead>
               <tbody>
                 {filtered.map((form, i) => {
-                  const st = statusStyle[form.status as any as number] || statusStyle[0];
                   return (
                     <tr
                       key={form.id}
@@ -139,9 +132,12 @@ const FormsPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: st.bg, color: st.color, border: `1px solid ${st.border}` }}>
-                          {st.label}
-                        </span>
+                        <StatusDropdown 
+                          type="form" 
+                          id={form.id} 
+                          initialStatus={form.status as any as 0|1|2} 
+                          fullObject={form} 
+                        />
                       </td>
                       <td className="px-5 py-4 text-sm hidden sm:table-cell" style={{ color: '#888' }}>
                         {form.creat_at ? new Date(form.creat_at).toLocaleDateString() : '—'}

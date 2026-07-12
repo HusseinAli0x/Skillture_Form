@@ -3,13 +3,7 @@ import { Plus, Search, GamepadIcon, Trash2, Play, Archive, Zap } from 'lucide-re
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import type { Quiz } from '../api/types';
-
-// 0=draft, 1=active, 2=archived
-const statusStyle: Record<number, { bg: string; color: string; border: string; label: string }> = {
-  0: { bg: 'rgba(136,136,136,0.1)', color: '#888',    border: 'rgba(136,136,136,0.25)', label: 'Draft' },
-  1: { bg: 'rgba(34,201,122,0.1)',  color: '#22c97a', border: 'rgba(34,201,122,0.25)', label: 'Active' },
-  2: { bg: 'rgba(224,85,85,0.1)',   color: '#e05555', border: 'rgba(224,85,85,0.25)', label: 'Archived' },
-};
+import StatusDropdown from '../components/StatusDropdown';
 
 const QuizzesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -132,7 +126,6 @@ const QuizzesPage: React.FC = () => {
               </thead>
               <tbody>
                 {filtered.map((quiz, i) => {
-                  const st = statusStyle[quiz.status as any as number] || statusStyle[0];
                   return (
                     <tr
                       key={quiz.id}
@@ -153,9 +146,13 @@ const QuizzesPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: st.bg, color: st.color, border: `1px solid ${st.border}` }}>
-                          {st.label}
-                        </span>
+                        <StatusDropdown 
+                          type="quiz" 
+                          id={quiz.id} 
+                          initialStatus={quiz.status as any as 0|1|2} 
+                          fullObject={quiz} 
+                          onStatusChange={fetchQuizzes}
+                        />
                       </td>
                       <td className="px-5 py-4 text-sm hidden sm:table-cell" style={{ color: '#888' }}>
                         {quiz.created_at ? new Date(quiz.created_at).toLocaleDateString() : '—'}

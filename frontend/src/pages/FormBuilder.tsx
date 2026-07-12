@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import { FieldTypeToInt, FieldTypeLabels } from '../api/types';
 import type { FieldType } from '../api/types';
+import StatusDropdown from '../components/StatusDropdown';
 
 const FIELD_TYPES: FieldType[] = ['text', 'textarea', 'number', 'email', 'select', 'radio', 'checkbox', 'date'];
 const HAS_OPTIONS: FieldType[] = ['select', 'radio', 'checkbox'];
@@ -31,6 +32,8 @@ const FormBuilder: React.FC = () => {
   const [fields, setFields] = useState<FieldState[]>([
     { _id: generateId(), label: '', placeholder: '', helpText: '', type: 'text', required: false, options: [], isNew: true }
   ]);
+  const [status, setStatus] = useState<0|1|2>(0);
+  const [fullObject, setFullObject] = useState<any>(null);
   const [deletedFieldIds, setDeletedFieldIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -43,6 +46,8 @@ const FormBuilder: React.FC = () => {
     ]).then(([fRes, ffRes]) => {
       setTitle(fRes.data.title || '');
       setDescription(fRes.data.description || '');
+      setStatus(fRes.data.status as 0|1|2 || 0);
+      setFullObject(fRes.data);
       const fetchedFields = (ffRes.data || []).sort((a: any, b: any) => a.field_order - b.field_order).map((f: any) => {
         let opts: string[] = [];
         if (f.options) {
@@ -197,7 +202,18 @@ const FormBuilder: React.FC = () => {
 
       {/* Form metadata */}
       <div className="rounded-xl border p-5 space-y-4" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
-        <h2 className="text-sm font-semibold" style={{ color: '#f0f0f0' }}>Form Details</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold" style={{ color: '#f0f0f0' }}>Form Details</h2>
+          {isEditMode && fullObject && (
+            <StatusDropdown 
+              type="form" 
+              id={id!} 
+              initialStatus={status} 
+              fullObject={fullObject} 
+              onStatusChange={setStatus} 
+            />
+          )}
+        </div>
         <div>
           <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Title <span style={{ color: '#0ABFBC' }}>*</span></label>
           <input
@@ -232,20 +248,20 @@ const FormBuilder: React.FC = () => {
             {/* Field header */}
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#2a2a2a', backgroundColor: 'rgba(255,255,255,0.02)' }}>
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 bg-black/20 p-1 rounded-md">
+                <div className="flex items-center gap-1.5 p-1">
                   <button 
                     onClick={() => moveField(idx, 'up')}
                     disabled={idx === 0}
-                    className="p-1 hover:bg-white/10 rounded transition-colors disabled:opacity-30"
+                    className="p-1.5 border border-slate-800 rounded-md transition-all duration-200 disabled:opacity-30 hover:bg-cyan-500/10 hover:border-cyan-500/30 group"
                   >
-                    <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+                    <ArrowUp className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 transition-colors" />
                   </button>
                   <button 
                     onClick={() => moveField(idx, 'down')}
                     disabled={idx === fields.length - 1}
-                    className="p-1 hover:bg-white/10 rounded transition-colors disabled:opacity-30"
+                    className="p-1.5 border border-slate-800 rounded-md transition-all duration-200 disabled:opacity-30 hover:bg-cyan-500/10 hover:border-cyan-500/30 group"
                   >
-                    <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+                    <ArrowDown className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 transition-colors" />
                   </button>
                 </div>
                 <span className="text-sm font-medium" style={{ color: '#888' }}>Field {idx + 1}</span>

@@ -3,6 +3,7 @@ import { Plus, Trash2, Save, ArrowLeft, ArrowUp, ArrowDown } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import type { QuizQuestionType } from '../api/types';
+import StatusDropdown from '../components/StatusDropdown';
 
 interface OptionState {
   id: string;
@@ -39,6 +40,8 @@ const FormQuizBuilder: React.FC = () => {
   const [deletedQuestionIds, setDeletedQuestionIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [status, setStatus] = useState<0|1|2>(0);
+  const [fullObject, setFullObject] = useState<any>(null);
 
   React.useEffect(() => {
     if (!isEditMode) return;
@@ -48,6 +51,8 @@ const FormQuizBuilder: React.FC = () => {
     ]).then(([qRes, qqRes]) => {
       setTitle(qRes.data.title?.en || '');
       setDescription(qRes.data.description?.en || '');
+      setStatus(qRes.data.status as 0|1|2 || 0);
+      setFullObject(qRes.data);
       const fetchedQs = (qqRes.data || []).sort((a: any, b: any) => a.position - b.position).map((q: any) => {
         let opts: OptionState[] = [];
         let correctId = '';
@@ -259,11 +264,22 @@ const FormQuizBuilder: React.FC = () => {
         </div>
       )}
 
-      {/* Quiz Metadata */}
+      {/* Quiz metadata */}
       <div className="rounded-xl border p-5 space-y-4" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
-        <h2 className="text-sm font-semibold" style={{ color: '#f0f0f0' }}>Quiz Details</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold" style={{ color: '#f0f0f0' }}>Quiz Settings</h2>
+          {isEditMode && fullObject && (
+            <StatusDropdown 
+              type="quiz" 
+              id={id!} 
+              initialStatus={status} 
+              fullObject={fullObject} 
+              onStatusChange={setStatus} 
+            />
+          )}
+        </div>
         <div>
-          <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Quiz Title <span style={{ color: '#0ABFBC' }}>*</span></label>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: '#888' }}>Title <span style={{ color: '#0ABFBC' }}>*</span></label>
           <input 
             type="text" 
             value={title}
@@ -296,20 +312,20 @@ const FormQuizBuilder: React.FC = () => {
           <div key={q.id} className="rounded-xl border overflow-hidden transition-all" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#2a2a2a', backgroundColor: 'rgba(255,255,255,0.02)' }}>
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 bg-black/20 p-1 rounded-md">
+                <div className="flex items-center gap-1.5 p-1">
                   <button 
                     onClick={() => moveQuestion(index, 'up')}
                     disabled={index === 0}
-                    className="p-1 hover:bg-white/10 rounded transition-colors disabled:opacity-30"
+                    className="p-1.5 border border-slate-800 rounded-md transition-all duration-200 disabled:opacity-30 hover:bg-cyan-500/10 hover:border-cyan-500/30 group"
                   >
-                    <ArrowUp className="w-3.5 h-3.5 text-slate-400" />
+                    <ArrowUp className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 transition-colors" />
                   </button>
                   <button 
                     onClick={() => moveQuestion(index, 'down')}
                     disabled={index === questions.length - 1}
-                    className="p-1 hover:bg-white/10 rounded transition-colors disabled:opacity-30"
+                    className="p-1.5 border border-slate-800 rounded-md transition-all duration-200 disabled:opacity-30 hover:bg-cyan-500/10 hover:border-cyan-500/30 group"
                   >
-                    <ArrowDown className="w-3.5 h-3.5 text-slate-400" />
+                    <ArrowDown className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 transition-colors" />
                   </button>
                 </div>
                 <span className="text-sm font-medium" style={{ color: '#888' }}>Question {index + 1}</span>

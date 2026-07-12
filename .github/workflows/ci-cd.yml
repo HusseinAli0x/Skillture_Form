@@ -1,0 +1,62 @@
+name: CI/CD Pipeline
+
+# Trigger the workflow on push or pull request to main/master branches
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  # Stage 1: Continuous Integration (Test & Build Verification)
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout application code
+      uses: actions/checkout@v4
+
+    - name: Set up Go environment
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+
+    - name: Install project dependencies
+      run: go mod download
+
+    - name: Check code formatting
+      run: go fmt ./...
+
+    # Optional: Uncomment the lines below if you want to run unit tests automatically
+    # - name: Run unit tests
+    #   run: go test -v ./...
+
+    - name: Verify application compiles successfully
+      run: go build -v -o main ./cmd/api/main.go
+
+  # Stage 2: Continuous Delivery (Build & Push Docker Image)
+  # This job runs only if the test-and-build job passes and the event is a push to main/master
+  docker-build-and-push:
+    needs: test-and-build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout application code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx for advanced caching features
+      uses: actions/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry (GHCR)
+      uses: actions/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build Docker image and push to GHCR
+      uses: actions/build-push-action@v5
+      with:
+        context: .
+        push: true
+        # Automatically tags the image with your GitHub repository name and 'latest'
+        tags: ghcr.io/${{ github.repository }}:latest

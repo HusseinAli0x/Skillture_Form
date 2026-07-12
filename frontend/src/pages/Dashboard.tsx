@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, FileText, GamepadIcon, Activity, ArrowRight } from 'lucide-react';
+import { Plus, FileText, GamepadIcon, Activity, ArrowRight, Share2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import client from '../api/client';
 import type { Quiz, Form } from '../api/types';
+import StatusDropdown from '../components/StatusDropdown';
 
 const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: number | string; color: string; onClick?: () => void }> = ({ icon, label, value, color, onClick }) => (
   <div
@@ -32,6 +34,16 @@ const Dashboard: React.FC = () => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [forms, setForms] = useState<Form[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    if (shareUrl) {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   useEffect(() => {
     Promise.all([
@@ -86,7 +98,7 @@ const Dashboard: React.FC = () => {
       {/* Quick actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Recent Forms */}
-        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
+        <div className="rounded-xl border" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
           <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: '#2a2a2a' }}>
             <h2 className="font-semibold text-sm" style={{ color: '#f0f0f0' }}>Recent Forms</h2>
             <button
@@ -126,8 +138,22 @@ const Dashboard: React.FC = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: '#f0f0f0' }}>{form.title || 'Untitled Form'}</p>
-                    <p className="text-xs capitalize" style={{ color: '#888' }}>{form.status}</p>
+                    <div className="mt-1">
+                      <StatusDropdown 
+                        type="form" 
+                        id={form.id} 
+                        initialStatus={form.status as any as 0|1|2} 
+                        fullObject={form} 
+                      />
+                    </div>
                   </div>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setShareUrl(`${window.location.origin}/form/${form.id}`); }}
+                    className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                    title="Share Form"
+                  >
+                    <Share2 className="w-4 h-4 text-cyan-400" />
+                  </button>
                 </div>
               ))
             )}
@@ -135,7 +161,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Recent Quizzes */}
-        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
+        <div className="rounded-xl border" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
           <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: '#2a2a2a' }}>
             <h2 className="font-semibold text-sm" style={{ color: '#f0f0f0' }}>Recent Quizzes</h2>
             <button
@@ -174,14 +200,64 @@ const Dashboard: React.FC = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: '#f0f0f0' }}>{quiz.title?.en || 'Untitled Quiz'}</p>
-                    <p className="text-xs capitalize" style={{ color: quiz.status === 'active' ? '#22c97a' : '#888' }}>{quiz.status}</p>
+                    <div className="mt-1">
+                      <StatusDropdown 
+                        type="quiz" 
+                        id={quiz.id} 
+                        initialStatus={quiz.status as any as 0|1|2} 
+                        fullObject={quiz} 
+                      />
+                    </div>
                   </div>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setShareUrl(`${window.location.origin}/quiz/${quiz.id}`); }}
+                    className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                    title="Share Quiz"
+                  >
+                    <Share2 className="w-4 h-4 text-cyan-400" />
+                  </button>
                 </div>
               ))
             )}
           </div>
         </div>
       </div>
+
+      {/* Share Modal */}
+      {shareUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShareUrl(null)}>
+          <div 
+            className="w-full max-w-sm rounded-2xl p-6 border shadow-2xl"
+            style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold mb-1" style={{ color: '#f0f0f0' }}>Share Link</h3>
+            <p className="text-sm mb-6" style={{ color: '#888' }}>Scan the QR code or copy the link below.</p>
+            
+            <div className="flex justify-center mb-6">
+              <div className="p-4 rounded-xl shadow-[0_0_20px_rgba(10,191,188,0.15)] bg-white border border-cyan-500/30">
+                <QRCodeSVG value={shareUrl} size={160} />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mb-2">
+              <input 
+                type="text" 
+                readOnly 
+                value={shareUrl}
+                className="flex-1 px-3 py-2 rounded-lg text-sm bg-black border border-[#2a2a2a] text-[#888] outline-none"
+              />
+              <button 
+                onClick={handleCopy}
+                className="px-3 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{ backgroundColor: copied ? '#22c97a' : 'rgba(10,191,188,0.1)', color: copied ? '#fff' : '#0ABFBC', border: `1px solid ${copied ? '#22c97a' : 'rgba(10,191,188,0.2)'}` }}
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
