@@ -3,9 +3,9 @@ name: CI/CD Pipeline
 # Trigger the workflow on push or pull request to main/master branches
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master , AIdev ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master , AIdev ]
 
 jobs:
   # Stage 1: Continuous Integration (Test & Build Verification)
