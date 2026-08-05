@@ -1,15 +1,21 @@
-import { useState, useEffect } from 'react';
-import { Gamepad2, ArrowRight } from 'lucide-react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowRight, Gamepad2 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import { playerSocketUrl } from '../api/ws';
+import { Button, Card, Spinner } from '../components/ui';
 
-export default function PlayerJoin() {
+type Step = 'pin' | 'nickname' | 'waiting';
+
+/** Reconnect delay for the lobby socket. */
+const RECONNECT_MS = 3000;
+
+const PlayerJoin: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const initialPin = searchParams.get('pin') || '';
 
-  const [step, setStep] = useState<1 | 2 | 3>(initialPin ? 2 : 1);
+  const [step, setStep] = useState<Step>('pin');
   const [pin, setPin] = useState(initialPin);
   const [nickname, setNickname] = useState('');
   const [sessionId, setSessionId] = useState('');
@@ -17,27 +23,34 @@ export default function PlayerJoin() {
   const [error, setError] = useState('');
   const [isJoining, setIsJoining] = useState(false);
 
-  // If provided via URL
-  useEffect(() => {
-    if (initialPin && step === 2) {
-      handlePinSubmit(new Event('submit') as any, initialPin);
-    }
-  }, []);
-
-  const handlePinSubmit = async (e: React.FormEvent, submitPin = pin) => {
-    e.preventDefault();
-    if (!submitPin) return;
+  const lookupPin = useCallback(async (candidate: string) => {
+    if (!candidate) return;
     setError('');
     setIsJoining(true);
     try {
-      const res = await client.get(`/api/v1/sessions/pin/${submitPin}`);
+      const res = await client.get(`/api/v1/sessions/pin/${candidate}`);
       setSessionId(res.data.id);
-      setStep(2);
+      setStep('nickname');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Invalid Game PIN');
     } finally {
       setIsJoining(false);
     }
+  }, []);
+
+  // A ?pin= in the URL is looked up straight away. The page used to jump to
+  // the nickname step before the lookup ran, so an invalid PIN left the player
+  // typing a nickname with no session to join it to.
+  const autoJoined = useRef(false);
+  useEffect(() => {
+    if (!initialPin || autoJoined.current) return;
+    autoJoined.current = true;
+    lookupPin(initialPin);
+  }, [initialPin, lookupPin]);
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    lookupPin(pin);
   };
 
   const handleNicknameSubmit = async (e: React.FormEvent) => {
@@ -48,7 +61,7 @@ export default function PlayerJoin() {
     try {
       const res = await client.post(`/api/v1/sessions/${sessionId}/players`, { name: nickname });
       setPlayerId(res.data.id);
-      setStep(3);
+      setStep('waiting');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to join. Nickname might be taken.');
     } finally {
@@ -56,137 +69,115 @@ export default function PlayerJoin() {
     }
   };
 
-  // Step 3: Waiting in Lobby
+  // Wait in the lobby until the host starts, then follow into the game.
   useEffect(() => {
+    if (step !== 'waiting' || !sessionId || !playerId) return;
+
     let ws: WebSocket | null = null;
-    let reconnectTimeout: any = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    if (step === 3 && sessionId && playerId) {
-      const connectWS = () => {
-        ws = new WebSocket(playerSocketUrl(sessionId, playerId));
+    const connect = () => {
+      ws = new WebSocket(playerSocketUrl(sessionId, playerId));
 
-        ws.onmessage = (event) => {
-          try {
-            const msg = JSON.parse(event.data);
-            if (msg.type === 'game_started' || msg.type === 'question_active') {
-              navigate(`/play/${sessionId}?playerId=${playerId}`);
-            } else if (msg.type === 'lobby_snapshot') {
-              if (msg.payload.status === 'active' || msg.payload.status === 'active_question') {
-                navigate(`/play/${sessionId}?playerId=${playerId}`);
-              }
-            }
-          } catch (e) {
-            console.error(e);
-          }
-        };
-
-        ws.onclose = () => {
-          reconnectTimeout = setTimeout(connectWS, 3000);
-        };
-      };
-
-      connectWS();
-
-      return () => {
-        if (reconnectTimeout) clearTimeout(reconnectTimeout);
-        if (ws) {
-          ws.onclose = null;
-          ws.close();
+      ws.onmessage = event => {
+        try {
+          const msg = JSON.parse(event.data);
+          const started =
+            msg.type === 'game_started' ||
+            msg.type === 'question_active' ||
+            (msg.type === 'lobby_snapshot' && msg.payload?.status && msg.payload.status !== 'lobby');
+          if (started) navigate(`/play/${sessionId}?playerId=${playerId}`);
+        } catch (err) {
+          console.error('Malformed lobby message', err);
         }
       };
-    }
-  }, [step, sessionId, playerId]);
+
+      ws.onclose = () => {
+        reconnectTimeout = setTimeout(connect, RECONNECT_MS);
+      };
+    };
+
+    connect();
+
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) {
+        // Clear onclose first, or tearing down schedules another reconnect.
+        ws.onclose = null;
+        ws.close();
+      }
+    };
+  }, [step, sessionId, playerId, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: '#0a0a0a' }}>
-      <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in-95 duration-500">
-        
-        {/* Logo/Icon */}
+    <div className="min-h-screen flex items-center justify-center p-6 bg-bg">
+      <div className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center justify-center space-y-4">
-          <div className="w-20 h-20 rounded-3xl flex items-center justify-center" style={{ backgroundColor: 'rgba(10,191,188,0.1)', border: '1px solid rgba(10,191,188,0.2)' }}>
-            <Gamepad2 className="w-10 h-10" style={{ color: '#0ABFBC' }} />
+          <div className="w-20 h-20 rounded-3xl flex items-center justify-center bg-primary-soft border border-primary-border">
+            <Gamepad2 className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight" style={{ color: '#f0f0f0' }}>Skillture Quiz</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-text">Skillture Quiz</h1>
         </div>
 
-        {/* Card */}
-        <div className="p-8 rounded-3xl border shadow-2xl space-y-6" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
-          
+        <Card className="p-8 rounded-3xl shadow-2xl space-y-6">
           {error && (
-            <div className="px-4 py-3 rounded-xl text-sm border font-medium text-center" style={{ backgroundColor: 'rgba(224,85,85,0.08)', borderColor: 'rgba(224,85,85,0.25)', color: '#e05555' }}>
+            <div
+              role="alert"
+              className="px-4 py-3 rounded-xl text-sm border font-medium text-center bg-danger-soft border-danger-border text-danger"
+            >
               {error}
             </div>
           )}
 
-          {step === 1 && (
+          {step === 'pin' && (
             <form onSubmit={handlePinSubmit} className="space-y-4">
-              <div>
-                <input 
-                  type="text"
-                  placeholder="Game PIN"
-                  value={pin}
-                  onChange={e => setPin(e.target.value.toUpperCase())}
-                  className="w-full text-center text-3xl font-black tracking-widest py-4 rounded-xl outline-none transition-all placeholder:font-normal placeholder:text-xl"
-                  style={{ backgroundColor: '#0a0a0a', border: '2px solid #2a2a2a', color: '#f0f0f0' }}
-                  onFocus={e => e.currentTarget.style.borderColor = '#0ABFBC'}
-                  onBlur={e => e.currentTarget.style.borderColor = '#2a2a2a'}
-                  autoFocus
-                />
-              </div>
-              <button 
-                type="submit"
-                disabled={!pin || isJoining}
-                className="w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 disabled:opacity-50 disabled:active:scale-100"
-                style={{ backgroundColor: '#0a0a0a', border: '1px solid #2a2a2a', color: '#f0f0f0' }}
-                onMouseEnter={e => { if (!isJoining && pin) { e.currentTarget.style.backgroundColor = '#0ABFBC'; e.currentTarget.style.color = '#0a0a0a'; e.currentTarget.style.borderColor = '#0ABFBC'; } }}
-                onMouseLeave={e => { if (!isJoining || !pin) { e.currentTarget.style.backgroundColor = '#0a0a0a'; e.currentTarget.style.color = '#f0f0f0'; e.currentTarget.style.borderColor = '#2a2a2a'; } }}
-              >
-                {isJoining ? 'Finding Game...' : 'Enter'} <ArrowRight className="w-5 h-5" />
-              </button>
+              <input
+                type="text"
+                placeholder="Game PIN"
+                aria-label="Game PIN"
+                value={pin}
+                onChange={e => setPin(e.target.value.toUpperCase())}
+                className="w-full text-center text-3xl font-black tracking-widest py-4 rounded-xl outline-none transition-colors placeholder:font-normal placeholder:text-xl bg-bg text-text border-2 border-border focus:border-primary"
+                autoFocus
+              />
+              <Button type="submit" size="lg" variant="secondary" block disabled={!pin} loading={isJoining}>
+                {isJoining ? 'Finding Game…' : 'Enter'}
+                {!isJoining && <ArrowRight className="w-5 h-5" />}
+              </Button>
             </form>
           )}
 
-          {step === 2 && (
+          {step === 'nickname' && (
             <form onSubmit={handleNicknameSubmit} className="space-y-4">
-              <div>
-                <input 
-                  type="text"
-                  placeholder="Nickname"
-                  value={nickname}
-                  onChange={e => setNickname(e.target.value)}
-                  className="w-full text-center text-2xl font-bold py-4 rounded-xl outline-none transition-all placeholder:font-normal placeholder:text-xl"
-                  style={{ backgroundColor: '#0a0a0a', border: '2px solid #2a2a2a', color: '#f0f0f0' }}
-                  onFocus={e => e.currentTarget.style.borderColor = '#0ABFBC'}
-                  onBlur={e => e.currentTarget.style.borderColor = '#2a2a2a'}
-                  autoFocus
-                />
-              </div>
-              <button 
-                type="submit"
-                disabled={!nickname || isJoining}
-                className="w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 disabled:opacity-50 disabled:active:scale-100"
-                style={{ backgroundColor: '#0ABFBC', color: '#0a0a0a' }}
-                onMouseEnter={e => !isJoining && nickname && (e.currentTarget.style.backgroundColor = '#09a8a5')}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#0ABFBC'}
-              >
-                {isJoining ? 'Joining...' : 'Join Game'}
-              </button>
+              <input
+                type="text"
+                placeholder="Nickname"
+                aria-label="Nickname"
+                value={nickname}
+                onChange={e => setNickname(e.target.value)}
+                className="w-full text-center text-2xl font-bold py-4 rounded-xl outline-none transition-colors placeholder:font-normal placeholder:text-xl bg-bg text-text border-2 border-border focus:border-primary"
+                autoFocus
+              />
+              <Button type="submit" size="lg" block disabled={!nickname} loading={isJoining}>
+                {isJoining ? 'Joining…' : 'Join Game'}
+              </Button>
             </form>
           )}
 
-          {step === 3 && (
+          {step === 'waiting' && (
             <div className="text-center space-y-6 py-4">
-              <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin mx-auto" style={{ borderColor: 'rgba(10,191,188,0.2)', borderTopColor: '#0ABFBC' }}></div>
+              <Spinner size="w-16 h-16" className="border-4" />
               <div>
-                <h2 className="text-xl font-bold mb-2" style={{ color: '#f0f0f0' }}>You're in!</h2>
-                <p className="text-lg font-medium" style={{ color: '#0ABFBC' }}>{nickname}</p>
+                <h2 className="text-xl font-bold mb-2 text-text">You're in!</h2>
+                <p className="text-lg font-medium text-primary">{nickname}</p>
               </div>
-              <p className="font-medium animate-pulse" style={{ color: '#888' }}>See your nickname on screen</p>
+              <p className="font-medium animate-pulse text-muted">See your nickname on screen</p>
             </div>
           )}
-
-        </div>
+        </Card>
       </div>
     </div>
   );
-}
+};
+
+export default PlayerJoin;

@@ -8,6 +8,7 @@ import StatusDropdown from '../components/StatusDropdown';
 import ShareModal from '../components/ShareModal';
 import { useToastStore } from '../context/ToastStore';
 import {
+import { formShareUrl } from '../lib/links';
   Button,
   Card,
   ConfirmDialog,
@@ -189,7 +190,7 @@ const FormsPage: React.FC = () => {
 
       {shareForm && (
         <ShareModal
-          url={`${window.location.origin}/preview/form/${shareForm.id}`}
+          url={formShareUrl(shareForm.id)}
           title={`Share "${shareForm.title}"`}
           onClose={() => setShareForm(null)}
         />

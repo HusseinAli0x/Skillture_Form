@@ -9,6 +9,7 @@ import StatusDropdown from '../components/StatusDropdown';
 import ShareModal from '../components/ShareModal';
 import { useToastStore } from '../context/ToastStore';
 import {
+import { quizShareUrl } from '../lib/links';
   Button,
   Card,
   ConfirmDialog,
@@ -256,7 +257,7 @@ const QuizzesPage: React.FC = () => {
 
       {shareQuiz && (
         <ShareModal
-          url={`${window.location.origin}/quiz/${shareQuiz.id}`}
+          url={quizShareUrl(shareQuiz.id)}
           title={`Share "${localized(shareQuiz.title, 'Untitled')}"`}
           description="Players scan this to join the next live session."
           onClose={() => setShareQuiz(null)}

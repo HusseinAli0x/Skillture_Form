@@ -10,6 +10,7 @@ import StatCard from '../components/dashboard/StatCard';
 import GeminiPanel from '../components/dashboard/GeminiPanel';
 import RecentPanel from '../components/dashboard/RecentPanel';
 import { Button, PageHeader } from '../components/ui';
+import { formShareUrl, quizShareUrl } from '../lib/links';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -89,7 +90,7 @@ const Dashboard: React.FC = () => {
           onShare={id => {
             const form = forms.find(f => f.id === id);
             setShare({
-              url: `${window.location.origin}/preview/form/${id}`,
+              url: formShareUrl(id),
               title: `Share "${localized(form?.title, 'Untitled Form')}"`,
             });
           }}
@@ -115,7 +116,7 @@ const Dashboard: React.FC = () => {
           onShare={id => {
             const quiz = quizzes.find(q => q.id === id);
             setShare({
-              url: `${window.location.origin}/quiz/${id}`,
+              url: quizShareUrl(id),
               title: `Share "${localized(quiz?.title, 'Untitled Quiz')}"`,
             });
           }}

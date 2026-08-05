@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
+import { Card, Spinner } from '../components/ui';
+
+/** How often to re-check whether the host has opened a session. */
+const POLL_MS = 3000;
 
 const QuizJoinHandler: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -10,24 +14,23 @@ const QuizJoinHandler: React.FC = () => {
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
     let isMounted = true;
-    
+
     const checkSession = async () => {
       try {
         const res = await client.get(`/api/v1/quizzes/${id}/active-session`);
         if (!isMounted) return;
 
-        const session = res.data;
-        if (session && session.pin) {
-          navigate(`/play?pin=${session.pin}`, { replace: true });
+        if (res.data?.pin) {
+          navigate(`/play?pin=${res.data.pin}`, { replace: true });
         } else {
-          timeout = setTimeout(checkSession, 3000);
+          timeout = setTimeout(checkSession, POLL_MS);
         }
       } catch (err: any) {
         if (!isMounted) return;
 
+        // 404 means the host has not started yet — keep waiting.
         if (err.response?.status === 404) {
-          // No active session yet, keep polling
-          timeout = setTimeout(checkSession, 3000);
+          timeout = setTimeout(checkSession, POLL_MS);
         } else {
           setError(err.response?.data?.error || 'Failed to connect to game server');
         }
@@ -44,23 +47,22 @@ const QuizJoinHandler: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
-        <div className="bg-[#141414] border border-red-500/20 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
-          <h2 className="text-xl font-bold text-red-400 mb-2">Connection Error</h2>
-          <p className="text-slate-400">{error}</p>
-        </div>
+      <div className="min-h-screen bg-bg flex items-center justify-center p-4">
+        <Card className="border-danger-border p-8 max-w-md w-full text-center shadow-2xl">
+          <h2 className="text-xl font-bold text-danger mb-2">Connection Error</h2>
+          <p className="text-muted">{error}</p>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center p-4">
-      <div className="w-16 h-16 relative mb-6">
-        <div className="absolute inset-0 rounded-full border-4 border-[#2a2a2a]"></div>
-        <div className="absolute inset-0 rounded-full border-4 border-[#0ABFBC] border-t-transparent animate-spin"></div>
-      </div>
-      <h2 className="text-2xl font-bold text-white mb-2">Waiting for Host...</h2>
-      <p className="text-slate-400">The game hasn't started yet. We'll connect you automatically when it's ready.</p>
+    <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-4">
+      <Spinner size="w-16 h-16" className="border-4 mb-6" />
+      <h2 className="text-2xl font-bold text-text mb-2">Waiting for Host…</h2>
+      <p className="text-muted text-center">
+        The game hasn't started yet. We'll connect you automatically when it's ready.
+      </p>
     </div>
   );
 };
