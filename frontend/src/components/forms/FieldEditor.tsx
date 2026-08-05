@@ -2,31 +2,7 @@ import React from 'react';
 import { ArrowDown, ArrowUp, ChevronDown, Plus, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import { FieldType, FieldTypeLabels } from '../../api/types';
 import { IconButton, Input, Label, Select } from '../ui';
-
-export interface FieldState {
-  _id: string;
-  label: string;
-  placeholder: string;
-  helpText: string;
-  type: FieldType;
-  required: boolean;
-  options: string[];
-  isNew?: boolean;
-}
-
-/** Field types that need an option list. */
-export const HAS_OPTIONS: FieldType[] = [FieldType.Select, FieldType.Radio, FieldType.Checkbox];
-
-export const FIELD_TYPES: FieldType[] = [
-  FieldType.Text,
-  FieldType.Textarea,
-  FieldType.Number,
-  FieldType.Email,
-  FieldType.Select,
-  FieldType.Radio,
-  FieldType.Checkbox,
-  FieldType.Date,
-];
+import { FIELD_TYPES, HAS_OPTIONS, type FieldState } from './fieldState';
 
 interface Props {
   field: FieldState;

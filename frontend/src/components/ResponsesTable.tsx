@@ -31,23 +31,26 @@ type SortColumn = 'respondent' | 'submitted_at' | string;
  * localised map. All three collapse to display text here.
  */
 const answerText = (value: unknown): string => {
-  let parsed = value;
-  if (typeof parsed === 'string') {
+  let candidate: unknown = value;
+
+  if (typeof value === 'string') {
     try {
-      const decoded = JSON.parse(parsed);
-      if (decoded && typeof decoded === 'object') parsed = decoded;
+      const decoded = JSON.parse(value);
+      candidate = decoded && typeof decoded === 'object' ? decoded : value;
     } catch {
-      return parsed;
+      return value;
     }
   }
-  if (parsed && typeof parsed === 'object') {
-    const map = parsed as Record<string, unknown>;
+
+  if (candidate && typeof candidate === 'object') {
+    const map = candidate as Record<string, unknown>;
     const text = localized(map as Record<string, string>);
     if (text) return text;
     if (typeof map.name === 'string') return map.name;
-    return JSON.stringify(parsed);
+    return JSON.stringify(candidate);
   }
-  return parsed == null ? '' : String(parsed);
+
+  return candidate == null ? '' : String(candidate);
 };
 
 interface Props {

@@ -5,22 +5,11 @@ import client from '../api/client';
 import { FieldType, FormStatus } from '../api/types';
 import type { Form } from '../api/types';
 import { localized, toLocalized } from '../lib/i18n';
-import { newId } from '../lib/id';
 import { useToastStore } from '../context/ToastStore';
 import StatusDropdown from '../components/StatusDropdown';
-import FieldEditor, { HAS_OPTIONS, type FieldState } from '../components/forms/FieldEditor';
+import FieldEditor from '../components/forms/FieldEditor';
+import { emptyField, HAS_OPTIONS, type FieldState } from '../components/forms/fieldState';
 import { Button, Card, IconButton, Input, Label, Textarea } from '../components/ui';
-
-const emptyField = (): FieldState => ({
-  _id: newId(),
-  label: '',
-  placeholder: '',
-  helpText: '',
-  type: FieldType.Text,
-  required: false,
-  options: [],
-  isNew: true,
-});
 
 const FormBuilder: React.FC = () => {
   const navigate = useNavigate();

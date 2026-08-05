@@ -18,7 +18,8 @@ export const useAuthStore = create<AuthState>((set) => {
     if (storedAdmin && storedAdmin !== 'undefined') {
       parsedAdmin = JSON.parse(storedAdmin);
     }
-  } catch (e) {
+  } catch {
+    // Corrupt entry — drop it rather than crashing the store's initialiser.
     localStorage.removeItem('admin');
   }
 

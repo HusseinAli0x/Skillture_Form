@@ -56,6 +56,18 @@ export async function exportToExcel(
  * fixed width and restored afterwards — including when rendering throws, which
  * previously could leave the template visible over the app.
  */
+/**
+ * The types bundled with html2pdf.js are incomplete: `pagebreak` is a real
+ * option but absent from Html2PdfOptions, and `.get()` is declared as a plain
+ * Promise when at runtime the worker's `.then()` returns the worker itself, so
+ * the chain continues into `.save()`. Neither interface is exported, so the
+ * shape used here is declared locally rather than papered over with `any`.
+ */
+interface PdfWorkerChain {
+  then(onFulfilled: (pdf: any) => void): PdfWorkerChain;
+  save(): Promise<void>;
+}
+
 export async function exportToPdf(
   element: HTMLElement,
   filename = 'Form_Responses_Report.pdf'
@@ -76,19 +88,24 @@ export async function exportToPdf(
     // One frame for the browser to lay the template out before it is captured.
     await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
-    await html2pdf()
-      .set({
-        margin: [10, 10, 15, 10] as [number, number, number, number],
-        filename,
-        image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, windowWidth: 1200 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' as const },
-        pagebreak: { mode: 'avoid-all' },
-      })
+    const options = {
+      margin: [10, 10, 15, 10] as [number, number, number, number],
+      filename,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false, windowWidth: 1200 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' as const },
+      // Keeps a table row from being sliced across a page boundary.
+      pagebreak: { mode: 'avoid-all' },
+    };
+
+    const pdfChain = html2pdf()
+      .set(options)
       .from(element)
       .toPdf()
-      .get('pdf')
-      .then((pdf: any) => {
+      .get('pdf') as unknown as PdfWorkerChain;
+
+    await pdfChain
+      .then(pdf => {
         const pageCount = pdf.internal.getNumberOfPages();
         for (let page = 1; page <= pageCount; page++) {
           pdf.setPage(page);

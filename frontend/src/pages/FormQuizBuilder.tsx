@@ -7,12 +7,13 @@ import type { Quiz } from '../api/types';
 import { localized, toLocalized } from '../lib/i18n';
 import { useToastStore } from '../context/ToastStore';
 import StatusDropdown from '../components/StatusDropdown';
-import QuestionEditor, {
+import QuestionEditor from '../components/quiz/QuestionEditor';
+import {
   emptyQuestion,
   trueFalseOptions,
   type OptionState,
   type QuestionState,
-} from '../components/quiz/QuestionEditor';
+} from '../components/quiz/questionState';
 import { Button, Card, IconButton, Input, Label, Textarea } from '../components/ui';
 
 /**
