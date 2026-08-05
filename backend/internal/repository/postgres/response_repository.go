@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/repository/interfaces"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // ResponseRepository implements PostgreSQL operations for Responses
@@ -66,6 +68,9 @@ func (r *ResponseRepository) GetByID(ctx context.Context, id uuid.UUID) (*entiti
 	row := r.base.QueryRow(ctx, query, id)
 	var resp entities.Response
 	if err := row.Scan(&resp.ID, &resp.FormID, &resp.Respondent, &resp.Status, &resp.SubmittedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("GetByID: %w", err)
 	}
 
@@ -94,6 +99,12 @@ func (r *ResponseRepository) ListByFormID(ctx context.Context, formID uuid.UUID)
 			return nil, fmt.Errorf("ListByFormID.Scan: %w", err)
 		}
 		responses = append(responses, &resp)
+	}
+
+	// A failure part-way through iteration otherwise returns a truncated
+	// slice as if it were a complete, successful result.
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return responses, nil

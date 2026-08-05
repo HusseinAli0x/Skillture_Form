@@ -7,6 +7,7 @@ import (
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
+	domainErrors "skillture/backend/internal/domain/errors"
 	repo "skillture/backend/internal/repository/interfaces"
 	usecase_interfaces "skillture/backend/internal/usecase/interfaces"
 	val "skillture/backend/internal/validation"
@@ -64,6 +65,10 @@ func (u *ResponseUsecase) Submit(
 	form, err := u.formRepo.GetByID(ctx, response.FormID)
 	if err != nil {
 		return err
+	}
+	// Repositories signal "not found" as (nil, nil).
+	if form == nil {
+		return domainErrors.ErrNotFound
 	}
 
 	if err := val.ValidateResponseBusiness(response, form); err != nil {
@@ -230,9 +235,12 @@ func (u *ResponseUsecase) Delete(ctx context.Context, id uuid.UUID) error {
 		return errors.New("response id is required")
 	}
 
-	_, err := u.responseRepo.GetByID(ctx, id)
+	existing, err := u.responseRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
+	}
+	if existing == nil {
+		return domainErrors.ErrNotFound
 	}
 
 	return u.responseRepo.Delete(ctx, id)

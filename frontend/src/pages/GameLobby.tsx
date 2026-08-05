@@ -3,6 +3,7 @@ import { Copy, Check, Users, Play } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
+import { hostSocketUrl } from '../api/ws';
 
 export default function GameLobby() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -14,6 +15,8 @@ export default function GameLobby() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!sessionId) return;
+
     // 1. Fetch session info to get the PIN
     client.get(`/api/v1/sessions/${sessionId}`)
       .then(res => {
@@ -30,21 +33,15 @@ export default function GameLobby() {
     const fetchPlayers = () => {
       client.get(`/api/v1/sessions/${sessionId}/leaderboard`)
         .then(res => {
-          setPlayers(res.data.map((p: any) => ({ id: p.player_id, name: p.player_name })));
+          // The leaderboard returns entities.QuizPlayer: {id, name, score, ...}
+          setPlayers((res.data || []).map((p: any) => ({ id: p.id, name: p.name })));
         })
         .catch(console.error);
     };
     fetchPlayers();
 
     // 2. Connect WebSocket as Host
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host; 
-    // Assuming backend is on port 8080 during dev. In production, proxy handles /ws
-    const wsUrl = import.meta.env.DEV 
-      ? `ws://localhost:8080/ws/sessions/${sessionId}/host`
-      : `${protocol}//${host}/ws/sessions/${sessionId}/host`;
-      
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(hostSocketUrl(sessionId));
 
     ws.onmessage = (event) => {
       try {

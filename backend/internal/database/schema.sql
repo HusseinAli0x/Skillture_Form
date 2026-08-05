@@ -50,7 +50,8 @@ CREATE TABLE form_fields (
         ON DELETE CASCADE
 );
 
-// UNIQUE INDEX REMOVED to allow reordering without constraint violations
+-- NOTE: no UNIQUE index on (form_id, position) — reordering fields would
+-- violate it mid-update. Ordering is enforced by the application instead.
 
 -- =====================================================
 -- Table: responses
@@ -281,7 +282,16 @@ CREATE TABLE homepage_images (
 -- =====================================================
 -- Initial Seed
 -- =====================================================
--- Insert default admin account (Password: Skillture@2025)
+-- Bootstrap admin account, created only when no admin exists yet.
+--
+-- Username: admin
+-- Password: Skillture@2025
+--
+-- CHANGE THIS IMMEDIATELY after the first login. The credential is published
+-- in this file, which is committed, so it is public by definition.
+--
+-- (The hash previously stored here was not a bcrypt hash of this or any other
+-- documented password, so this account could never be logged into at all.)
 INSERT INTO admins (id, username, hashed_password)
-SELECT gen_random_uuid(), 'admin', '$2a$10$32rK7q4Q1E.Tj4tH1eH84.1w0P3K7P/O5s1g8pS6gq2p/Yw.1w52K'
+SELECT gen_random_uuid(), 'admin', '$2a$12$6eFPDRyHzJSlcHQs/v8np.UR24aXLYV6UJ9Tu2Yzq7t8SXBQlHrDm'
 WHERE NOT EXISTS (SELECT 1 FROM admins);

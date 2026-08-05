@@ -27,10 +27,14 @@ const HomePage: React.FC = () => {
         if (imageRes.data && imageRes.data.length > 0) {
           // Use the most recent active image
           const activeImage = imageRes.data.find((img: any) => img.is_active);
+          // file_path is root-relative (/uploads/...). nginx proxies /uploads/
+          // to the backend in production and Vite proxies it in dev, so no
+          // origin prefix is needed — VITE_API_URL was never defined anywhere
+          // and produced src="undefined/uploads/...".
           if (activeImage) {
-            setImageUrl(import.meta.env.VITE_API_URL + activeImage.file_path);
+            setImageUrl(activeImage.file_path);
           } else {
-            setImageUrl(import.meta.env.VITE_API_URL + imageRes.data[0].file_path);
+            setImageUrl(imageRes.data[0].file_path);
           }
         }
       } catch (err) {

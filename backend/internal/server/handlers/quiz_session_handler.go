@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 
+	"skillture/backend/internal/auth"
 	"skillture/backend/internal/server/ws"
 	uc "skillture/backend/internal/usecase/interfaces"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -40,18 +43,14 @@ func (h *QuizSessionHandler) CreateSession(c *gin.Context) {
 		return
 	}
 
-	// host_id is optional — use a sentinel UUID if not provided
-	var req struct {
-		HostID string `json:"host_id"`
-	}
-	_ = c.ShouldBindJSON(&req) // ignore binding error; body may be empty
-
-	hostID := uuid.Nil
-	if req.HostID != "" {
-		if hostID, err = uuid.Parse(req.HostID); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid host_id"})
-			return
-		}
+	// The host is whoever holds the access token. quiz_sessions.host_id is a
+	// NOT NULL foreign key to admins(id), so the previous behaviour — trusting
+	// an optional body field and falling back to uuid.Nil — produced an opaque
+	// foreign-key violation reported as a 400 whenever the body was omitted.
+	hostID, ok := auth.AdminIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthenticated"})
+		return
 	}
 
 	session, err := h.sessionUC.CreateSession(c.Request.Context(), quizID, hostID)
@@ -120,7 +119,7 @@ func (h *QuizSessionHandler) StartSession(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	// Broadcast game_started to all players in the room
 	h.hub.Broadcast(id, ws.Message{
 		Type: ws.MsgTypeGameStarted,
@@ -159,10 +158,11 @@ func (h *QuizSessionHandler) AdvanceQuestion(c *gin.Context) {
 		return
 	}
 
-	// Broadcast the new question to all players in the room
+	// Broadcast the new question to all players in the room. PublicView strips
+	// correct_answer — the raw entity would hand players the answer.
 	h.hub.Broadcast(sessionID, ws.Message{
 		Type:    ws.MsgTypeQuestion,
-		Payload: question,
+		Payload: question.PublicView(),
 	})
 
 	c.JSON(http.StatusOK, question)
@@ -180,7 +180,22 @@ func (h *QuizSessionHandler) FinishSession(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "finished"})
+
+	// Broadcast the final leaderboard with game_finished. Players wait on this
+	// event to leave the question screen; without it they hang indefinitely.
+	leaderboard, err := h.playerUC.GetLeaderboard(c.Request.Context(), id)
+	if err != nil {
+		// The session is already finished; a leaderboard read failure must not
+		// leave clients stranded, so still signal the end of the game.
+		log.Printf("FinishSession: leaderboard read failed for session %s: %v", id, err)
+		leaderboard = nil
+	}
+	h.hub.Broadcast(id, ws.Message{
+		Type:    ws.MsgTypeGameFinished,
+		Payload: leaderboard,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"status": "finished", "leaderboard": leaderboard})
 }
 
 // GET /api/v1/sessions/:id/leaderboard

@@ -10,7 +10,11 @@ import (
 	uc "skillture/backend/internal/usecase/interfaces"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// pgUniqueViolation is PostgreSQL's SQLSTATE for a unique constraint violation.
+const pgUniqueViolation = "23505"
 
 // quizPlayerUseCase is the concrete implementation of QuizPlayerUseCase.
 type quizPlayerUseCase struct {
@@ -61,12 +65,22 @@ func (u *quizPlayerUseCase) JoinSession(ctx context.Context, sessionID uuid.UUID
 	}
 
 	if err := u.playerRepo.Create(ctx, player); err != nil {
-		// The unique index on (session_id, name) will cause a conflict error;
-		// surface it as a domain error so handlers can return 409.
-		return nil, domainErrors.ErrDuplicatePlayerName
+		// Only a unique-violation on (session_id, name) means the nickname is
+		// taken. Reporting every failure as a duplicate name turned database
+		// outages into a misleading "that nickname is taken" 409.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
+			return nil, domainErrors.ErrDuplicatePlayerName
+		}
+		return nil, err
 	}
 
 	return player, nil
+}
+
+// GetPlayer retrieves a single player by ID.
+func (u *quizPlayerUseCase) GetPlayer(ctx context.Context, playerID uuid.UUID) (*entities.QuizPlayer, error) {
+	return u.playerRepo.GetByID(ctx, playerID)
 }
 
 // GetLeaderboard returns all players in a session sorted by score DESC.

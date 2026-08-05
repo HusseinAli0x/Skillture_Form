@@ -18,11 +18,10 @@ func NewResponseHandler(responseUC uc.ResponseUseCase) *ResponseHandler {
 	return &ResponseHandler{responseUC: responseUC}
 }
 
-
 // SubmitResponseRequest matches the frontend submission payload
 type SubmitResponseRequest struct {
-	FormID     uuid.UUID              `json:"form_id"`
-	Respondent map[string]any         `json:"respondent"`
+	FormID     uuid.UUID                 `json:"form_id"`
+	Respondent map[string]any            `json:"respondent"`
 	Answers    map[string]map[string]any `json:"answers"` // map[field_id] {"en": "..."}
 }
 
@@ -71,7 +70,10 @@ func (h *ResponseHandler) GetByID(c *gin.Context) {
 
 	resp, err := h.responseUC.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondError(c, err)
+		return
+	}
+	if respondNotFoundIfNil(c, resp == nil) {
 		return
 	}
 
@@ -88,7 +90,7 @@ func (h *ResponseHandler) GetAnswers(c *gin.Context) {
 
 	answers, err := h.responseUC.GetAnswers(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 
@@ -105,7 +107,7 @@ func (h *ResponseHandler) ListByForm(c *gin.Context) {
 
 	list, err := h.responseUC.ListByForm(c.Request.Context(), formID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 
@@ -122,7 +124,7 @@ func (h *ResponseHandler) ListDetailedByForm(c *gin.Context) {
 
 	details, err := h.responseUC.ListDetailedByForm(c.Request.Context(), formID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 
@@ -138,7 +140,7 @@ func (h *ResponseHandler) Delete(c *gin.Context) {
 	}
 
 	if err := h.responseUC.Delete(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 

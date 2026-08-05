@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"skillture/backend/internal/domain/entities"
@@ -86,19 +87,24 @@ func (r *quizPlayerRepository) GetByID(ctx context.Context, id uuid.UUID) (*enti
 	return p, nil
 }
 
-// UpdateScore atomically sets the player's cumulative score.
-// Called by the scoring use case after each answered question.
-func (r *quizPlayerRepository) UpdateScore(ctx context.Context, playerID uuid.UUID, score int) error {
-	const query = `UPDATE quiz_players SET score = $2 WHERE id = $1`
+// AddScore atomically adds points to the player's cumulative score and
+// returns the new total.
+//
+// This replaces an UpdateScore that wrote an absolute value computed in Go
+// (SET score = $2). Two answers scored concurrently both read the same
+// starting total, and the second write overwrote the first — silently losing
+// points. Incrementing in SQL makes the update commutative.
+func (r *quizPlayerRepository) AddScore(ctx context.Context, playerID uuid.UUID, points int) (int, error) {
+	const query = `UPDATE quiz_players SET score = score + $2 WHERE id = $1 RETURNING score`
 
-	tag, err := r.exec.Exec(ctx, query, playerID, score)
-	if err != nil {
-		return fmt.Errorf("quizPlayerRepository.UpdateScore: %w", err)
+	var newScore int
+	if err := r.exec.QueryRow(ctx, query, playerID, points).Scan(&newScore); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, pgx.ErrNoRows
+		}
+		return 0, fmt.Errorf("quizPlayerRepository.AddScore: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
-		return pgx.ErrNoRows
-	}
-	return nil
+	return newScore, nil
 }
 
 // Delete removes a player record by ID.
@@ -138,6 +144,12 @@ func (r *quizPlayerRepository) ListBySessionID(ctx context.Context, sessionID uu
 			return nil, fmt.Errorf("quizPlayerRepository.ListBySessionID.Scan: %w", err)
 		}
 		players = append(players, &p)
+	}
+
+	// A failure part-way through iteration otherwise returns a truncated
+	// slice as if it were a complete, successful result.
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return players, nil

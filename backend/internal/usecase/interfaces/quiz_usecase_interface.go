@@ -73,6 +73,10 @@ type QuizPlayerUseCase interface {
 	// Returns ErrSessionNotInLobby if the game has already started.
 	// Returns ErrDuplicatePlayerName if the nickname is already taken.
 	JoinSession(ctx context.Context, sessionID uuid.UUID, name string) (*entities.QuizPlayer, error)
+	// GetPlayer retrieves a single player by ID. Returns (nil, nil) if no such
+	// player exists. Callers must confirm the player belongs to the session
+	// they are acting on — the player ID arrives from the client.
+	GetPlayer(ctx context.Context, playerID uuid.UUID) (*entities.QuizPlayer, error)
 	// GetLeaderboard returns all players in a session sorted by score DESC
 	GetLeaderboard(ctx context.Context, sessionID uuid.UUID) ([]*entities.QuizPlayer, error)
 }

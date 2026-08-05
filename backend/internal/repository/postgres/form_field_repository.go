@@ -223,5 +223,11 @@ func (r *formFieldRepository) List(ctx context.Context, filter interfaces.FormFi
 		fields = append(fields, &ff)
 	}
 
+	// A failure part-way through iteration otherwise returns a truncated
+	// slice as if it were a complete, successful result.
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return fields, nil
 }

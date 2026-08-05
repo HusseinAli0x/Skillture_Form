@@ -1,70 +1,137 @@
 # Skillture Platform
 
-Skillture is a robust, highly scalable assessment platform for creating forms and real-time quiz games. This repository contains both the Go-based backend and the Vite + React + TypeScript frontend, fully containerized and ready for deployment.
+Skillture is an assessment platform for building forms and running real-time quiz games.
+This repository contains the Go backend and the Vite + React + TypeScript frontend,
+containerized with Docker Compose.
+
+Further reading:
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the system is put together.
+- [`docs/ISSUES.md`](docs/ISSUES.md) — known defects, fixed and outstanding.
 
 ## Architecture
 
-The project is strictly separated into two environments:
-- `/backend`: Go application using Gin framework, pgxpool, and Google Gemini API.
-- `/frontend`: React SPA built with Vite, TypeScript, and Tailwind CSS.
+- `/backend` — Go 1.25 application: Gin, pgx/v5, JWT auth, gorilla/websocket, Google Gemini.
+- `/frontend` — React 19 SPA: Vite, TypeScript, Tailwind v4, zustand, axios.
+- PostgreSQL 16 with the `pgvector` extension.
+
+In production the SPA is served by nginx, which also proxies `/api`, `/admin`, `/uploads`
+and `/ws` to the backend — so the browser only ever talks to one origin.
 
 ## Prerequisites
 
 - Docker and Docker Compose
-- Node.js (v18+) for local frontend development
-- Go (1.22+) for local backend development
-- PostgreSQL (if running locally without Docker)
+- Node.js 22+ for local frontend development
+- Go 1.25.4+ for local backend development (see `backend/go.mod`)
+- PostgreSQL 16 with `pgvector` (if running locally without Docker)
 
-## Getting Started (Docker - Recommended)
+## Getting Started (Docker — recommended)
 
 1. **Clone the repository.**
-2. **Environment Variables:**
-   - Copy `backend/.env.example` to `backend/.env` and add your Google Gemini API Key:
-     ```bash
-     cp backend/.env.example backend/.env
-     ```
-     Ensure `GEMINI_API_KEY=your_key_here` is set in the `.env` file.
-3. **Run Docker Compose:**
+
+2. **Environment variables.**
+
    ```bash
-   docker-compose up --build -d
+   cp backend/.env.example backend/.env
    ```
+
+   Then edit `backend/.env`. Two things are mandatory:
+
+   - `JWT_SECRET` — at least 32 characters, or the backend refuses to start.
+     Generate one with `openssl rand -base64 48`.
+   - `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`, which must match
+     `DB_USER` / `DB_PASSWORD` / `DB_NAME` in the same file.
+
+   `GEMINI_API_KEY` is optional; leave it blank to disable the AI report panel.
+
+3. **Run Docker Compose:**
+
+   ```bash
+   docker compose up --build -d
+   ```
+
 4. **Access the application:**
-   - Public Homepage: [http://localhost:5173](http://localhost:5173)
-   - Admin Dashboard: [http://localhost:5173/admin/dashboard](http://localhost:5173/admin/dashboard)
-   - Backend API: [http://localhost:8080](http://localhost:8080)
+   - Public homepage: <http://localhost:5175>
+   - Admin dashboard: <http://localhost:5175/admin/dashboard>
+   - Backend API: <http://localhost:8080>
+
+> **Schema changes:** `schema.sql` is mounted as a Postgres init script, and init scripts
+> only run once, on an empty data volume. After editing the schema you must run
+> `docker compose down -v` before `up` for the change to take effect.
 
 ## Default Admin Credentials
 
-Upon the first startup, the database automatically seeds an initial admin account:
+On first startup — when the `admins` table is empty — the schema seeds one account:
+
 - **Username:** `admin`
-- **Password:** `admin123`
+- **Password:** `Skillture@2025`
 
-*Please change these credentials in a production environment.*
+This password is published in `backend/internal/database/schema.sql`, so it is public by
+definition. **Change it immediately after the first login.**
 
-## Local Development (Without Docker)
+## Local Development (without Docker)
 
 ### Backend
-1. Ensure PostgreSQL is running.
-2. Initialize the database using `backend/internal/database/schema.sql`.
-3. Navigate to `backend/` and run:
+
+1. Ensure PostgreSQL is running and the `vector` extension is available.
+2. Create the database and apply `backend/internal/database/schema.sql`.
+3. Copy `backend/.env.example` to `backend/.env` and fill it in (see step 2 above).
+4. Run:
+
    ```bash
-   go run cmd/api/main.go
+   cd backend
+   go run ./cmd/api
    ```
 
 ### Frontend
-1. Navigate to `frontend/`.
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Run the development server:
-   ```bash
-   npm run dev
-   ```
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+The Vite dev server proxies `/api`, `/admin` and `/ws` to `http://127.0.0.1:8080`, so no
+frontend environment variables are needed.
+
+## Tests and checks
+
+```bash
+# Backend
+cd backend
+gofmt -l .          # must print nothing
+go vet ./...
+go test -race ./...
+
+# Frontend
+cd frontend
+npx tsc -b --noEmit
+npm run lint
+```
+
+Repository integration tests skip themselves unless `TEST_DATABASE_URL` points at a
+scratch database:
+
+```bash
+TEST_DATABASE_URL='postgres://user:pass@localhost:5432/skillture_test' go test ./...
+```
+
+CI (`.github/workflows/ci-cd.yml`) runs all of the above, then builds and pushes the
+backend and frontend images to GHCR on pushes to `main`.
 
 ## Features
-- **Form Builder**: Create complex forms with multiple field types.
-- **Quiz Game Builder**: Build engaging, time-limited live quizzes.
-- **AI Analytics Panel**: Leverage Google Gemini 3.1 Pro to analyze form data and generate insights.
-- **CMS Editor**: Customize the public-facing homepage and hero images effortlessly.
-- **Share Modals**: Instantly generate QR codes and shareable links for forms.
+
+- **Form Builder** — forms with eight field types, multilingual labels, draft/published/closed states.
+- **Quiz Game Builder** — live, PIN-joined quizzes with speed-based scoring.
+- **AI Analytics Panel** — a database activity summary generated with Google Gemini
+  (`gemini-2.5-flash` by default; override with `GEMINI_MODEL`).
+- **CMS Editor** — edit the public homepage copy and hero image.
+- **Share Modals** — QR codes and shareable links for forms and quizzes.
+
+## Security notes
+
+- All admin routes require a bearer token; see `backend/internal/auth/auth.go`.
+- Player-facing routes (join, answer, form submission) are intentionally unauthenticated —
+  players have no accounts.
+- Tokens are currently stored in `localStorage`, which is readable by any XSS on the
+  origin. Moving to an httpOnly cookie is tracked in [`docs/ISSUES.md`](docs/ISSUES.md).

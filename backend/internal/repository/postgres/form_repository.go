@@ -3,12 +3,15 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/repository/interfaces"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // FormRepository implements Postgres CRUD operations for forms.
@@ -65,6 +68,12 @@ func (r *FormRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.F
 	var form entities.Form
 	var titleBytes, descBytes []byte
 	if err := row.Scan(&form.ID, &titleBytes, &descBytes, &form.Status, &form.CreatedAt); err != nil {
+		// Every other repository signals "not found" as (nil, nil). Wrapping
+		// ErrNoRows here instead made a missing form indistinguishable from a
+		// database failure, so handlers reported 500 for both.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("FormRepository.GetByID: %w", err)
 	}
 
@@ -102,19 +111,28 @@ func (r *FormRepository) List(ctx context.Context, filter interfaces.FormFilter)
 		SELECT id, title, description, status, created_at
 		FROM forms
 	`
-	var args []interface{}
+	var (
+		args       []interface{}
+		conditions []string
+	)
 	if filter.Status != nil {
-		query += " WHERE status=$1"
 		args = append(args, *filter.Status)
+		conditions = append(conditions, fmt.Sprintf("status = $%d", len(args)))
 	}
 
 	if filter.Title != nil {
-		if len(args) > 0 {
-			query += " AND title ILIKE $2"
-		} else {
-			query += " WHERE title ILIKE $1"
-		}
 		args = append(args, "%"+*filter.Title+"%")
+		// `title` is JSONB, and Postgres has no ILIKE for jsonb — the previous
+		// `title ILIKE $n` failed with:
+		//   operator does not exist: jsonb ~~* unknown
+		// making any title-filtered list a guaranteed 500. Match against the
+		// extracted text of each translation instead.
+		conditions = append(conditions, fmt.Sprintf(
+			"(title->>'en' ILIKE $%d OR title->>'ar' ILIKE $%d)", len(args), len(args)))
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	rows, err := r.base.Query(ctx, query, args...)
@@ -137,6 +155,12 @@ func (r *FormRepository) List(ctx context.Context, filter interfaces.FormFilter)
 			_ = json.Unmarshal(descBytes, &f.Description)
 		}
 		forms = append(forms, &f)
+	}
+
+	// A failure part-way through iteration otherwise returns a truncated
+	// slice as if it were a complete, successful result.
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return forms, nil

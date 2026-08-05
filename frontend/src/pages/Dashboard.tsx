@@ -3,6 +3,7 @@ import { Plus, FileText, GamepadIcon, Activity, ArrowRight, Share2, Bot, Sparkle
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import client from '../api/client';
+import { FormStatus, QuizStatus } from '../api/types';
 import type { Quiz, Form } from '../api/types';
 import StatusDropdown from '../components/StatusDropdown';
 
@@ -30,19 +31,21 @@ const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: number |
 );
 
 const GeminiPanel: React.FC = () => {
-  const [prompt, setPrompt] = useState('');
   const [response, setResponse] = useState('');
+  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleAsk = async () => {
-    if (!prompt.trim()) return;
+  // The backend exposes a single report endpoint that summarises database
+  // activity; it takes no prompt. There is no free-form generation route.
+  const handleGenerate = async () => {
     setIsLoading(true);
     setResponse('');
+    setError('');
     try {
-      const res = await client.post('/api/v1/ai/generate', { prompt });
-      setResponse(res.data.response || 'No response generated.');
-    } catch (err) {
-      setResponse('Error generating response.');
+      const res = await client.get('/api/v1/admin/ai-report');
+      setResponse(res.data.report || 'No report generated.');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to generate report.');
     } finally {
       setIsLoading(false);
     }
@@ -59,30 +62,31 @@ const GeminiPanel: React.FC = () => {
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             AI Assistant <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold bg-indigo-500/20 text-indigo-300">Beta</span>
           </h2>
-          <p className="text-xs text-slate-400">Powered by Google Gemini 3.1 Pro</p>
+          <p className="text-xs text-slate-400">Powered by Google Gemini 2.5 Flash</p>
         </div>
       </div>
       
       <div className="space-y-4 relative z-10">
-        <div className="flex gap-2">
-          <input 
-            type="text" 
-            value={prompt}
-            onChange={e => setPrompt(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAsk()}
-            placeholder="Ask for insights on your forms or generate new quiz ideas..."
-            className="flex-1 px-4 py-3 bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl text-sm text-slate-200 outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all"
-          />
-          <button 
-            onClick={handleAsk}
-            disabled={isLoading || !prompt.trim()}
+        <div className="flex items-center gap-4">
+          <p className="flex-1 text-sm text-slate-400">
+            Generate an activity summary across your forms, responses, quizzes and sessions.
+          </p>
+          <button
+            onClick={handleGenerate}
+            disabled={isLoading}
             className="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-medium rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50"
           >
             {isLoading ? <Sparkles className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Ask
+            {isLoading ? 'Generating…' : 'Generate report'}
           </button>
         </div>
-        
+
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
         {response && (
           <div className="p-4 bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl">
             <div className="prose prose-invert prose-sm max-w-none text-slate-300 whitespace-pre-wrap">
@@ -121,7 +125,9 @@ const Dashboard: React.FC = () => {
     }).finally(() => setIsLoading(false));
   }, []);
 
-  const activeQuizzes = quizzes.filter(q => q.status === 'active').length;
+  // status is an int16 from the API, not a string. Comparing against 'active'
+  // meant this card read 0 no matter how many quizzes were active.
+  const activeQuizzes = quizzes.filter(q => q.status === QuizStatus.Active).length;
 
   return (
     <div className="space-y-8">
@@ -156,7 +162,7 @@ const Dashboard: React.FC = () => {
         <StatCard
           icon={<FileText className="w-5 h-5" />}
           label="Published Forms"
-          value={isLoading ? '...' : forms.filter(f => f.status === 'published').length}
+          value={isLoading ? '...' : forms.filter(f => f.status === FormStatus.Published).length}
           color="#22c97a"
         />
       </div>
@@ -208,7 +214,7 @@ const Dashboard: React.FC = () => {
                       <StatusDropdown 
                         type="form" 
                         id={form.id} 
-                        initialStatus={form.status as any as 0|1|2} 
+                        initialStatus={form.status} 
                         fullObject={form} 
                       />
                     </div>
@@ -279,7 +285,7 @@ const Dashboard: React.FC = () => {
                       <StatusDropdown 
                         type="quiz" 
                         id={quiz.id} 
-                        initialStatus={quiz.status as any as 0|1|2} 
+                        initialStatus={quiz.status} 
                         fullObject={quiz} 
                       />
                     </div>

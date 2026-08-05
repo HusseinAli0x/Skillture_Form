@@ -1,8 +1,8 @@
 package entities
 
 import (
-	"skillture/backend/internal/domain/enums"
 	"errors"
+	"skillture/backend/internal/domain/enums"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,15 +20,15 @@ var (
 // Created by the host when they choose to "Start" a quiz from the dashboard.
 // Players join via the PIN before the game begins (lobby phase).
 type QuizSession struct {
-	ID                uuid.UUID                 `db:"id"                  json:"id"`
-	QuizID            uuid.UUID                 `db:"quiz_id"             json:"quiz_id"`
-	HostID            uuid.UUID                 `db:"host_id"             json:"host_id"`
-	PIN               string                    `db:"pin"                 json:"pin"`
-	Status            enums.QuizSessionStatus   `db:"status"              json:"status"`
-	CurrentQuestionID *uuid.UUID                `db:"current_question_id" json:"current_question_id,omitempty"`
-	CreatedAt         time.Time                 `db:"created_at"          json:"created_at"`
-	StartedAt         *time.Time                `db:"started_at"          json:"started_at,omitempty"`
-	FinishedAt        *time.Time                `db:"finished_at"         json:"finished_at,omitempty"`
+	ID                uuid.UUID               `db:"id"                  json:"id"`
+	QuizID            uuid.UUID               `db:"quiz_id"             json:"quiz_id"`
+	HostID            uuid.UUID               `db:"host_id"             json:"host_id"`
+	PIN               string                  `db:"pin"                 json:"pin"`
+	Status            enums.QuizSessionStatus `db:"status"              json:"status"`
+	CurrentQuestionID *uuid.UUID              `db:"current_question_id" json:"current_question_id,omitempty"`
+	CreatedAt         time.Time               `db:"created_at"          json:"created_at"`
+	StartedAt         *time.Time              `db:"started_at"          json:"started_at,omitempty"`
+	FinishedAt        *time.Time              `db:"finished_at"         json:"finished_at,omitempty"`
 }
 
 // TableName returns the PostgreSQL table name

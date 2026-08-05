@@ -3,20 +3,27 @@ services:
   postgres_db:
     image: pgvector/pgvector:pg16
     container_name: skillture_postgres
-    environment:
-      POSTGRES_USER: hussein
-      POSTGRES_PASSWORD: hussein
-      POSTGRES_DB: skillturedb
+    # Credentials come from backend/.env, which is gitignored. They used to be
+    # hardcoded as hussein/hussein in this committed file. POSTGRES_USER /
+    # POSTGRES_PASSWORD / POSTGRES_DB must match DB_USER / DB_PASSWORD /
+    # DB_NAME in the same file — see backend/.env.example.
+    env_file:
+      - path: ./backend/.env
+        required: true
     ports:
+      # Published for local psql access. Remove this mapping if the database
+      # does not need to be reachable from the host.
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Init scripts run ONCE, on an empty data volume. After changing
+      # schema.sql you must `docker compose down -v` to re-apply it.
       - ./backend/internal/database/schema.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - skillture_network
-    restart: always
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hussein -d skillturedb"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -30,18 +37,29 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: true
     environment:
+      # Inside the compose network the database is reachable by service name on
+      # its container port, overriding whatever .env says for host-side use.
       - DB_HOST=postgres_db
       - DB_PORT=5432
     volumes:
+      # Must match WORKDIR in backend/Dockerfile — the app resolves "./uploads"
+      # relative to its working directory.
       - ./backend/uploads:/app/uploads
     depends_on:
       postgres_db:
         condition: service_healthy
     networks:
       - skillture_network
-    restart: always
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   # --- Frontend Application Service ---
   frontend:
@@ -52,10 +70,13 @@ services:
     ports:
       - "5175:80"
     depends_on:
-      - backend
+      # Wait for the API to answer /health, not merely for the container to
+      # exist — nginx otherwise starts proxying to a backend that is not up.
+      backend:
+        condition: service_healthy
     networks:
       - skillture_network
-    restart: always
+    restart: unless-stopped
 
 # --- Networks & Volumes Definitions ---
 networks:

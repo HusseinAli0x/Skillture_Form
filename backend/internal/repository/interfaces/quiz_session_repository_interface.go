@@ -11,7 +11,7 @@ import (
 
 // QuizSessionFilter holds optional filter criteria for listing sessions
 type QuizSessionFilter struct {
-	QuizID *uuid.UUID              // optional: restrict to sessions of a specific quiz
+	QuizID *uuid.UUID               // optional: restrict to sessions of a specific quiz
 	Status *enums.QuizSessionStatus // optional: filter by lobby/active/finished
 }
 

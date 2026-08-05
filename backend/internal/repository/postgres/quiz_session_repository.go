@@ -194,5 +194,11 @@ func (r *quizSessionRepository) List(ctx context.Context, filter interfaces.Quiz
 		sessions = append(sessions, &s)
 	}
 
+	// A failure part-way through iteration otherwise returns a truncated
+	// slice as if it were a complete, successful result.
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return sessions, nil
 }

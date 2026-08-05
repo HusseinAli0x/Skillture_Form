@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/repository/interfaces"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // ResponseAnswerVectorRepository implements Postgres CRUD for embeddings/vectors
@@ -94,6 +96,9 @@ func (r *ResponseAnswerVectorRepository) GetByID(ctx context.Context, id uuid.UU
 	row := r.base.QueryRow(ctx, query, id)
 	var v entities.ResponseAnswerVector
 	if err := row.Scan(&v.ID, &v.ResponseAnswerID, &v.Embedding, &v.ModelName, &v.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("GetByID: %w", err)
 	}
 
@@ -135,6 +140,12 @@ func (r *ResponseAnswerVectorRepository) List(ctx context.Context, filter interf
 			return nil, fmt.Errorf("List.Scan: %w", err)
 		}
 		vectors = append(vectors, &v)
+	}
+
+	// A failure part-way through iteration otherwise returns a truncated
+	// slice as if it were a complete, successful result.
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return vectors, nil

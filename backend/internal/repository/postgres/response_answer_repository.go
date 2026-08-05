@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/repository/interfaces"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // ResponseAnswerRepository implements Postgres CRUD operations for response answers.
@@ -101,6 +103,9 @@ func (r *ResponseAnswerRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 	row := r.base.QueryRow(ctx, query, id)
 	var ans entities.ResponseAnswer
 	if err := row.Scan(&ans.ID, &ans.ResponseID, &ans.FieldID, &ans.FieldType, &ans.Value, &ans.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("GetByID: %w", err)
 	}
 
@@ -148,6 +153,12 @@ func (r *ResponseAnswerRepository) List(ctx context.Context, filter interfaces.R
 			return nil, fmt.Errorf("List.Scan: %w", err)
 		}
 		answers = append(answers, &a)
+	}
+
+	// A failure part-way through iteration otherwise returns a truncated
+	// slice as if it were a complete, successful result.
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return answers, nil

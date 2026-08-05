@@ -1,9 +1,9 @@
 package validation
 
 import (
+	"errors"
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
-	"errors"
 )
 
 // ValidateResponseDomain checks the domain rules for Response entity

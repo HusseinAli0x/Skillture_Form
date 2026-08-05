@@ -16,4 +16,23 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
+// Access tokens expire. Without this the SPA keeps rendering as "logged in"
+// while every request fails, because isAuthenticated only checks that some
+// string is present in localStorage.
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const onLoginPage = window.location.pathname === '/login';
+      localStorage.removeItem('token');
+      localStorage.removeItem('admin');
+      if (!onLoginPage) {
+        // Full reload so every store and in-flight view is reset.
+        window.location.assign('/login');
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default client;

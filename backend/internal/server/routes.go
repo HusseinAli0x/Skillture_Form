@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 
+	"skillture/backend/internal/auth"
 	"skillture/backend/internal/server/handlers"
 
 	"github.com/gin-gonic/gin"
@@ -14,8 +15,18 @@ func HealthCheck(c *gin.Context) {
 }
 
 // SetupRoutes registers all application routes on the given Gin engine.
+//
+// Routes are split into two groups:
+//
+//   - Public: the landing page, form preview and submission, and everything a
+//     quiz player needs (look up a session by PIN, join, answer, connect the
+//     player socket). Players have no accounts, so these cannot require a token.
+//   - Admin: everything else. Guarded by RequireAdmin. Before this split, every
+//     route below was reachable anonymously, including admin creation, admin
+//     deletion, and destructive form/quiz operations.
 func SetupRoutes(
 	r *gin.Engine,
+	tokens *auth.TokenIssuer,
 	adminHandler *handlers.AdminHandler,
 	quizHandler *handlers.QuizHandler,
 	sessionHandler *handlers.QuizSessionHandler,
@@ -26,36 +37,66 @@ func SetupRoutes(
 	homepageHandler *handlers.HomepageHandler,
 	geminiHandler *handlers.GeminiHandler,
 ) {
+	requireAdmin := auth.RequireAdmin(tokens)
+
 	// ---- Liveness probe ----
 	r.GET("/health", HealthCheck)
 
-	// ---- Admin routes ----
+	// ---- Admin account routes ----
 	admin := r.Group("/admin")
 	admin.Use(AdminLoggingMiddleware())
 	{
-		admin.POST("/create", adminHandler.CreateAdmin)
-		admin.GET("/list", adminHandler.ListAdmins)
-		admin.DELETE("/delete/:id", adminHandler.DeleteAdmin)
+		// Login is the only anonymous endpoint in this group.
 		admin.POST("/login", adminHandler.LoginAdmin)
+
+		protected := admin.Group("")
+		protected.Use(requireAdmin)
+		{
+			protected.GET("/me", adminHandler.Me)
+			protected.POST("/create", adminHandler.CreateAdmin)
+			protected.GET("/list", adminHandler.ListAdmins)
+			protected.DELETE("/delete/:id", adminHandler.DeleteAdmin)
+		}
 	}
 
-	// ---- Public Homepage routes ----
 	api := r.Group("/api/v1")
+
+	// =====================================================
+	//  Public routes — no authentication
+	// =====================================================
 	{
-		homepage := api.Group("/homepage")
-		{
-			homepage.GET("", homepageHandler.GetContent)
-			homepage.PUT("", homepageHandler.UpdateContent)
-			homepage.POST("/images", homepageHandler.UploadImage)
-			homepage.GET("/images", homepageHandler.GetImages)
-		}
-		
-		adminApi := api.Group("/admin")
-		{
-			adminApi.GET("/ai-report", geminiHandler.GenerateReport)
-		}
+		// Landing page content is read by anonymous visitors.
+		api.GET("/homepage", homepageHandler.GetContent)
+		api.GET("/homepage/images", homepageHandler.GetImages)
+
+		// Respondents open a form by link and submit it without an account.
+		api.GET("/forms/:id", formHandler.GetByID)
+		api.GET("/forms/:id/fields", formFieldHandler.ListByFormID)
+		api.POST("/responses", responseHandler.Submit)
+
+		// Quiz players: find the session, join it, answer questions.
+		api.GET("/sessions/pin/:pin", sessionHandler.GetByPIN)
+		api.GET("/sessions/:id", sessionHandler.GetSession)
+		api.GET("/sessions/:id/leaderboard", sessionHandler.GetLeaderboard)
+		api.POST("/sessions/:id/players", wsHandler.JoinSession)
+		api.POST("/sessions/:id/answer", wsHandler.SubmitAnswer)
+	}
+
+	// =====================================================
+	//  Admin routes — bearer token required
+	// =====================================================
+	authed := api.Group("")
+	authed.Use(requireAdmin)
+	{
+		// CMS
+		authed.PUT("/homepage", homepageHandler.UpdateContent)
+		authed.POST("/homepage/images", homepageHandler.UploadImage)
+
+		// AI analytics
+		authed.GET("/admin/ai-report", geminiHandler.GenerateReport)
+
 		// Quiz CRUD
-		quizzes := api.Group("/quizzes")
+		quizzes := authed.Group("/quizzes")
 		{
 			quizzes.POST("", quizHandler.Create)
 			quizzes.GET("", quizHandler.List)
@@ -65,70 +106,61 @@ func SetupRoutes(
 			quizzes.PATCH("/:id/archive", quizHandler.Archive)
 			quizzes.DELETE("/:id", quizHandler.Delete)
 
-			// Nested question management
+			// Nested question management. These carry correct_answer, so they
+			// must never be reachable by a player.
 			quizzes.POST("/:id/questions", quizHandler.CreateQuestion)
 			quizzes.GET("/:id/questions", quizHandler.ListQuestions)
 			quizzes.PUT("/:id/questions/:qid", quizHandler.UpdateQuestion)
 			quizzes.DELETE("/:id/questions/:qid", quizHandler.DeleteQuestion)
 
-			// Create a live session for a quiz
+			// Session lifecycle
 			quizzes.POST("/:id/sessions", sessionHandler.CreateSession)
-			// Get the active session for a quiz
 			quizzes.GET("/:id/active-session", sessionHandler.GetActiveSession)
 		}
 
 		// Form CRUD
-		forms := api.Group("/forms")
+		forms := authed.Group("/forms")
 		{
 			forms.POST("", formHandler.Create)
 			forms.GET("", formHandler.List)
-			forms.GET("/:id", formHandler.GetByID)
 			forms.PUT("/:id", formHandler.Update)
 			forms.DELETE("/:id", formHandler.Delete)
 
-			// Form Field management
 			forms.POST("/:id/fields", formFieldHandler.Create)
-			forms.GET("/:id/fields", formFieldHandler.ListByFormID)
 			forms.PUT("/:id/fields/:fieldID", formFieldHandler.Update)
 			forms.DELETE("/:id/fields/:fieldID", formFieldHandler.Delete)
+
+			// Response inspection
+			forms.GET("/:id/responses", responseHandler.ListByForm)
+			forms.GET("/:id/responses/detailed", responseHandler.ListDetailedByForm)
 		}
 
-		// Responses
-		responses := api.Group("/responses")
+		// Individual responses
+		responses := authed.Group("/responses")
 		{
-			responses.POST("", responseHandler.Submit)
 			responses.GET("/:id", responseHandler.GetByID)
 			responses.GET("/:id/answers", responseHandler.GetAnswers)
 			responses.DELETE("/:id", responseHandler.Delete)
 		}
-		// List responses by form
-		api.GET("/forms/:id/responses", responseHandler.ListByForm)
-		api.GET("/forms/:id/responses/detailed", responseHandler.ListDetailedByForm)
 
-		// Session management (host-driven state machine)
-		sessions := api.Group("/sessions")
+		// Host-driven session state machine
+		sessions := authed.Group("/sessions")
 		{
-			sessions.GET("/:id", sessionHandler.GetSession)
-			sessions.GET("/pin/:pin", sessionHandler.GetByPIN)
 			sessions.PATCH("/:id/start", sessionHandler.StartSession)
 			sessions.PATCH("/:id/advance", sessionHandler.AdvanceQuestion)
 			sessions.PATCH("/:id/finish", sessionHandler.FinishSession)
-			sessions.GET("/:id/leaderboard", sessionHandler.GetLeaderboard)
-
-			// Player join (REST): returns player record with ID used for WS connect
-			sessions.POST("/:id/players", wsHandler.JoinSession)
-
-			// Player answer submission (REST + triggers WS leaderboard broadcast)
-			sessions.POST("/:id/answer", wsHandler.SubmitAnswer)
+			sessions.POST("/:id/show_results", sessionHandler.PublishResults)
 		}
 	}
 
 	// ---- WebSocket upgrades ----
-	// WS endpoints live outside /api/v1 to avoid confusion with REST
+	// WS endpoints live outside /api/v1 to avoid confusion with REST.
+	// Browsers cannot set an Authorization header on a WebSocket handshake, so
+	// the host socket takes the access token as a query parameter and verifies
+	// it inside the handler.
 	wsGroup := r.Group("/ws")
 	{
 		wsGroup.GET("/sessions/:id/host", wsHandler.ConnectHost)
 		wsGroup.GET("/sessions/:id/join", wsHandler.ConnectPlayer)
 	}
 }
-

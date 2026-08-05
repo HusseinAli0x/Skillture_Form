@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,36 +12,15 @@ func TestBaseRepository_CRUD(t *testing.T) {
 	// =========================
 	//    DB test
 	// =========================
-	dbHost := "localhost"
-	dbPort := "5432"
-	dbUser := "hussein"
-	dbPassword := "hussein"
-	dbName := "skillture_test"
-	dbSSLMode := "disable"
+	pool := testPool(t)
 
-	connStr :=
-		"host=" + dbHost +
-			" port=" + dbPort +
-			" user=" + dbUser +
-			" password=" + dbPassword +
-			" dbname=" + dbName +
-			" sslmode=" + dbSSLMode
-
-	pool, err := pgxpool.New(context.Background(), connStr)
-	require.NoError(t, err)
-	defer pool.Close()
-
-	// =========================
-	// Coniction Test
-	// =========================
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	require.NoError(t, pool.Ping(ctx))
 
 	// =========================
 	//  Clear admins Table
 	// =========================
-	err = func() error {
+	err := func() error {
 		_, err := pool.Exec(ctx, "TRUNCATE TABLE admins RESTART IDENTITY CASCADE;")
 		return err
 	}()

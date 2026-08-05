@@ -1,9 +1,9 @@
 package main
 
 import (
-	"context"
 	"log"
 
+	"skillture/backend/internal/auth"
 	"skillture/backend/internal/config"
 	"skillture/backend/internal/database"
 	"skillture/backend/internal/repository/postgres"
@@ -52,18 +52,22 @@ func main() {
 	responseAnswerVectorRepo := postgres.NewResponseAnswerVectorRepository(baseRepo)
 
 	// 5. UseCases & Services
-	adminUC := admin.NewAdminUseCase(adminRepo)
-	// Auto-create admin for the user
-	adminUC.Create(context.Background(), "husssein", "hussein")
-	adminUC.Create(context.Background(), "hussein", "hussein")
-	adminUC.Create(context.Background(), "admin", "admin")
+	//
+	// NOTE: this used to unconditionally create the admins "admin"/"admin",
+	// "hussein"/"hussein" and "husssein"/"hussein" on every process start —
+	// a permanent backdoor that reappeared after any manual cleanup. The
+	// initial account now comes from the schema seed, which is applied once.
+	adminUC := admin.NewAdminUseCase(adminRepo, cfg.JWT.BcryptCost)
 	quizUC := quiz.NewQuizUseCase(quizRepo)
 	quizQuestionUC := quiz.NewQuizQuestionUseCase(quizRepo, quizQuestionRepo)
 	formUC := form.NewFormUseCase(formRepo)
 	formFieldUC := form_field_uc.NewFormFieldUseCase(formRepo, formFieldRepo)
 	responseUC := response.NewResponseUsecase(formRepo, formFieldRepo, responseRepo, responseAnswerRepo, responseAnswerVectorRepo)
-	
-	geminiSvc := services.NewGeminiService(db.Pool())
+
+	geminiSvc := services.NewGeminiService(db.Pool(), cfg.Gemini)
+
+	// Token issuer for admin authentication
+	tokens := auth.NewTokenIssuer(cfg.JWT)
 
 	// Create hub for WS
 	hub := ws.NewHub()
@@ -74,14 +78,14 @@ func main() {
 	quizAnswerUC := quiz.NewQuizAnswerUseCase(quizSessionRepo, quizQuestionRepo, quizPlayerRepo, quizPlayerAnswerRepo)
 
 	// 6. Handlers
-	adminHandler := handlers.NewAdminHandler(adminUC)
+	adminHandler := handlers.NewAdminHandler(adminUC, tokens)
 	quizHandler := handlers.NewQuizHandler(quizUC, quizQuestionUC)
 	sessionHandler := handlers.NewQuizSessionHandler(quizSessionUC, quizPlayerUC, hub)
-	wsHandler := handlers.NewQuizWSHandler(hub, quizPlayerUC, quizAnswerUC, quizSessionUC)
+	wsHandler := handlers.NewQuizWSHandler(hub, quizPlayerUC, quizAnswerUC, quizSessionUC, tokens, cfg.CORS)
 	formHandler := handlers.NewFormHandler(formUC)
 	formFieldHandler := handlers.NewFormFieldHandler(formFieldUC)
 	responseHandler := handlers.NewResponseHandler(responseUC)
-	homepageHandler := handlers.NewHomepageHandler(db.Pool())
+	homepageHandler := handlers.NewHomepageHandler(db.Pool(), cfg.Upload)
 	geminiHandler := handlers.NewGeminiHandler(geminiSvc)
 
 	// 7. Gin Setup
@@ -91,11 +95,21 @@ func main() {
 
 	r := gin.Default()
 
+	// Requests arrive through nginx, so client IPs must come from the
+	// configured trusted proxies rather than being taken on faith.
+	if err := r.SetTrustedProxies(cfg.Security.TrustedProxies); err != nil {
+		log.Fatalf("Failed to set trusted proxies: %v", err)
+	}
+
+	// Global middleware (CORS). This call was missing entirely, so nothing in
+	// middleware.go ever executed.
+	server.SetupMiddleware(r, cfg)
+
 	// Serve static uploads for the CMS images
 	r.Static("/uploads", "./uploads")
 
 	// 8. Wire Routes
-	server.SetupRoutes(r, adminHandler, quizHandler, sessionHandler, wsHandler, formHandler, formFieldHandler, responseHandler, homepageHandler, geminiHandler)
+	server.SetupRoutes(r, tokens, adminHandler, quizHandler, sessionHandler, wsHandler, formHandler, formFieldHandler, responseHandler, homepageHandler, geminiHandler)
 
 	// 9. Start server
 	addr := cfg.Server.Address()

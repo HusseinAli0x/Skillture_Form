@@ -25,7 +25,7 @@ const HomepageEditor: React.FC = () => {
     client.get('/api/v1/homepage/images').then(res => {
       if (res.data && res.data.length > 0) {
         const activeImg = res.data.find((img: any) => img.is_active) || res.data[0];
-        setPreviewUrl(import.meta.env.VITE_API_URL + activeImg.file_path);
+        setPreviewUrl(activeImg.file_path);
       }
     });
   }, []);
@@ -63,7 +63,7 @@ const HomepageEditor: React.FC = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       addToast('success', 'Image uploaded successfully');
-      setPreviewUrl(import.meta.env.VITE_API_URL + res.data.file_path);
+      setPreviewUrl(res.data.file_path);
     } catch (err) {
       addToast('error', 'Failed to upload image');
     } finally {

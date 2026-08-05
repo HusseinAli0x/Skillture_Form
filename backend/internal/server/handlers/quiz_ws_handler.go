@@ -2,7 +2,10 @@ package handlers
 
 import (
 	"net/http"
+	"slices"
 
+	"skillture/backend/internal/auth"
+	"skillture/backend/internal/config"
 	domainErrors "skillture/backend/internal/domain/errors"
 	"skillture/backend/internal/server/ws"
 	uc "skillture/backend/internal/usecase/interfaces"
@@ -12,19 +15,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	// Allow all origins in dev. Restrict in production via CheckOrigin.
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
 // QuizWSHandler handles WebSocket connections and real-time answer submission.
 type QuizWSHandler struct {
 	hub       *ws.Hub
 	playerUC  uc.QuizPlayerUseCase
 	answerUC  uc.QuizAnswerUseCase
 	sessionUC uc.QuizSessionUseCase
+	tokens    *auth.TokenIssuer
+	upgrader  websocket.Upgrader
 }
 
 // NewQuizWSHandler creates a new QuizWSHandler.
@@ -33,12 +31,36 @@ func NewQuizWSHandler(
 	playerUC uc.QuizPlayerUseCase,
 	answerUC uc.QuizAnswerUseCase,
 	sessionUC uc.QuizSessionUseCase,
+	tokens *auth.TokenIssuer,
+	corsCfg config.CORSConfig,
 ) *QuizWSHandler {
 	return &QuizWSHandler{
 		hub:       hub,
 		playerUC:  playerUC,
 		answerUC:  answerUC,
 		sessionUC: sessionUC,
+		tokens:    tokens,
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			// A WebSocket handshake is not subject to the same-origin policy,
+			// so `return true` let any page on the internet open a socket
+			// against a session. Restrict to the configured origins.
+			CheckOrigin: originChecker(corsCfg.AllowedOrigins),
+		},
+	}
+}
+
+// originChecker builds a CheckOrigin function from the CORS allow-list.
+// A request with no Origin header is not browser-initiated and is allowed.
+func originChecker(allowed []string) func(*http.Request) bool {
+	allowAll := slices.Contains(allowed, "*")
+	return func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		return allowAll || slices.Contains(allowed, origin)
 	}
 }
 
@@ -53,12 +75,20 @@ func (h *QuizWSHandler) ConnectHost(c *gin.Context) {
 		return
 	}
 
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	// The host socket carries every game event, including the host's view of
+	// the session, so it must be authenticated. Browsers cannot set headers on
+	// a WebSocket handshake, so the access token comes in as a query parameter.
+	if _, err := h.tokens.Verify(c.Query("token")); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or missing token"})
+		return
+	}
+
+	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		return // upgrader writes the HTTP error itself
 	}
 
-	h.hub.RegisterClient(conn, sessionID, uuid.Nil, ws.RoleHost)
+	h.hub.RegisterClient(conn, sessionID, uuid.Nil, "", ws.RoleHost)
 }
 
 // GET /ws/sessions/:id/join?player_id=<uuid>
@@ -79,29 +109,57 @@ func (h *QuizWSHandler) ConnectPlayer(c *gin.Context) {
 		return
 	}
 
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	// The player ID is client-supplied. Without this check any UUID could be
+	// presented, letting a caller attach to a session they never joined or
+	// impersonate another player.
+	player, err := h.playerUC.GetPlayer(c.Request.Context(), playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not verify player"})
+		return
+	}
+	if player == nil || player.SessionID != sessionID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "player does not belong to this session"})
+		return
+	}
+
+	// Fetch the session before upgrading — after the upgrade the connection is
+	// no longer an HTTP response and errors cannot be reported as status codes.
+	session, err := h.sessionUC.GetByID(c.Request.Context(), sessionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load session"})
+		return
+	}
+	if session == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
+
+	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		return
 	}
 
-	client := h.hub.RegisterClient(conn, sessionID, playerID, ws.RolePlayer)
+	client := h.hub.RegisterClient(conn, sessionID, playerID, player.Name, ws.RolePlayer)
 
-	// Fetch session to give the player the current state (in case they joined mid-game)
-	session, _ := h.sessionUC.GetByID(c.Request.Context(), sessionID)
-	if session != nil {
-		client.Send(ws.Message{
-			Type: ws.MsgTypeLobbySnapshot,
-			Payload: gin.H{
-				"status":              session.Status,
-				"current_question_id": session.CurrentQuestionID,
-			},
-		})
-	}
+	// Give the player the current state, in case they joined mid-game.
+	client.Send(ws.Message{
+		Type: ws.MsgTypeLobbySnapshot,
+		Payload: gin.H{
+			"status":              session.Status,
+			"current_question_id": session.CurrentQuestionID,
+			"players":             h.hub.PlayerNames(sessionID),
+		},
+	})
 
-	// Broadcast to the room that a new player joined
+	// Broadcast to the room that a new player joined. The name is included so
+	// the host lobby can render it; previously only the UUID was sent and the
+	// host displayed every joiner as "New Player".
 	h.hub.BroadcastExcept(sessionID, ws.Message{
-		Type:    ws.MsgTypePlayerJoined,
-		Payload: gin.H{"player_id": playerID},
+		Type: ws.MsgTypePlayerJoined,
+		Payload: gin.H{
+			"player_id": playerID,
+			"name":      player.Name,
+		},
 	}, client)
 }
 
@@ -148,6 +206,8 @@ func (h *QuizWSHandler) SubmitAnswer(c *gin.Context) {
 		switch err {
 		case domainErrors.ErrAlreadyAnswered:
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		case domainErrors.ErrPlayerNotInSession:
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		case domainErrors.ErrSessionNotActive, domainErrors.ErrQuestionNotCurrent:
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		default:
@@ -156,9 +216,18 @@ func (h *QuizWSHandler) SubmitAnswer(c *gin.Context) {
 		return
 	}
 
-	// Broadcast that an answer was submitted (Host uses this to increment counter)
+	// Tell the room an answer landed. The host uses this to increment its
+	// counter; player_id lets it de-duplicate rather than counting blind.
 	h.hub.Broadcast(sessionID, ws.Message{
-		Type: "answer_result",
+		Type:    ws.MsgTypeAnswerResult,
+		Payload: gin.H{"player_id": playerID},
+	})
+
+	// The usecase already read the fresh leaderboard to build this result;
+	// broadcasting it here means the host does not need a follow-up request.
+	h.hub.Broadcast(sessionID, ws.Message{
+		Type:    ws.MsgTypeLeaderboard,
+		Payload: result.Leaderboard,
 	})
 
 	// Return scoring result to the answering player via REST

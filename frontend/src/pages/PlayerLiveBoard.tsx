@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
+import { playerSocketUrl } from '../api/ws';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
 const COLORS = ['bg-red-500 hover:bg-red-600', 'bg-blue-500 hover:bg-blue-600', 'bg-yellow-500 hover:bg-yellow-600', 'bg-green-500 hover:bg-green-600'];
@@ -28,13 +29,7 @@ export default function PlayerLiveBoard() {
     let reconnectTimeout: any = null;
 
     const connectWS = () => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      const wsUrl = import.meta.env.DEV 
-        ? `ws://localhost:8080/ws/sessions/${sessionId}/join?player_id=${playerId}`
-        : `${protocol}//${host}/ws/sessions/${sessionId}/join?player_id=${playerId}`;
-        
-      ws = new WebSocket(wsUrl);
+      ws = new WebSocket(playerSocketUrl(sessionId, playerId));
 
       ws.onmessage = (event) => {
         try {
@@ -99,7 +94,11 @@ export default function PlayerLiveBoard() {
     const timeTaken = Date.now() - startTime;
 
     try {
+      // player_id and question_id are `binding:"required"` on the handler —
+      // omitting them makes every submission 400.
       const res = await client.post(`/api/v1/sessions/${sessionId}/answer`, {
+        player_id: playerId,
+        question_id: question.id,
         answer: { value: value },
         time_taken_ms: timeTaken
       });
@@ -185,12 +184,12 @@ export default function PlayerLiveBoard() {
             <h2 className="text-3xl font-bold text-center mb-6 text-yellow-400">Top 10 Leaders</h2>
             <div className="space-y-3">
               {leaderboard.slice(0, 10).map((lb: any, idx: number) => {
-                const isMe = lb.player_id === playerId;
+                const isMe = lb.id === playerId;
                 return (
-                  <div key={lb.player_id} className={`flex justify-between items-center p-4 rounded-xl ${isMe ? 'bg-[#0ABFBC]/20 border border-[#0ABFBC]' : 'bg-[#1a1a1a]'}`}>
+                  <div key={lb.id} className={`flex justify-between items-center p-4 rounded-xl ${isMe ? 'bg-[#0ABFBC]/20 border border-[#0ABFBC]' : 'bg-[#1a1a1a]'}`}>
                     <div className="flex items-center gap-4">
                       <span className="font-bold text-gray-500 w-6">{idx + 1}</span>
-                      <span className={`font-bold ${isMe ? 'text-[#0ABFBC]' : 'text-white'}`}>{lb.player_name} {isMe && '(You)'}</span>
+                      <span className={`font-bold ${isMe ? 'text-[#0ABFBC]' : 'text-white'}`}>{lb.name} {isMe && '(You)'}</span>
                     </div>
                     <span className="font-bold">{lb.score}</span>
                   </div>
@@ -200,7 +199,7 @@ export default function PlayerLiveBoard() {
             
             {/* Show my rank if I am not in Top 10 */}
             {(() => {
-              const myRank = leaderboard.findIndex((lb: any) => lb.player_id === playerId) + 1;
+              const myRank = leaderboard.findIndex((lb: any) => lb.id === playerId) + 1;
               if (myRank > 10) {
                 return (
                   <div className="mt-6 pt-6 border-t border-[#2a2a2a] text-center">

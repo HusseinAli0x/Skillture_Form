@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
 	domainErrors "skillture/backend/internal/domain/errors"
@@ -84,7 +86,16 @@ func (u *quizAnswerUseCase) SubmitAnswer(ctx context.Context, input uc.SubmitAns
 		return nil, errors.New("player not found")
 	}
 
+	// The player ID arrives from the client, so existence is not enough —
+	// without this a player from one session could score into another.
+	if player.SessionID != input.SessionID {
+		return nil, domainErrors.ErrPlayerNotInSession
+	}
+
 	// --- 5. Guard against double-answer ---
+	// This is a fast path for the common case only. The authoritative guard is
+	// the uq_player_question_answer unique index, checked after the insert
+	// below, because two concurrent submissions can both pass this check.
 	alreadyAnswered, err := u.answerRepo.ExistsByPlayerAndQuestion(ctx, input.PlayerID, input.QuestionID)
 	if err != nil {
 		return nil, err
@@ -97,9 +108,10 @@ func (u *quizAnswerUseCase) SubmitAnswer(ctx context.Context, input uc.SubmitAns
 	isCorrect := checkAnswer(question, input.Answer)
 
 	// --- 7. Calculate score ---
+	timeTakenMs := clampTimeTaken(input.TimeTakenMs, question.TimeLimitSec)
 	scoreAwarded := 0
 	if isCorrect {
-		scoreAwarded = calculateScore(question.Points, question.TimeLimitSec, input.TimeTakenMs)
+		scoreAwarded = calculateScore(question.Points, question.TimeLimitSec, timeTakenMs)
 	}
 
 	// --- 8. Persist the answer ---
@@ -110,15 +122,22 @@ func (u *quizAnswerUseCase) SubmitAnswer(ctx context.Context, input uc.SubmitAns
 		Answer:       input.Answer,
 		IsCorrect:    isCorrect,
 		ScoreAwarded: scoreAwarded,
-		TimeTakenMs:  input.TimeTakenMs,
+		TimeTakenMs:  timeTakenMs,
 	}
 	if err := u.answerRepo.Create(ctx, answer); err != nil {
+		// The unique index fired: another request for this player/question won
+		// the race. Report it as a duplicate rather than a 500.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
+			return nil, domainErrors.ErrAlreadyAnswered
+		}
 		return nil, fmt.Errorf("SubmitAnswer: persist answer: %w", err)
 	}
 
 	// --- 9. Update player cumulative score ---
-	player.AddScore(scoreAwarded)
-	if err := u.playerRepo.UpdateScore(ctx, player.ID, player.Score); err != nil {
+	// Incremented in SQL. Computing the new total in Go and writing it back
+	// lost points whenever two answers were scored concurrently.
+	if _, err := u.playerRepo.AddScore(ctx, player.ID, scoreAwarded); err != nil {
 		return nil, fmt.Errorf("SubmitAnswer: update score: %w", err)
 	}
 
@@ -170,6 +189,22 @@ func checkAnswer(question *entities.QuizQuestion, playerAnswer map[string]any) b
 	}
 
 	return false
+}
+
+// clampTimeTaken bounds the client-reported elapsed time to [0, timeLimit].
+//
+// TimeTakenMs is measured in the browser and sent by the player, so it is not
+// trustworthy. A negative value produced a speed ratio above 1 and therefore a
+// score above the question's base points — `time_taken_ms: -999999` was a
+// one-line cheat.
+func clampTimeTaken(timeTakenMs, timeLimitSec int) int {
+	if timeTakenMs < 0 {
+		return 0
+	}
+	if timeLimitSec > 0 && timeTakenMs > timeLimitSec*1000 {
+		return timeLimitSec * 1000
+	}
+	return timeTakenMs
 }
 
 // calculateScore computes speed-based points.

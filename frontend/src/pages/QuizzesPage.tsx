@@ -157,7 +157,7 @@ const QuizzesPage: React.FC = () => {
                         <StatusDropdown 
                           type="quiz" 
                           id={quiz.id} 
-                          initialStatus={quiz.status as any as 0|1|2} 
+                          initialStatus={quiz.status} 
                           fullObject={quiz} 
                           onStatusChange={fetchQuizzes}
                         />

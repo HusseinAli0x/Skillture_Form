@@ -23,5 +23,6 @@ var (
 	ErrSessionFinished       = errors.New("session is already finished")
 	ErrDuplicatePlayerName   = errors.New("player name already taken in this session")
 	ErrAlreadyAnswered       = errors.New("player has already answered this question")
+	ErrPlayerNotInSession    = errors.New("player does not belong to this session")
 	ErrQuestionNotCurrent    = errors.New("question is not the current active question")
 )

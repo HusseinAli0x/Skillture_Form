@@ -50,7 +50,7 @@ func scanQuizQuestion(row pgx.Row) (*entities.QuizQuestion, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(questionBytes) > 0 {
 		_ = json.Unmarshal(questionBytes, &qq.Question)
 	}
@@ -222,6 +222,12 @@ func (r *quizQuestionRepository) List(ctx context.Context, filter interfaces.Qui
 		}
 
 		questions = append(questions, &qq)
+	}
+
+	// A failure part-way through iteration otherwise returns a truncated
+	// slice as if it were a complete, successful result.
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return questions, nil

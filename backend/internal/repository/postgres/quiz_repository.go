@@ -157,5 +157,11 @@ func (r *quizRepository) List(ctx context.Context, filter interfaces.QuizFilter)
 		quizzes = append(quizzes, &q)
 	}
 
+	// A failure part-way through iteration otherwise returns a truncated
+	// slice as if it were a complete, successful result.
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return quizzes, nil
 }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Gamepad2, ArrowRight } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
+import { playerSocketUrl } from '../api/ws';
 
 export default function PlayerJoin() {
   const [searchParams] = useSearchParams();
@@ -62,13 +63,7 @@ export default function PlayerJoin() {
 
     if (step === 3 && sessionId && playerId) {
       const connectWS = () => {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host; 
-        const wsUrl = import.meta.env.DEV 
-          ? `ws://localhost:8080/ws/sessions/${sessionId}/join?player_id=${playerId}`
-          : `${protocol}//${host}/ws/sessions/${sessionId}/join?player_id=${playerId}`;
-          
-        ws = new WebSocket(wsUrl);
+        ws = new WebSocket(playerSocketUrl(sessionId, playerId));
 
         ws.onmessage = (event) => {
           try {

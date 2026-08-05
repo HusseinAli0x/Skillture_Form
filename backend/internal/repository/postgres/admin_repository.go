@@ -148,5 +148,11 @@ func (r *adminRepository) List(ctx context.Context) ([]*entities.Admin, error) {
 		admins = append(admins, &admin)
 	}
 
+	// A failure part-way through iteration otherwise returns a truncated
+	// slice as if it were a complete, successful result.
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return admins, nil
 }

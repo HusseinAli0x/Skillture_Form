@@ -2,13 +2,17 @@ import React, { useState } from 'react';
 import { Plus, Trash2, Save, ArrowLeft, ToggleLeft, ToggleRight, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
-import { FieldTypeToInt, FieldTypeLabels } from '../api/types';
-import type { FieldType } from '../api/types';
+import { FieldType, FieldTypeLabels, FormStatus } from '../api/types';
 import { useToastStore } from '../context/ToastStore';
 import StatusDropdown from '../components/StatusDropdown';
 
-const FIELD_TYPES: FieldType[] = ['text', 'textarea', 'number', 'email', 'select', 'radio', 'checkbox', 'date'];
-const HAS_OPTIONS: FieldType[] = ['select', 'radio', 'checkbox'];
+// FieldType is the int16 the API actually sends. The builder used to carry a
+// parallel set of string names and convert at the edges via FieldTypeToInt.
+const FIELD_TYPES: FieldType[] = [
+  FieldType.Text, FieldType.Textarea, FieldType.Number, FieldType.Email,
+  FieldType.Select, FieldType.Radio, FieldType.Checkbox, FieldType.Date,
+];
+const HAS_OPTIONS: FieldType[] = [FieldType.Select, FieldType.Radio, FieldType.Checkbox];
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
@@ -32,9 +36,9 @@ const FormBuilder: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [fields, setFields] = useState<FieldState[]>([
-    { _id: generateId(), label: '', placeholder: '', helpText: '', type: 'text', required: false, options: [], isNew: true }
+    { _id: generateId(), label: '', placeholder: '', helpText: '', type: FieldType.Text, required: false, options: [], isNew: true }
   ]);
-  const [status, setStatus] = useState<0|1|2>(0);
+  const [status, setStatus] = useState<FormStatus>(FormStatus.Draft);
   const [fullObject, setFullObject] = useState<any>(null);
   const [deletedFieldIds, setDeletedFieldIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -46,9 +50,11 @@ const FormBuilder: React.FC = () => {
       client.get(`/api/v1/forms/${id}`),
       client.get(`/api/v1/forms/${id}/fields`)
     ]).then(([fRes, ffRes]) => {
-      setTitle(fRes.data.title || '');
-      setDescription(fRes.data.description || '');
-      setStatus(fRes.data.status as 0|1|2 || 0);
+      // title/description are JSONB maps ({en: "..."}), not strings — reading
+      // them raw put "[object Object]" in the inputs.
+      setTitle(fRes.data.title?.en ?? '');
+      setDescription(fRes.data.description?.en ?? '');
+      setStatus((fRes.data.status ?? FormStatus.Draft) as FormStatus);
       setFullObject(fRes.data);
       const fetchedFields = (ffRes.data || []).sort((a: any, b: any) => a.field_order - b.field_order).map((f: any) => {
         let opts: string[] = [];
@@ -61,7 +67,7 @@ const FormBuilder: React.FC = () => {
           label: f.label?.en || f.label || '',
           placeholder: f.placeholder?.en || f.placeholder || '',
           helpText: f.help_text?.en || f.help_text || '',
-          type: Object.keys(FieldTypeToInt).find((k: any) => FieldTypeToInt[k as FieldType] === f.type) as FieldType || 'text',
+          type: (f.type ?? FieldType.Text) as FieldType,
           required: f.required || false,
           options: opts,
           isNew: false
@@ -76,7 +82,7 @@ const FormBuilder: React.FC = () => {
   const addField = () => {
     setFields(prev => [...prev, {
       _id: generateId(), label: '', placeholder: '', helpText: '',
-      type: 'text', required: false, options: [], isNew: true
+      type: FieldType.Text, required: false, options: [], isNew: true
     }]);
   };
 
@@ -152,7 +158,7 @@ const FormBuilder: React.FC = () => {
           placeholder: f.placeholder ? { en: f.placeholder } : undefined,
           help_text: f.helpText ? { en: f.helpText } : undefined,
           required: f.required,
-          type: FieldTypeToInt[f.type],
+          type: f.type,
           field_order: i + 1,
           options: Object.keys(optionsMap).length > 0 ? optionsMap : undefined,
         };
@@ -320,7 +326,7 @@ const FormBuilder: React.FC = () => {
                   <div className="relative">
                     <select
                       value={field.type}
-                      onChange={e => updateField(field._id, { type: e.target.value as FieldType })}
+                      onChange={e => updateField(field._id, { type: Number(e.target.value) as FieldType })}
                       className="w-full px-3 py-2 rounded-lg text-sm outline-none appearance-none cursor-pointer"
                       style={{ backgroundColor: '#0a0a0a', border: '1px solid #2a2a2a', color: '#f0f0f0' }}
                     >

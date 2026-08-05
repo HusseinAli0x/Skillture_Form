@@ -1,14 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import client from '../api/client';
+import { FieldType, FormStatus } from '../api/types';
 import { CheckCircle } from 'lucide-react';
 
+// entities.FormField sends `type` as an int16 (enums.FieldType) and the
+// required flag as `required`. This used to declare `type: string` and
+// `is_required`, so every comparison below failed: dropdowns, radios,
+// checkboxes and textareas all fell through to a plain text input, and
+// required-field validation never ran because the flag was always undefined.
 interface Field {
   id: string;
-  type: string;
+  type: FieldType;
   label: { en?: string; ar?: string; value?: string };
-  is_required: boolean;
-  options?: Record<string, { value?: string; en?: string; ar?: string }>;
+  required: boolean;
+  options?: Record<string, { label?: string; value?: string; en?: string; ar?: string }>;
 }
 
 const FormPreview: React.FC = () => {
@@ -21,6 +27,11 @@ const FormPreview: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // A draft or closed form is not open for responses. The backend rejects the
+  // submission, but without this the page renders as a live form and only
+  // surfaces the problem after the respondent has filled it in.
+  const isAcceptingResponses = form != null && form.status === FormStatus.Published;
 
   useEffect(() => {
     client.get(`/api/v1/forms/${id}`)
@@ -46,7 +57,7 @@ const FormPreview: React.FC = () => {
     // Validation Logic
     const errors: Record<string, string> = {};
     for (const field of fields) {
-      if (field.is_required) {
+      if (field.required) {
         const val = formData[field.id];
         if (val === undefined || val === null || val === '' || (Array.isArray(val) && val.length === 0)) {
           errors[field.id] = 'This field is required';
@@ -128,6 +139,14 @@ const FormPreview: React.FC = () => {
           </div>
         )}
 
+        {form && !isAcceptingResponses && (
+          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 px-4 py-3 rounded-lg mb-6">
+            {form.status === FormStatus.Closed
+              ? 'This form is closed and is no longer accepting responses.'
+              : 'This form is still a draft and is not yet accepting responses.'}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {fields.map(field => {
             const labelStr = field.label?.en || field.label?.value || 'Question';
@@ -136,7 +155,7 @@ const FormPreview: React.FC = () => {
                 <label className="block text-sm font-medium text-slate-200 mb-3 flex items-center justify-between">
                   <span>
                     {labelStr}
-                    {field.is_required && <span className="text-red-400 ml-1">*</span>}
+                    {field.required && <span className="text-red-400 ml-1">*</span>}
                   </span>
                   {validationErrors[field.id] && (
                     <span className="text-red-400 text-xs flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded">
@@ -146,25 +165,25 @@ const FormPreview: React.FC = () => {
                   )}
                 </label>
                 
-                {field.type === 'textarea' ? (
+                {field.type === FieldType.Textarea ? (
                   <textarea
-                    required={field.is_required}
+                    required={field.required}
                     onChange={e => handleChange(field.id, e.target.value)}
                     className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-[#0ABFBC] resize-y min-h-[100px]"
                     placeholder="Your answer"
                   />
-                ) : field.type === 'select' ? (
+                ) : field.type === FieldType.Select ? (
                   <select
-                    required={field.is_required}
+                    required={field.required}
                     onChange={e => handleChange(field.id, e.target.value)}
                     className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-[#0ABFBC]"
                   >
                     <option value="">Choose...</option>
                     {field.options && Object.entries(field.options).map(([k, opt]) => (
-                      <option key={k} value={k}>{opt.en || opt.value || k}</option>
+                      <option key={k} value={k}>{opt.label || opt.en || opt.value || k}</option>
                     ))}
                   </select>
-                ) : field.type === 'radio' ? (
+                ) : field.type === FieldType.Radio ? (
                   <div className="space-y-2">
                     {field.options && Object.entries(field.options).map(([k, opt]) => (
                       <label key={k} className="flex items-center gap-3 cursor-pointer">
@@ -172,15 +191,15 @@ const FormPreview: React.FC = () => {
                           type="radio"
                           name={field.id}
                           value={k}
-                          required={field.is_required}
+                          required={field.required}
                           onChange={e => handleChange(field.id, e.target.value)}
                           className="w-4 h-4 text-[#0ABFBC] bg-[#0a0a0a] border-[#2a2a2a] focus:ring-[#0ABFBC] focus:ring-offset-[#0a0a0a]"
                         />
-                        <span className="text-sm">{opt.en || opt.value || k}</span>
+                        <span className="text-sm">{opt.label || opt.en || opt.value || k}</span>
                       </label>
                     ))}
                   </div>
-                ) : field.type === 'checkbox' ? (
+                ) : field.type === FieldType.Checkbox ? (
                   <div className="space-y-2">
                     {field.options && Object.entries(field.options).map(([k, opt]) => (
                       <label key={k} className="flex items-center gap-3 cursor-pointer">
@@ -194,14 +213,14 @@ const FormPreview: React.FC = () => {
                           }}
                           className="w-4 h-4 text-[#0ABFBC] bg-[#0a0a0a] border-[#2a2a2a] rounded focus:ring-[#0ABFBC] focus:ring-offset-[#0a0a0a]"
                         />
-                        <span className="text-sm">{opt.en || opt.value || k}</span>
+                        <span className="text-sm">{opt.label || opt.en || opt.value || k}</span>
                       </label>
                     ))}
                   </div>
                 ) : (
                   <input
-                    type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
-                    required={field.is_required}
+                    type={field.type === FieldType.Number ? 'number' : field.type === FieldType.Email ? 'email' : field.type === FieldType.Date ? 'date' : 'text'}
+                    required={field.required}
                     onChange={e => handleChange(field.id, e.target.value)}
                     className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-[#0ABFBC]"
                     placeholder="Your answer"
@@ -215,7 +234,7 @@ const FormPreview: React.FC = () => {
             <p className="text-xs text-slate-500">Never submit passwords through forms.</p>
             <button
               type="submit"
-              disabled={isSubmitting || fields.length === 0}
+              disabled={isSubmitting || fields.length === 0 || !isAcceptingResponses}
               className="px-6 py-2.5 rounded-lg bg-[#0ABFBC] text-black font-semibold hover:bg-[#09a8a5] transition-colors disabled:opacity-50"
             >
               {isSubmitting ? 'Submitting...' : 'Submit'}

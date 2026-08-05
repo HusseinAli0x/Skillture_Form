@@ -1,8 +1,8 @@
 package entities
 
 import (
-	"skillture/backend/internal/domain/enums"
 	"errors"
+	"skillture/backend/internal/domain/enums"
 	"time"
 
 	"github.com/google/uuid"

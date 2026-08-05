@@ -54,7 +54,11 @@ func (h *FormHandler) GetByID(c *gin.Context) {
 
 	form, err := h.formUC.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		// A database failure used to be reported as 404 here, hiding outages.
+		respondError(c, err)
+		return
+	}
+	if respondNotFoundIfNil(c, form == nil) {
 		return
 	}
 
@@ -80,18 +84,28 @@ func (h *FormHandler) Update(c *gin.Context) {
 
 	form, err := h.formUC.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		respondError(c, err)
+		return
+	}
+	if respondNotFoundIfNil(c, form == nil) {
 		return
 	}
 
-	form.Title = req.Title
-	form.Description = req.Description
+	// Only overwrite fields the request actually supplied. Assigning
+	// unconditionally meant a PUT that omitted "description" wiped it, despite
+	// this handler doing a read-modify-write that implies partial updates.
+	if req.Title != nil {
+		form.Title = req.Title
+	}
+	if req.Description != nil {
+		form.Description = req.Description
+	}
 	if req.Status != nil {
 		form.Status = enums.FormStatus(*req.Status)
 	}
 
 	if err := h.formUC.Update(c.Request.Context(), form); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 
@@ -119,7 +133,7 @@ func (h *FormHandler) Delete(c *gin.Context) {
 	}
 
 	if err := h.formUC.Delete(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 

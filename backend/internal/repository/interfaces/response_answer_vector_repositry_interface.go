@@ -1,8 +1,8 @@
 package interfaces
 
 import (
-	"skillture/backend/internal/domain/entities"
 	"context"
+	"skillture/backend/internal/domain/entities"
 
 	"github.com/google/uuid"
 )

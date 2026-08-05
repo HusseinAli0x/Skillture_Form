@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import client from '../api/client';
 
@@ -13,16 +13,29 @@ interface Props {
   fullObject?: any;
 }
 
-const statusOptions = {
-  0: { label: 'Draft', color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.1)', border: 'rgba(251, 191, 36, 0.25)' },
-  1: { label: 'Published', color: '#0ABFBC', bg: 'rgba(10, 191, 188, 0.1)', border: 'rgba(10, 191, 188, 0.25)' },
-  2: { label: 'Archived', color: '#888', bg: 'rgba(136, 136, 136, 0.1)', border: 'rgba(136, 136, 136, 0.25)' },
+const palette = {
+  0: { color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.1)', border: 'rgba(251, 191, 36, 0.25)' },
+  1: { color: '#0ABFBC', bg: 'rgba(10, 191, 188, 0.1)', border: 'rgba(10, 191, 188, 0.25)' },
+  2: { color: '#888', bg: 'rgba(136, 136, 136, 0.1)', border: 'rgba(136, 136, 136, 0.25)' },
+};
+
+// Value 2 is "closed" for a form and "archived" for a quiz; a single shared
+// label list showed forms as "Archived", which is not a form state at all.
+const labels: Record<Props['type'], Record<StatusValue, string>> = {
+  form: { 0: 'Draft', 1: 'Published', 2: 'Closed' },
+  quiz: { 0: 'Draft', 1: 'Active', 2: 'Archived' },
 };
 
 const StatusDropdown: React.FC<Props> = ({ type, id, initialStatus, onStatusChange, fullObject }) => {
   const [status, setStatus] = useState<StatusValue>(initialStatus);
   const [isOpen, setIsOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Re-sync when the parent refetches. State seeded once from a prop went stale
+  // as soon as the list reloaded, so the badge could disagree with the server.
+  useEffect(() => {
+    setStatus(initialStatus);
+  }, [initialStatus]);
 
   const handleUpdate = async (newStatus: StatusValue) => {
     if (newStatus === status) {
@@ -53,7 +66,10 @@ const StatusDropdown: React.FC<Props> = ({ type, id, initialStatus, onStatusChan
     }
   };
 
-  const currentOpt = statusOptions[status as StatusValue] || statusOptions[0];
+  const currentOpt = {
+    ...(palette[status] ?? palette[0]),
+    label: labels[type][status] ?? labels[type][0],
+  };
 
   return (
     <div className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
@@ -88,10 +104,10 @@ const StatusDropdown: React.FC<Props> = ({ type, id, initialStatus, onStatusChan
               key={val}
               onClick={() => handleUpdate(val)}
               className="w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 hover:bg-white/5"
-              style={{ color: status === val ? statusOptions[val].color : '#f0f0f0' }}
+              style={{ color: status === val ? palette[val].color : '#f0f0f0' }}
             >
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusOptions[val].color }} />
-              {statusOptions[val].label}
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: palette[val].color }} />
+              {labels[type][val]}
             </button>
           ))}
         </div>

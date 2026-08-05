@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"skillture/backend/internal/auth"
 	"skillture/backend/internal/usecase/admin"
 
 	"github.com/gin-gonic/gin"
@@ -13,11 +14,12 @@ import (
 // AdminHandler handles admin-related HTTP requests
 type AdminHandler struct {
 	adminUC *admin.AdminUseCase
+	tokens  *auth.TokenIssuer
 }
 
 // NewAdminHandler creates a new AdminHandler instance
-func NewAdminHandler(adminUC *admin.AdminUseCase) *AdminHandler {
-	return &AdminHandler{adminUC: adminUC}
+func NewAdminHandler(adminUC *admin.AdminUseCase, tokens *auth.TokenIssuer) *AdminHandler {
+	return &AdminHandler{adminUC: adminUC, tokens: tokens}
 }
 
 // Health is a simple endpoint to check server status
@@ -106,12 +108,41 @@ func (h *AdminHandler) LoginAdmin(c *gin.Context) {
 		return
 	}
 
-	// TODO: issue JWT token here
+	token, expiresAt, err := h.tokens.Issue(admin.ID, admin.Username)
+	if err != nil {
+		log.Printf("Failed to issue token for %s: %v", admin.Username, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not issue token"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"token": "dummy-token-123",
+		"token":      token,
+		"expires_at": expiresAt,
 		"admin": gin.H{
 			"id":       admin.ID,
 			"username": admin.Username,
 		},
+	})
+}
+
+// Me returns the currently authenticated admin, derived from the bearer token.
+// The frontend uses it to confirm a stored token is still valid on page load.
+func (h *AdminHandler) Me(c *gin.Context) {
+	id, ok := auth.AdminIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthenticated"})
+		return
+	}
+
+	admin, err := h.adminUC.GetByID(c.Request.Context(), id)
+	if err != nil || admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthenticated"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":       admin.ID,
+		"username": admin.Username,
+		"created":  admin.CreatedAt,
 	})
 }

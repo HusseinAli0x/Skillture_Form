@@ -2,41 +2,20 @@ package postgres
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
 	"skillture/backend/internal/domain/entities"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAdminRepository_CRUD(t *testing.T) {
 	// =========================
-	// Direct connection to test DB
+	// Connection to test DB
 	// =========================
-	dbHost := "localhost"
-	dbPort := "5432"
-	dbUser := "hussein"
-	dbPassword := "hussein"
-	dbName := "skillture_test"
-	dbSSLMode := "disable"
-
-	connStr := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		dbHost, dbPort, dbUser, dbPassword, dbName, dbSSLMode,
-	)
-
-	pool, err := pgxpool.New(context.Background(), connStr)
-	require.NoError(t, err)
-	defer pool.Close()
-
-	// Ping the database to make sure it's alive
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	require.NoError(t, pool.Ping(ctx))
+	pool := testPool(t)
 
 	// =========================
 	// Create repository
@@ -52,7 +31,7 @@ func TestAdminRepository_CRUD(t *testing.T) {
 		Username:       "admin1",
 		HashedPassword: "hashed_pass",
 	}
-	err = repo.Create(context.Background(), admin)
+	err := repo.Create(context.Background(), admin)
 	require.NoError(t, err)
 	require.NotEqual(t, uuid.Nil, admin.ID)
 

@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
+import { hostSocketUrl } from '../api/ws';
 import { Users, Play, SkipForward, Flag, Trophy } from 'lucide-react';
 
+// Field names must match entities.QuizQuestion — the backend sends
+// `question` and `position`, not `title`/`order_index`.
 interface Question {
   id: string;
-  title: Record<string, string>;
-  type: string;
+  question: Record<string, string>;
+  type: number;
   options: any;
   time_limit_sec: number;
-  order_index: number;
+  position: number;
 }
 
 export default function HostLiveBoard() {
@@ -25,11 +28,30 @@ export default function HostLiveBoard() {
   const [viewState, setViewState] = useState<'lobby' | 'question' | 'leaderboard' | 'finished'>('lobby');
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
+  // Both the timer and the "everyone answered" effect can fire showLeaderboard
+  // in the same tick. A ref guard is used rather than reading viewState, which
+  // would be a stale value captured when the callback was created.
+  const publishingRef = useRef(false);
+
+  const showLeaderboard = useCallback(async () => {
+    if (publishingRef.current) return;
+    publishingRef.current = true;
+    try {
+      // Fetch and trigger broadcast to all players
+      const res = await client.post(`/api/v1/sessions/${sessionId}/show_results`);
+      setLeaderboard(res.data.leaderboard || []);
+      setViewState('leaderboard');
+    } catch (err) {
+      console.error(err);
+      publishingRef.current = false;
+    }
+  }, [sessionId]);
+
   useEffect(() => {
     if (viewState === 'question' && players.length > 0 && answeredCount >= players.length) {
       showLeaderboard();
     }
-  }, [answeredCount, players.length, viewState]);
+  }, [answeredCount, players.length, viewState, showLeaderboard]);
 
   useEffect(() => {
     if (viewState !== 'question' || timeLeft === null) return;
@@ -39,7 +61,7 @@ export default function HostLiveBoard() {
     }
     const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
     return () => clearTimeout(timer);
-  }, [timeLeft, viewState]);
+  }, [timeLeft, viewState, showLeaderboard]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -50,7 +72,7 @@ export default function HostLiveBoard() {
       return Promise.all([res.data, client.get(`/api/v1/quizzes/${res.data.quiz_id}/questions`)]);
     }).then(([sessionData, questionsRes]) => {
       const questionsData = questionsRes.data || [];
-      const sorted = questionsData.sort((a: Question, b: Question) => a.order_index - b.order_index);
+      const sorted = questionsData.sort((a: Question, b: Question) => a.position - b.position);
       setQuestions(sorted);
 
       if (sessionData.status === 'finished') {
@@ -70,14 +92,15 @@ export default function HostLiveBoard() {
       }
     }).catch(err => console.error(err));
 
+    // Seed the roster. Players who joined the lobby before this board mounted
+    // never send a player_joined event here, so without this the count stays 0
+    // and the "everyone answered" auto-advance can never fire.
+    client.get(`/api/v1/sessions/${sessionId}/leaderboard`)
+      .then(res => setPlayers((res.data || []).map((p: any) => ({ id: p.id, name: p.name }))))
+      .catch(err => console.error(err));
+
     // Connect WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host; 
-    const wsUrl = import.meta.env.DEV 
-      ? `ws://localhost:8080/ws/sessions/${sessionId}/host`
-      : `${protocol}//${host}/ws/sessions/${sessionId}/host`;
-      
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(hostSocketUrl(sessionId));
 
     ws.onmessage = (event) => {
       try {
@@ -116,6 +139,7 @@ export default function HostLiveBoard() {
       });
       setCurrentIndex(nextIdx);
       setAnsweredCount(0);
+      publishingRef.current = false; // re-arm the leaderboard trigger
       setTimeLeft(questions[nextIdx].time_limit_sec > 0 ? questions[nextIdx].time_limit_sec : null);
       setViewState('question');
     } catch (err) {
@@ -127,18 +151,6 @@ export default function HostLiveBoard() {
     try {
       await client.patch(`/api/v1/sessions/${sessionId}/finish`);
       setViewState('finished');
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const showLeaderboard = async () => {
-    if (viewState === 'leaderboard') return; // prevent multiple triggers
-    try {
-      // Fetch and trigger broadcast to all players
-      const res = await client.post(`/api/v1/sessions/${sessionId}/show_results`);
-      setLeaderboard(res.data.leaderboard);
-      setViewState('leaderboard');
     } catch (err) {
       console.error(err);
     }
@@ -188,7 +200,7 @@ export default function HostLiveBoard() {
               <div className="absolute top-4 right-4 bg-[#0a0a0a] px-4 py-2 rounded-full border border-[#2a2a2a] text-[#0ABFBC] font-bold">
                 {currentIndex + 1} / {questions.length}
               </div>
-              <h2 className="text-4xl font-bold">{currentQ.title.en || currentQ.title.ar}</h2>
+              <h2 className="text-4xl font-bold">{currentQ.question?.en || currentQ.question?.ar}</h2>
               {timeLeft !== null && (
                 <div className={`mt-6 font-mono text-5xl font-black ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-[#0ABFBC]'}`}>
                   {timeLeft}
@@ -223,10 +235,10 @@ export default function HostLiveBoard() {
                 <p className="text-center text-gray-400 text-xl">No scores yet!</p>
               ) : (
                 leaderboard.map((lb: any, idx: number) => (
-                  <div key={lb.player_id} className="flex justify-between items-center bg-[#141414] border border-[#2a2a2a] p-6 rounded-2xl">
+                  <div key={lb.id} className="flex justify-between items-center bg-[#141414] border border-[#2a2a2a] p-6 rounded-2xl">
                     <div className="flex items-center gap-6">
                       <span className="text-2xl font-black text-gray-500 w-8 text-center">{idx + 1}</span>
-                      <span className="text-2xl font-bold">{lb.player_name}</span>
+                      <span className="text-2xl font-bold">{lb.name}</span>
                     </div>
                     <span className="text-2xl font-bold text-[#0ABFBC]">{lb.score} pts</span>
                   </div>

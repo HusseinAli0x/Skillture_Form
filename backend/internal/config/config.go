@@ -1,4 +1,4 @@
-// Package config provides configuration management for the Nahj application.
+// Package config provides configuration management for the Skillture application.
 package config
 
 import (
@@ -21,6 +21,20 @@ type Config struct {
 	Logging  LoggingConfig
 	CORS     CORSConfig
 	Upload   UploadConfig
+	Gemini   GeminiConfig
+}
+
+// GeminiConfig holds Google Gemini API settings.
+// The API key used to be read with os.Getenv from inside the service, which
+// bypassed this package entirely and gave no startup validation.
+type GeminiConfig struct {
+	APIKey string
+	Model  string
+}
+
+// Enabled reports whether the AI report feature can run.
+func (g *GeminiConfig) Enabled() bool {
+	return g.APIKey != ""
 }
 
 // DatabaseConfig holds database connection and pool settings.
@@ -107,6 +121,7 @@ func Load() (*Config, error) {
 		Logging:  loadLoggingConfig(),
 		CORS:     loadCORSConfig(),
 		Upload:   loadUploadConfig(),
+		Gemini:   loadGeminiConfig(),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -118,11 +133,15 @@ func Load() (*Config, error) {
 
 func LoadDatabaseConfig() DatabaseConfig {
 	return DatabaseConfig{
-		Host:     getEnv("DB_HOST", "localhost"),
-		Port:     getEnv("DB_PORT", "5432"),
-		User:     getEnv("DB_USER", "cpper"),
-		Password: getEnv("DB_PASSWORD", "0770"),
-		DBName:   getEnv("DB_NAME", "nahjdbv"),
+		Host: getEnv("DB_HOST", "localhost"),
+		Port: getEnv("DB_PORT", "5432"),
+		// No credential defaults. These previously fell back to a username,
+		// password and database name from an unrelated project, so a
+		// misconfigured deployment failed with a confusing connection error
+		// instead of a clear "DB_USER is required". Validate() enforces them.
+		User:     getEnv("DB_USER", ""),
+		Password: getEnv("DB_PASSWORD", ""),
+		DBName:   getEnv("DB_NAME", ""),
 		SSLMode:  getEnv("DB_SSL_MODE", "disable"),
 
 		MaxOpenConns:      getEnvInt("DB_MAX_OPEN_CONNS", 50),
@@ -153,7 +172,7 @@ func loadServerConfig() ServerConfig {
 func loadJWTConfig() JWTConfig {
 	return JWTConfig{
 		Secret:            getEnv("JWT_SECRET", ""),
-		Issuer:            getEnv("JWT_ISSUER", "nahj-api"),
+		Issuer:            getEnv("JWT_ISSUER", "skillture-api"),
 		AccessExpireMin:   getEnvInt("JWT_ACCESS_EXPIRE_MIN", 15),
 		RefreshExpireDays: getEnvInt("JWT_REFRESH_EXPIRE_DAYS", 7),
 		BcryptCost:        getEnvInt("BCRYPT_COST", 12),
@@ -187,11 +206,20 @@ func loadCORSConfig() CORSConfig {
 	}
 }
 
+func loadGeminiConfig() GeminiConfig {
+	return GeminiConfig{
+		APIKey: getEnv("GEMINI_API_KEY", ""),
+		Model:  getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
+	}
+}
+
 func loadUploadConfig() UploadConfig {
 	return UploadConfig{
-		BasePath:     getEnv("UPLOAD_BASE_PATH", "./uploads"),
-		MaxSizeMB:    getEnvInt("UPLOAD_MAX_FILE_SIZE_MB", 5),
-		AllowedTypes: getEnvSlice("UPLOAD_ALLOWED_TYPES", "pdf,png,jpg,jpeg,doc,docx"),
+		BasePath:  getEnv("UPLOAD_BASE_PATH", "./uploads"),
+		MaxSizeMB: getEnvInt("UPLOAD_MAX_FILE_SIZE_MB", 5),
+		// Images only. Uploads are served back statically from /uploads, so
+		// anything the browser will execute (svg, html) is a stored-XSS vector.
+		AllowedTypes: getEnvSlice("UPLOAD_ALLOWED_TYPES", "png,jpg,jpeg,webp,gif"),
 	}
 }
 

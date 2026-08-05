@@ -14,8 +14,11 @@ type QuizPlayerRepository interface {
 	Create(ctx context.Context, player *entities.QuizPlayer) error
 	// GetByID retrieves a player by primary key. Returns nil, nil when not found.
 	GetByID(ctx context.Context, id uuid.UUID) (*entities.QuizPlayer, error)
-	// UpdateScore persists the player's cumulative score.
-	UpdateScore(ctx context.Context, playerID uuid.UUID, score int) error
+	// AddScore atomically increments the player's cumulative score by points
+	// and returns the new total. Incrementing in SQL rather than writing a
+	// value computed in Go keeps concurrent answers from overwriting each
+	// other.
+	AddScore(ctx context.Context, playerID uuid.UUID, points int) (int, error)
 	// Delete removes a player record.
 	Delete(ctx context.Context, id uuid.UUID) error
 	// ListBySessionID returns all players in a session, ordered by score descending.

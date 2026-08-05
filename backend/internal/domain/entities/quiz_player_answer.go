@@ -27,7 +27,7 @@ type QuizPlayerAnswer struct {
 	PlayerID     uuid.UUID      `db:"player_id"     json:"player_id"`
 	SessionID    uuid.UUID      `db:"session_id"    json:"session_id"`
 	QuestionID   uuid.UUID      `db:"question_id"   json:"question_id"`
-	Answer       map[string]any `db:"answer"        json:"answer"`        // {"value": "Go"} or {"value": true}
+	Answer       map[string]any `db:"answer"        json:"answer"` // {"value": "Go"} or {"value": true}
 	IsCorrect    bool           `db:"is_correct"    json:"is_correct"`
 	ScoreAwarded int            `db:"score_awarded" json:"score_awarded"` // Final points after speed calculation
 	TimeTakenMs  int            `db:"time_taken_ms" json:"time_taken_ms"` // Response time in milliseconds

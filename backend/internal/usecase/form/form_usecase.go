@@ -7,6 +7,7 @@ import (
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
+	domainErrors "skillture/backend/internal/domain/errors"
 	repo "skillture/backend/internal/repository/interfaces"
 	formUC "skillture/backend/internal/usecase/interfaces"
 
@@ -58,6 +59,10 @@ func (u *formUseCase) Update(ctx context.Context, form *entities.Form) error {
 	if err != nil {
 		return err
 	}
+	// Repositories signal "not found" as (nil, nil).
+	if existing == nil {
+		return domainErrors.ErrNotFound
+	}
 
 	// Closed forms cannot be updated
 	if existing.Status == enums.FormStatusClosed {
@@ -84,6 +89,9 @@ func (u *formUseCase) Publish(ctx context.Context, formID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	if form == nil {
+		return domainErrors.ErrNotFound
+	}
 
 	// Only draft forms can be published
 	if form.Status != enums.FormStatusDraft {
@@ -105,6 +113,9 @@ func (u *formUseCase) Close(ctx context.Context, formID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	if form == nil {
+		return domainErrors.ErrNotFound
+	}
 
 	// If already closed, do nothing
 	if form.Status == enums.FormStatusClosed {
@@ -123,9 +134,12 @@ func (u *formUseCase) Close(ctx context.Context, formID uuid.UUID) error {
 func (u *formUseCase) Delete(ctx context.Context, formID uuid.UUID) error {
 
 	// Ensure the form exists
-	_, err := u.formRepo.GetByID(ctx, formID)
+	existing, err := u.formRepo.GetByID(ctx, formID)
 	if err != nil {
 		return err
+	}
+	if existing == nil {
+		return domainErrors.ErrNotFound
 	}
 
 	// Delete the form

@@ -141,7 +141,7 @@ const FormsPage: React.FC = () => {
                         <StatusDropdown 
                           type="form" 
                           id={form.id} 
-                          initialStatus={form.status as any as 0|1|2} 
+                          initialStatus={form.status} 
                           fullObject={form} 
                         />
                       </td>

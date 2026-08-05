@@ -7,6 +7,7 @@ import (
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
+	domainErrors "skillture/backend/internal/domain/errors"
 	repo "skillture/backend/internal/repository/interfaces"
 	uc "skillture/backend/internal/usecase/interfaces"
 	val "skillture/backend/internal/validation"
@@ -48,6 +49,10 @@ func (u *formFieldUseCase) Create(ctx context.Context, field *entities.FormField
 	if err != nil {
 		return err
 	}
+	// Repositories signal "not found" as (nil, nil).
+	if form == nil {
+		return domainErrors.ErrNotFound
+	}
 	if form.Status == enums.FormStatusClosed {
 		return errors.New("cannot add field to a closed form")
 	}
@@ -77,6 +82,11 @@ func (u *formFieldUseCase) Update(ctx context.Context, field *entities.FormField
 	if err != nil {
 		return err
 	}
+	// GetByID returns (nil, nil) for a missing row. Without this the
+	// existing.FormID dereference below panicked on any unknown field ID.
+	if existing == nil {
+		return domainErrors.ErrNotFound
+	}
 
 	// -------------------
 	//  Domain validation
@@ -91,6 +101,9 @@ func (u *formFieldUseCase) Update(ctx context.Context, field *entities.FormField
 	form, err := u.formRepo.GetByID(ctx, existing.FormID)
 	if err != nil {
 		return err
+	}
+	if form == nil {
+		return domainErrors.ErrNotFound
 	}
 	if form.Status == enums.FormStatusClosed {
 		return errors.New("cannot update field of a closed form")
@@ -111,9 +124,12 @@ func (u *formFieldUseCase) Update(ctx context.Context, field *entities.FormField
 func (u *formFieldUseCase) Delete(ctx context.Context, fieldID uuid.UUID) error {
 
 	// Ensure field exists
-	_, err := u.formFieldRepo.GetByID(ctx, fieldID)
+	existing, err := u.formFieldRepo.GetByID(ctx, fieldID)
 	if err != nil {
 		return err
+	}
+	if existing == nil {
+		return domainErrors.ErrNotFound
 	}
 
 	// Delete

@@ -17,6 +17,9 @@
     "jsx": "react-jsx",
 
     /* Linting */
+    /* strict was off, which is why several types in src/api/types.ts could
+       disagree with the Go API for months without the build noticing. */
+    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
