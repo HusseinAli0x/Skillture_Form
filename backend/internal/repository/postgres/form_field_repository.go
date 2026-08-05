@@ -165,6 +165,53 @@ func (r *formFieldRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// ReplaceByFormID applies the complete desired field list in one transaction.
+//
+// See the interface for why this is an upsert rather than a delete-and-insert:
+// response_answers.field_id references form_fields(id) ON DELETE CASCADE, so
+// recreating every row on every save would destroy the answers already
+// collected against those fields.
+func (r *formFieldRepository) ReplaceByFormID(ctx context.Context, formID uuid.UUID, fields []*entities.FormField) error {
+	return r.WithTx(ctx, func(tx *BaseRepository) error {
+		txRepo := &formFieldRepository{BaseRepository: tx}
+
+		existing, err := txRepo.List(ctx, interfaces.FormFieldFilter{FormID: &formID})
+		if err != nil {
+			return err
+		}
+		known := make(map[uuid.UUID]bool, len(existing))
+		for _, f := range existing {
+			known[f.ID] = true
+		}
+
+		keep := make([]uuid.UUID, 0, len(fields))
+		for _, field := range fields {
+			field.FormID = formID
+
+			// An ID the caller invented, or one belonging to another form, is
+			// treated as a new field rather than trusted into an UPDATE that
+			// would silently rewrite somebody else's row.
+			if field.ID != uuid.Nil && known[field.ID] {
+				if err := txRepo.Update(ctx, field); err != nil {
+					return err
+				}
+			} else {
+				field.ID = uuid.New()
+				if err := txRepo.Create(ctx, field); err != nil {
+					return err
+				}
+			}
+			keep = append(keep, field.ID)
+		}
+
+		// Anything the caller left out is a field the author deleted.
+		return tx.Exec(ctx,
+			`DELETE FROM form_fields WHERE form_id = $1 AND NOT (id = ANY($2))`,
+			formID, keep,
+		)
+	})
+}
+
 // List returns all form fields, optionally filtered by form ID
 func (r *formFieldRepository) List(ctx context.Context, filter interfaces.FormFieldFilter) ([]*entities.FormField, error) {
 	baseQuery := `

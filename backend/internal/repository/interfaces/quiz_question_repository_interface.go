@@ -25,4 +25,17 @@ type QuizQuestionRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	// List retrieves questions ordered by position, with an optional quiz filter.
 	List(ctx context.Context, filter QuizQuestionFilter) ([]*entities.QuizQuestion, error)
+
+	// ReplaceByQuizID makes the quiz's questions match the given slice exactly,
+	// in a single transaction: questions carrying an existing ID are updated,
+	// questions without one are inserted, and any question of this quiz not in
+	// the slice is deleted.
+	//
+	// The builder previously did this as a sequential run of per-question
+	// requests, so a failure part-way through left the quiz half-written.
+	//
+	// Note this is an upsert, not delete-and-recreate: quiz_player_answers
+	// references quiz_questions(id), so recreating rows would discard the
+	// answers of any game already played on this quiz.
+	ReplaceByQuizID(ctx context.Context, quizID uuid.UUID, questions []*entities.QuizQuestion) error
 }

@@ -44,6 +44,10 @@ type QuizQuestionUseCase interface {
 	GetByID(ctx context.Context, questionID uuid.UUID) (*entities.QuizQuestion, error)
 	// ListByQuizID returns all questions for a quiz ordered by position
 	ListByQuizID(ctx context.Context, quizID uuid.UUID) ([]*entities.QuizQuestion, error)
+	// ReplaceQuestions makes the quiz's questions match the given slice
+	// exactly, in a single transaction. Position is taken from the slice
+	// order, so the caller does not have to keep it consistent itself.
+	ReplaceQuestions(ctx context.Context, quizID uuid.UUID, questions []*entities.QuizQuestion) error
 }
 
 // QuizSessionUseCase manages live game session lifecycle

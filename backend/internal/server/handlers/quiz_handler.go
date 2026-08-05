@@ -188,6 +188,72 @@ func (h *QuizHandler) CreateQuestion(c *gin.Context) {
 	c.JSON(http.StatusCreated, question)
 }
 
+// PUT /api/v1/quizzes/:id/questions
+//
+// Replaces the quiz's whole question list in one transaction. The builder used
+// to save by firing one request per question plus one per deletion, with no
+// rollback: a failure part-way through left the quiz half-written, and the
+// author saw a single error with no way to tell what had landed.
+//
+// A question keeps its `id` to be updated in place; omit the id for a new one.
+// Any existing question absent from the list is deleted. Position comes from
+// the order of the array.
+func (h *QuizHandler) ReplaceQuestions(c *gin.Context) {
+	quizID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quiz id"})
+		return
+	}
+
+	// A pointer so `binding:"required"` means "the key is present" rather than
+	// "the list is non-empty" — deleting the last question is a legitimate
+	// save, but an empty body must not be read as "delete everything".
+	var req struct {
+		Questions *[]struct {
+			ID            uuid.UUID         `json:"id"`
+			Question      map[string]string `json:"question"       binding:"required"`
+			Type          string            `json:"type"           binding:"required"`
+			TimeLimitSec  int               `json:"time_limit_sec"`
+			Points        int               `json:"points"`
+			Options       map[string]any    `json:"options"`
+			CorrectAnswer map[string]any    `json:"correct_answer" binding:"required"`
+		} `json:"questions" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	questions := make([]*entities.QuizQuestion, 0, len(*req.Questions))
+	for _, q := range *req.Questions {
+		timeLimit := q.TimeLimitSec
+		if timeLimit == 0 {
+			timeLimit = 15
+		}
+		points := q.Points
+		if points == 0 {
+			points = 1000
+		}
+
+		questions = append(questions, &entities.QuizQuestion{
+			ID:            q.ID,
+			QuizID:        quizID,
+			Question:      q.Question,
+			Type:          enums.QuizQuestionType(q.Type),
+			TimeLimitSec:  timeLimit,
+			Points:        points,
+			Options:       q.Options,
+			CorrectAnswer: q.CorrectAnswer,
+		})
+	}
+
+	if err := h.questionUC.ReplaceQuestions(c.Request.Context(), quizID, questions); err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, questions)
+}
+
 // GET /api/v1/quizzes/:id/questions
 func (h *QuizHandler) ListQuestions(c *gin.Context) {
 	quizID, err := uuid.Parse(c.Param("id"))

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"skillture/backend/internal/domain/entities"
+	domainErrors "skillture/backend/internal/domain/errors"
 	repo "skillture/backend/internal/repository/interfaces"
 	uc "skillture/backend/internal/usecase/interfaces"
 
@@ -103,4 +104,36 @@ func (u *quizQuestionUseCase) GetByID(ctx context.Context, questionID uuid.UUID)
 // ListByQuizID returns all questions for a quiz ordered by position.
 func (u *quizQuestionUseCase) ListByQuizID(ctx context.Context, quizID uuid.UUID) ([]*entities.QuizQuestion, error) {
 	return u.questionRepo.List(ctx, repo.QuizQuestionFilter{QuizID: &quizID})
+}
+
+// ReplaceQuestions makes the quiz's questions match the given slice exactly.
+//
+// Every question is validated before anything is written, so a quiz with one
+// bad question is rejected whole rather than saved up to the point of failure.
+func (u *quizQuestionUseCase) ReplaceQuestions(ctx context.Context, quizID uuid.UUID, questions []*entities.QuizQuestion) error {
+	quiz, err := u.quizRepo.GetByID(ctx, quizID)
+	if err != nil {
+		return err
+	}
+	// A bare errors.New here would fall through respondError to a 500.
+	if quiz == nil {
+		return domainErrors.ErrNotFound
+	}
+
+	for i, question := range questions {
+		if question == nil {
+			return errors.New("question list contains an empty entry")
+		}
+		question.QuizID = quizID
+		// Position comes from the order of the slice. It also starts at 1
+		// rather than 0 — see D5: `Position int` is tagged binding:"required",
+		// and Go's validator treats 0 as absent.
+		question.Position = i + 1
+
+		if err := question.IsValid(); err != nil {
+			return err
+		}
+	}
+
+	return u.questionRepo.ReplaceByQuizID(ctx, quizID, questions)
 }

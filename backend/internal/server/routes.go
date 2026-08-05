@@ -110,6 +110,9 @@ func SetupRoutes(
 			// must never be reachable by a player.
 			quizzes.POST("/:id/questions", quizHandler.CreateQuestion)
 			quizzes.GET("/:id/questions", quizHandler.ListQuestions)
+			// Whole-list replace, in one transaction. This is what the builder
+			// saves through; the per-question routes remain for scripted use.
+			quizzes.PUT("/:id/questions", quizHandler.ReplaceQuestions)
 			quizzes.PUT("/:id/questions/:qid", quizHandler.UpdateQuestion)
 			quizzes.DELETE("/:id/questions/:qid", quizHandler.DeleteQuestion)
 
@@ -127,6 +130,9 @@ func SetupRoutes(
 			forms.DELETE("/:id", formHandler.Delete)
 
 			forms.POST("/:id/fields", formFieldHandler.Create)
+			// Whole-list replace, in one transaction. This is what the builder
+			// saves through; the per-field routes remain for scripted use.
+			forms.PUT("/:id/fields", formFieldHandler.ReplaceFields)
 			forms.PUT("/:id/fields/:fieldID", formFieldHandler.Update)
 			forms.DELETE("/:id/fields/:fieldID", formFieldHandler.Delete)
 

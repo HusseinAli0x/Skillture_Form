@@ -22,4 +22,9 @@ type FormFieldUseCase interface {
 
 	// ListByFormID returns all fields for a specific form.
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]*entities.FormField, error)
+
+	// ReplaceFields makes the form's fields match the given slice exactly, in a
+	// single transaction. Field order is taken from the slice order, so the
+	// caller does not have to keep field_order consistent itself.
+	ReplaceFields(ctx context.Context, formID uuid.UUID, fields []*entities.FormField) error
 }

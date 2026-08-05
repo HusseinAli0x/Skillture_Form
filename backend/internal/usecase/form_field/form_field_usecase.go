@@ -140,3 +140,43 @@ func (u *formFieldUseCase) Delete(ctx context.Context, fieldID uuid.UUID) error 
 func (u *formFieldUseCase) ListByFormID(ctx context.Context, formID uuid.UUID) ([]*entities.FormField, error) {
 	return u.formFieldRepo.List(ctx, repo.FormFieldFilter{FormID: &formID})
 }
+
+// ReplaceFields makes the form's fields match the given slice exactly.
+//
+// Every field is validated before anything is written, so a form with one bad
+// field is rejected whole rather than saved up to the point of failure.
+func (u *formFieldUseCase) ReplaceFields(ctx context.Context, formID uuid.UUID, fields []*entities.FormField) error {
+	form, err := u.formRepo.GetByID(ctx, formID)
+	if err != nil {
+		return err
+	}
+	// Repositories signal "not found" as (nil, nil).
+	if form == nil {
+		return domainErrors.ErrNotFound
+	}
+	if form.Status == enums.FormStatusClosed {
+		// A bare errors.New here would fall through respondError to a 500.
+		return domainErrors.ErrFormClosed
+	}
+
+	now := time.Now()
+	for i, field := range fields {
+		if field == nil {
+			return errors.New("field list contains an empty entry")
+		}
+		field.FormID = formID
+		// Position comes from the order of the slice; a caller that also sends
+		// field_order cannot disagree with itself.
+		field.FieldOrder = i + 1
+		field.UpdatedAt = now
+		if field.CreatedAt.IsZero() {
+			field.CreatedAt = now
+		}
+
+		if err := val.ValidateFormFieldDomain(field); err != nil {
+			return err
+		}
+	}
+
+	return u.formFieldRepo.ReplaceByFormID(ctx, formID, fields)
+}

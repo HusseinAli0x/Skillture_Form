@@ -23,7 +23,6 @@ const FormBuilder: React.FC = () => {
   const [fields, setFields] = useState<FieldState[]>([emptyField()]);
   const [status, setStatus] = useState<FormStatus>(FormStatus.Draft);
   const [fullObject, setFullObject] = useState<Form | null>(null);
-  const [deletedFieldIds, setDeletedFieldIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -77,11 +76,10 @@ const FormBuilder: React.FC = () => {
 
   const addField = () => setFields(prev => [...prev, emptyField()]);
 
-  const removeField = (fieldId: string) => {
-    const field = fields.find(f => f._id === fieldId);
-    if (field && !field.isNew) setDeletedFieldIds(prev => [...prev, fieldId]);
+  // Removal needs no bookkeeping: the save sends the complete desired list,
+  // and the server deletes whatever is missing from it.
+  const removeField = (fieldId: string) =>
     setFields(prev => prev.filter(f => f._id !== fieldId));
-  };
 
   const moveField = (index: number, direction: 'up' | 'down') => {
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
@@ -135,38 +133,34 @@ const FormBuilder: React.FC = () => {
         formId = formRes.data.id;
       }
 
-      for (const delId of deletedFieldIds) {
-        await client.delete(`/api/v1/forms/${formId}/fields/${delId}`);
-      }
+      // One transactional replace, not a request per field plus one per
+      // deletion. The old loop had no rollback: a failure part-way through
+      // left the form half-written, with some fields updated, some not, and
+      // the deletions already applied.
+      await client.put(`/api/v1/forms/${formId}/fields`, {
+        fields: fields.map(f => {
+          const optionsMap: Record<string, { label: string }> = {};
+          if (HAS_OPTIONS.includes(f.type)) {
+            f.options
+              .filter(o => o.trim())
+              .forEach((o, idx) => {
+                optionsMap[`opt_${idx}`] = { label: o };
+              });
+          }
 
-      for (let i = 0; i < fields.length; i++) {
-        const f = fields[i];
-
-        const optionsMap: Record<string, { label: string }> = {};
-        if (HAS_OPTIONS.includes(f.type)) {
-          f.options
-            .filter(o => o.trim())
-            .forEach((o, idx) => {
-              optionsMap[`opt_${idx}`] = { label: o };
-            });
-        }
-
-        const payload = {
-          label: toLocalized(f.label),
-          placeholder: f.placeholder ? toLocalized(f.placeholder) : undefined,
-          help_text: f.helpText ? toLocalized(f.helpText) : undefined,
-          required: f.required,
-          type: f.type,
-          field_order: i + 1,
-          options: Object.keys(optionsMap).length > 0 ? optionsMap : undefined,
-        };
-
-        if (f.isNew) {
-          await client.post(`/api/v1/forms/${formId}/fields`, payload);
-        } else {
-          await client.put(`/api/v1/forms/${formId}/fields/${f._id}`, payload);
-        }
-      }
+          return {
+            // A new field has a client-generated `_id` that means nothing to
+            // the server; omitting it is what marks the field as an insert.
+            id: f.isNew ? undefined : f._id,
+            label: toLocalized(f.label),
+            placeholder: f.placeholder ? toLocalized(f.placeholder) : undefined,
+            help_text: f.helpText ? toLocalized(f.helpText) : undefined,
+            required: f.required,
+            type: f.type,
+            options: Object.keys(optionsMap).length > 0 ? optionsMap : undefined,
+          };
+        }),
+      });
 
       addToast('success', `Form ${isEditMode ? 'updated' : 'created'} successfully!`);
       navigate('/admin/forms');

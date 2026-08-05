@@ -46,7 +46,6 @@ const FormQuizBuilder: React.FC = () => {
   const [questions, setQuestions] = useState<QuestionState[]>([emptyQuestion()]);
   const [status, setStatus] = useState<QuizStatus>(QuizStatus.Draft);
   const [fullObject, setFullObject] = useState<Quiz | null>(null);
-  const [deletedQuestionIds, setDeletedQuestionIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -95,11 +94,10 @@ const FormQuizBuilder: React.FC = () => {
 
   const addQuestion = () => setQuestions(prev => [...prev, emptyQuestion()]);
 
-  const removeQuestion = (questionId: string) => {
-    const question = questions.find(q => q.id === questionId);
-    if (question && !question.isNew) setDeletedQuestionIds(prev => [...prev, questionId]);
+  // Removal needs no bookkeeping: the save sends the complete desired list,
+  // and the server deletes whatever is missing from it.
+  const removeQuestion = (questionId: string) =>
     setQuestions(prev => prev.filter(q => q.id !== questionId));
-  };
 
   const moveQuestion = (index: number, direction: 'up' | 'down') => {
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
@@ -162,43 +160,38 @@ const FormQuizBuilder: React.FC = () => {
         quizId = quizRes.data.id;
       }
 
-      for (const delId of deletedQuestionIds) {
-        await client.delete(`/api/v1/quizzes/${quizId}/questions/${delId}`);
-      }
+      // One transactional replace, not a request per question plus one per
+      // deletion. The old loop had no rollback: a failure part-way through
+      // left the quiz half-written, with the deletions already applied.
+      await client.put(`/api/v1/quizzes/${quizId}/questions`, {
+        questions: questions.map(q => {
+          const correctValue =
+            q.type === 'short'
+              ? q.correctOptionId
+              : (q.options.find(o => o.id === q.correctOptionId)?.value ?? '');
 
-      for (let i = 0; i < questions.length; i++) {
-        const q = questions[i];
+          // The option id doubles as the map key so the correct answer
+          // survives a reload — see readOptions above.
+          const optionsMap: Record<string, { value: string }> = {};
+          if (q.type !== 'short') {
+            q.options.forEach(opt => {
+              optionsMap[opt.id] = { value: opt.value };
+            });
+          }
 
-        const correctValue =
-          q.type === 'short'
-            ? q.correctOptionId
-            : (q.options.find(o => o.id === q.correctOptionId)?.value ?? '');
-
-        // The option id doubles as the map key so the correct answer survives a
-        // reload — see readOptions above.
-        const optionsMap: Record<string, { value: string }> = {};
-        if (q.type !== 'short') {
-          q.options.forEach(opt => {
-            optionsMap[opt.id] = { value: opt.value };
-          });
-        }
-
-        const payload = {
-          question: toLocalized(q.question),
-          type: q.type,
-          position: i + 1,
-          time_limit_sec: q.timeLimit,
-          points: q.points,
-          options: optionsMap,
-          correct_answer: { value: correctValue },
-        };
-
-        if (q.isNew) {
-          await client.post(`/api/v1/quizzes/${quizId}/questions`, payload);
-        } else {
-          await client.put(`/api/v1/quizzes/${quizId}/questions/${q.id}`, payload);
-        }
-      }
+          return {
+            // A new question has a client-generated id that means nothing to
+            // the server; omitting it is what marks the question as an insert.
+            id: q.isNew ? undefined : q.id,
+            question: toLocalized(q.question),
+            type: q.type,
+            time_limit_sec: q.timeLimit,
+            points: q.points,
+            options: optionsMap,
+            correct_answer: { value: correctValue },
+          };
+        }),
+      });
 
       addToast('success', `Quiz ${isEditMode ? 'updated' : 'created'} successfully!`);
       navigate('/admin/quizzes');

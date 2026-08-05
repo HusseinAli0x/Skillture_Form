@@ -172,6 +172,52 @@ func (r *quizQuestionRepository) Delete(ctx context.Context, id uuid.UUID) error
 	return nil
 }
 
+// ReplaceByQuizID applies the complete desired question list in one transaction.
+//
+// See the interface for why this is an upsert rather than a delete-and-insert:
+// quiz_player_answers.question_id references quiz_questions(id), so recreating
+// every row on every save would discard the answers of games already played.
+func (r *quizQuestionRepository) ReplaceByQuizID(ctx context.Context, quizID uuid.UUID, questions []*entities.QuizQuestion) error {
+	return r.WithTx(ctx, func(tx *BaseRepository) error {
+		txRepo := &quizQuestionRepository{BaseRepository: tx}
+
+		existing, err := txRepo.List(ctx, interfaces.QuizQuestionFilter{QuizID: &quizID})
+		if err != nil {
+			return err
+		}
+		known := make(map[uuid.UUID]bool, len(existing))
+		for _, q := range existing {
+			known[q.ID] = true
+		}
+
+		keep := make([]uuid.UUID, 0, len(questions))
+		for _, question := range questions {
+			question.QuizID = quizID
+
+			// An ID the caller invented, or one belonging to another quiz, is
+			// treated as a new question rather than trusted into an UPDATE
+			// that would silently rewrite somebody else's row.
+			if question.ID != uuid.Nil && known[question.ID] {
+				if err := txRepo.Update(ctx, question); err != nil {
+					return err
+				}
+			} else {
+				question.ID = uuid.New()
+				if err := txRepo.Create(ctx, question); err != nil {
+					return err
+				}
+			}
+			keep = append(keep, question.ID)
+		}
+
+		// Anything the caller left out is a question the author deleted.
+		return tx.Exec(ctx,
+			`DELETE FROM quiz_questions WHERE quiz_id = $1 AND NOT (id = ANY($2))`,
+			quizID, keep,
+		)
+	})
+}
+
 // List retrieves questions ordered by position ASC, optionally filtered by quiz_id.
 func (r *quizQuestionRepository) List(ctx context.Context, filter interfaces.QuizQuestionFilter) ([]*entities.QuizQuestion, error) {
 	baseQuery := `

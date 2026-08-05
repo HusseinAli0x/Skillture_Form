@@ -24,4 +24,19 @@ type FormFieldRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	// List retrieves form fields based on optional filter
 	List(ctx context.Context, filter FormFieldFilter) ([]*entities.FormField, error)
+
+	// ReplaceByFormID makes the form's fields match the given slice exactly, in
+	// a single transaction: fields carrying an existing ID are updated, fields
+	// without one are inserted, and any field of this form not in the slice is
+	// deleted.
+	//
+	// The builder previously did this as a sequential run of per-field
+	// requests, so a failure part-way through left the form half-written —
+	// some fields updated, some not, deletions already applied — with no way
+	// for the caller to tell what had landed.
+	//
+	// Note this is an upsert, not delete-and-recreate: response_answers
+	// references form_fields(id), so recreating rows would take existing
+	// answers with them.
+	ReplaceByFormID(ctx context.Context, formID uuid.UUID, fields []*entities.FormField) error
 }
