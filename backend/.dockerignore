@@ -1,0 +1,19 @@
+# Build artifacts — these are ~44 MB each and bust the layer cache on every build
+main
+tmp_build
+*.exe
+*.test
+*.out
+
+# Secrets — never ship into an image layer
+.env
+.env.local
+
+# Runtime data (bind-mounted by docker-compose)
+uploads/
+
+# VCS / editor
+.git
+.gitignore
+.idea/
+.vscode/

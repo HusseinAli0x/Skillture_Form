@@ -1,0 +1,66 @@
+services:
+  # --- Database Service (PostgreSQL) ---
+  postgres_db:
+    image: pgvector/pgvector:pg16
+    container_name: skillture_postgres
+    environment:
+      POSTGRES_USER: hussein
+      POSTGRES_PASSWORD: hussein
+      POSTGRES_DB: skillturedb
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/internal/database/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - skillture_network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hussein -d skillturedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- Go Backend Application Service ---
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: skillture_backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=postgres_db
+      - DB_PORT=5432
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - skillture_network
+    restart: always
+
+  # --- Frontend Application Service ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: skillture_frontend
+    ports:
+      - "5175:80"
+    depends_on:
+      - backend
+    networks:
+      - skillture_network
+    restart: always
+
+# --- Networks & Volumes Definitions ---
+networks:
+  skillture_network:
+    driver: bridge
+
+volumes:
+  postgres_data:

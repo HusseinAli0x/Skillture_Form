@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import type { QuizQuestionType } from '../api/types';
 import StatusDropdown from '../components/StatusDropdown';
+import { useToastStore } from '../context/ToastStore';
 
 interface OptionState {
   id: string;
@@ -39,7 +40,7 @@ const FormQuizBuilder: React.FC = () => {
   ]);
   const [deletedQuestionIds, setDeletedQuestionIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState('');
+  const { addToast } = useToastStore();
   const [status, setStatus] = useState<0|1|2>(0);
   const [fullObject, setFullObject] = useState<any>(null);
 
@@ -82,7 +83,7 @@ const FormQuizBuilder: React.FC = () => {
       });
       if (fetchedQs.length > 0) setQuestions(fetchedQs);
     }).catch(_err => {
-      setError('Failed to load quiz.');
+      addToast('error', 'Failed to load quiz.');
     });
   }, [id, isEditMode]);
 
@@ -146,23 +147,22 @@ const FormQuizBuilder: React.FC = () => {
 
   const handleSave = async () => {
     if (!title.trim()) {
-      setError('Quiz title is required');
+      addToast('error', 'Quiz title is required');
       return;
     }
     
     // Validate questions
     for (const q of questions) {
       if (!q.question.trim()) {
-        setError('All questions must have a title');
+        addToast('error', 'All questions must have a title');
         return;
       }
       if (q.type !== 'short' && !q.correctOptionId) {
-        setError(`Please select a correct answer for: "${q.question}"`);
+        addToast('error', `Please select a correct answer for: "${q.question}"`);
         return;
       }
     }
 
-    setError('');
     setIsSaving(true);
 
     try {
@@ -221,9 +221,10 @@ const FormQuizBuilder: React.FC = () => {
         }
       }
 
-      navigate('/quizzes');
+      addToast('success', `Quiz ${isEditMode ? 'updated' : 'created'} successfully!`);
+      navigate('/admin/quizzes');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save quiz');
+      addToast('error', err.response?.data?.error || 'Failed to save quiz');
     } finally {
       setIsSaving(false);
     }
@@ -233,7 +234,7 @@ const FormQuizBuilder: React.FC = () => {
     <div className="space-y-6 max-w-3xl mx-auto pb-24">
       <div className="flex items-center gap-4">
         <button
-          onClick={() => navigate('/quizzes')}
+          onClick={() => navigate('/admin/quizzes')}
           className="p-2 rounded-lg transition-colors flex-shrink-0"
           style={{ color: '#888', border: '1px solid #2a2a2a' }}
           onMouseEnter={e => e.currentTarget.style.borderColor = '#3a3a3a'}
@@ -257,12 +258,6 @@ const FormQuizBuilder: React.FC = () => {
           {isSaving ? 'Saving...' : 'Save Quiz'}
         </button>
       </div>
-
-      {error && (
-        <div className="px-4 py-3 rounded-lg text-sm border" style={{ backgroundColor: 'rgba(224,85,85,0.08)', borderColor: 'rgba(224,85,85,0.25)', color: '#e05555' }}>
-          {error}
-        </div>
-      )}
 
       {/* Quiz metadata */}
       <div className="rounded-xl border p-5 space-y-4" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
@@ -316,16 +311,16 @@ const FormQuizBuilder: React.FC = () => {
                   <button 
                     onClick={() => moveQuestion(index, 'up')}
                     disabled={index === 0}
-                    className="p-1.5 border border-slate-800 rounded-md transition-all duration-200 disabled:opacity-30 hover:bg-cyan-500/10 hover:border-cyan-500/30 group"
+                    className="p-1.5 border border-[#0ABFBC]/20 bg-[#0ABFBC]/10 rounded-md transition-all duration-200 disabled:opacity-30 disabled:grayscale hover:bg-[#0ABFBC]/20 hover:border-[#0ABFBC]/40 group"
                   >
-                    <ArrowUp className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 transition-colors" />
+                    <ArrowUp className="w-4 h-4 text-[#0ABFBC] transition-colors" />
                   </button>
                   <button 
                     onClick={() => moveQuestion(index, 'down')}
                     disabled={index === questions.length - 1}
-                    className="p-1.5 border border-slate-800 rounded-md transition-all duration-200 disabled:opacity-30 hover:bg-cyan-500/10 hover:border-cyan-500/30 group"
+                    className="p-1.5 border border-[#0ABFBC]/20 bg-[#0ABFBC]/10 rounded-md transition-all duration-200 disabled:opacity-30 disabled:grayscale hover:bg-[#0ABFBC]/20 hover:border-[#0ABFBC]/40 group"
                   >
-                    <ArrowDown className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 transition-colors" />
+                    <ArrowDown className="w-4 h-4 text-[#0ABFBC] transition-colors" />
                   </button>
                 </div>
                 <span className="text-sm font-medium" style={{ color: '#888' }}>Question {index + 1}</span>

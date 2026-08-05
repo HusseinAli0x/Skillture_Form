@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Users, Play, Copy, Check } from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import { Copy, Check, Users, Play } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 
 export default function GameLobby() {
-  const { id } = useParams<{ id: string }>();
+  const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   
   const [pin, setPin] = useState('');
   const [players, setPlayers] = useState<{ id: string; name: string }[]>([]);
@@ -13,21 +15,34 @@ export default function GameLobby() {
 
   useEffect(() => {
     // 1. Fetch session info to get the PIN
-    client.get(`/api/v1/sessions/${id}`)
+    client.get(`/api/v1/sessions/${sessionId}`)
       .then(res => {
         setPin(res.data.pin);
+        if (res.data.status === 'active' || res.data.status === 'finished') {
+          navigate(`/host/live/${sessionId}`);
+        }
       })
       .catch(_err => {
         setError('Failed to load session details.');
       });
+
+    // 1b. Fetch current players
+    const fetchPlayers = () => {
+      client.get(`/api/v1/sessions/${sessionId}/leaderboard`)
+        .then(res => {
+          setPlayers(res.data.map((p: any) => ({ id: p.player_id, name: p.player_name })));
+        })
+        .catch(console.error);
+    };
+    fetchPlayers();
 
     // 2. Connect WebSocket as Host
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host; 
     // Assuming backend is on port 8080 during dev. In production, proxy handles /ws
     const wsUrl = import.meta.env.DEV 
-      ? `ws://localhost:8080/ws/sessions/${id}/host`
-      : `${protocol}//${host}/ws/sessions/${id}/host`;
+      ? `ws://localhost:8080/ws/sessions/${sessionId}/host`
+      : `${protocol}//${host}/ws/sessions/${sessionId}/host`;
       
     const ws = new WebSocket(wsUrl);
 
@@ -35,8 +50,8 @@ export default function GameLobby() {
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === 'player_joined') {
-          // Add player to the list.
-          setPlayers(prev => [...prev, { id: msg.payload.player_id, name: msg.payload.name || 'New Player' }]);
+          // Refetch players to get the actual names
+          fetchPlayers();
         }
       } catch (e) {
         console.error('Failed to parse WS message', e);
@@ -46,20 +61,20 @@ export default function GameLobby() {
     return () => {
       ws.close();
     };
-  }, [id]);
+  }, [sessionId]);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(pin);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const handleStartGame = async () => {
     try {
-      await client.patch(`/api/v1/sessions/${id}/start`);
-      alert('Game Started! Transitioning to live board (coming soon...)');
+      await client.patch(`/api/v1/sessions/${sessionId}/start`);
+      navigate(`/host/live/${sessionId}`);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to start game');
+      const errorMsg = err.response?.data?.error;
+      if (errorMsg === 'session has already started') {
+        navigate(`/host/live/${sessionId}`);
+      } else {
+        setError(errorMsg || 'Failed to start game');
+      }
     }
   };
 
@@ -72,20 +87,41 @@ export default function GameLobby() {
         </div>
       )}
 
-      {/* PIN Display */}
-      <div className="text-center space-y-3">
-        <p className="text-lg font-medium" style={{ color: '#888' }}>Join at <span className="text-white">skillture.com/join</span> with PIN:</p>
+      {/* Join Link Display */}
+      <div className="text-center space-y-4">
+        <p className="text-xl font-medium" style={{ color: '#888' }}>Share this link with players to join:</p>
         <div 
-          className="relative group flex items-center justify-center cursor-pointer"
-          onClick={handleCopy}
+          className="relative group flex items-center justify-center cursor-pointer bg-[#141414] border border-[#2a2a2a] p-6 rounded-2xl transition hover:bg-[#1a1a1a]"
+          onClick={() => {
+            const link = `${window.location.origin}/play?pin=${pin}`;
+            navigator.clipboard.writeText(link);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
         >
-          <h1 className="text-7xl md:text-9xl font-black tracking-widest" style={{ color: '#0ABFBC', textShadow: '0 0 40px rgba(10,191,188,0.3)' }}>
-            {pin || '------'}
-          </h1>
-          <div className="absolute -right-12 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-lg" style={{ backgroundColor: '#141414', border: '1px solid #2a2a2a' }}>
-            {copied ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 text-slate-400" />}
+          <h2 className="text-3xl md:text-4xl font-bold" style={{ color: '#0ABFBC' }}>
+            {`${window.location.origin}/play?pin=${pin}`}
+          </h2>
+          <div className="absolute -right-16 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-3 rounded-xl bg-[#2a2a2a]">
+            {copied ? <Check className="w-6 h-6 text-green-500" /> : <Copy className="w-6 h-6 text-slate-300" />}
           </div>
         </div>
+        <p className="text-gray-500 mt-2">Players will only need to enter their name.</p>
+
+        {pin && (
+          <div className="flex justify-center mt-8">
+            <div className="bg-white p-4 rounded-xl shadow-lg inline-block">
+              <QRCodeSVG 
+                value={`${window.location.origin}/play?pin=${pin}`}
+                size={200}
+                bgColor="#ffffff"
+                fgColor="#000000"
+                level="Q"
+                includeMargin={false}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action Bar */}

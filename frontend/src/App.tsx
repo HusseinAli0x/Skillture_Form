@@ -9,7 +9,14 @@ import QuizzesPage from './pages/QuizzesPage';
 import GameLobby from './pages/GameLobby';
 import PlayerJoin from './pages/PlayerJoin';
 import MainLayout from './components/layout/MainLayout';
+import HomePage from './pages/HomePage';
+import HomepageEditor from './pages/HomepageEditor';
+import FormPreview from './pages/FormPreview';
+import QuizJoinHandler from './pages/QuizJoinHandler';
 import { useAuthStore } from './context/AuthStore';
+import ToastContainer from './components/Toast';
+import HostLiveBoard from './pages/HostLiveBoard';
+import PlayerLiveBoard from './pages/PlayerLiveBoard';
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -17,32 +24,33 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/login"
-          element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />}
-        />
+        {/* Public Routes */}
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/admin/dashboard" />} />
+        <Route path="/preview/form/:id" element={<FormPreview />} />
+        <Route path="/quiz/:id" element={<QuizJoinHandler />} />
+        <Route path="/play" element={<PlayerJoin />} />
+        <Route path="/play/:sessionId" element={<PlayerLiveBoard />} />
+        <Route path="/host/lobby/:sessionId" element={<GameLobby />} />
+        <Route path="/host/live/:sessionId" element={<HostLiveBoard />} />
 
-        <Route path="/join" element={<PlayerJoin />} />
-
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
+        {/* Protected Admin Routes */}
+        <Route path="/admin" element={<MainLayout />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
-
-          {/* Forms */}
+          <Route path="homepage" element={<HomepageEditor />} />
           <Route path="forms" element={<FormsPage />} />
           <Route path="forms/new" element={<FormBuilder />} />
-          <Route path="forms/:id" element={<FormDetailPage />} />
           <Route path="forms/:id/edit" element={<FormBuilder />} />
-
-          {/* Quiz Game */}
+          <Route path="forms/:id" element={<FormDetailPage />} />
           <Route path="quizzes" element={<QuizzesPage />} />
           <Route path="builder" element={<FormQuizBuilder />} />
-          <Route path="quizzes/:id/edit" element={<FormQuizBuilder />} />
-          <Route path="host/lobby/:id" element={<GameLobby />} />
+          <Route path="builder/:id" element={<FormQuizBuilder />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <ToastContainer />
     </BrowserRouter>
   );
 }

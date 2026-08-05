@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, GamepadIcon, Trash2, Play, Archive, Zap } from 'lucide-react';
+import { Plus, Search, GamepadIcon, Trash2, Play, Archive, Zap, Edit2, Share2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import type { Quiz } from '../api/types';
 import StatusDropdown from '../components/StatusDropdown';
+import { useToastStore } from '../context/ToastStore';
+import { useAuthStore } from '../context/AuthStore';
 
 const QuizzesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +13,9 @@ const QuizzesPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const { addToast } = useToastStore();
+  const admin = useAuthStore((state) => state.admin);
 
   useEffect(() => { fetchQuizzes(); }, []);
 
@@ -27,7 +32,8 @@ const QuizzesPage: React.FC = () => {
     try {
       await client.patch(`/api/v1/quizzes/${id}/activate`);
       await fetchQuizzes();
-    } catch (err: any) { alert(err.response?.data?.error || 'Failed to activate'); }
+      addToast('success', 'Quiz activated successfully');
+    } catch (err: any) { addToast('error', err.response?.data?.error || 'Failed to activate'); }
     finally { setActionId(null); }
   };
 
@@ -36,7 +42,8 @@ const QuizzesPage: React.FC = () => {
     try {
       await client.patch(`/api/v1/quizzes/${id}/archive`);
       await fetchQuizzes();
-    } catch (err: any) { alert(err.response?.data?.error || 'Failed to archive'); }
+      addToast('success', 'Quiz archived successfully');
+    } catch (err: any) { addToast('error', err.response?.data?.error || 'Failed to archive'); }
     finally { setActionId(null); }
   };
 
@@ -46,7 +53,8 @@ const QuizzesPage: React.FC = () => {
     try {
       await client.delete(`/api/v1/quizzes/${id}`);
       setQuizzes(prev => prev.filter(q => q.id !== id));
-    } catch (err: any) { alert(err.response?.data?.error || 'Failed to delete'); }
+      addToast('success', 'Quiz deleted successfully');
+    } catch (err: any) { addToast('error', err.response?.data?.error || 'Failed to delete'); }
     finally { setActionId(null); }
   };
 
@@ -62,7 +70,7 @@ const QuizzesPage: React.FC = () => {
           <p className="mt-1 text-sm" style={{ color: '#888' }}>Manage and host your real-time quiz games.</p>
         </div>
         <button
-          onClick={() => navigate('/builder')}
+          onClick={() => navigate('/admin/builder')}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all"
           style={{ backgroundColor: '#0ABFBC', color: '#0a0a0a' }}
           onMouseEnter={e => e.currentTarget.style.backgroundColor = '#09a8a5'}
@@ -72,7 +80,7 @@ const QuizzesPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
+      <div className="rounded-xl border" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
         {/* Toolbar */}
         <div className="flex items-center gap-4 px-5 py-4 border-b" style={{ borderColor: '#2a2a2a' }}>
           <div className="relative flex-1 max-w-xs">
@@ -105,7 +113,7 @@ const QuizzesPage: React.FC = () => {
             <p className="text-sm mb-4" style={{ color: '#888' }}>{search ? 'Try a different search' : 'Create your first quiz to get started.'}</p>
             {!search && (
               <button
-                onClick={() => navigate('/builder')}
+                onClick={() => navigate('/admin/builder')}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
                 style={{ backgroundColor: 'rgba(10,191,188,0.1)', color: '#0ABFBC', border: '1px solid rgba(10,191,188,0.2)' }}
               >
@@ -159,6 +167,26 @@ const QuizzesPage: React.FC = () => {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => navigate(`/admin/builder/${quiz.id}`)}
+                            className="p-1.5 rounded-lg transition-colors"
+                            title="Edit Quiz"
+                            style={{ color: '#888' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#0ABFBC'; e.currentTarget.style.backgroundColor = 'rgba(10,191,188,0.1)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#888'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setShareUrl(`${window.location.origin}/quiz/${quiz.id}`)}
+                            className="p-1.5 rounded-lg transition-colors"
+                            title="Share Quiz"
+                            style={{ color: '#888' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#0ABFBC'; e.currentTarget.style.backgroundColor = 'rgba(10,191,188,0.1)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#888'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </button>
                           {quiz.status === (0 as any) && (
                             <button
                               onClick={() => handleActivate(quiz.id)}
@@ -177,10 +205,11 @@ const QuizzesPage: React.FC = () => {
                               <button
                                 onClick={async () => {
                                   try {
-                                    const res = await client.post(`/api/v1/quizzes/${quiz.id}/sessions`);
+                                    const res = await client.post(`/api/v1/quizzes/${quiz.id}/sessions`, { host_id: admin?.id });
+                                    addToast('success', 'Session hosted successfully');
                                     navigate(`/host/lobby/${res.data.id}`);
                                   } catch (err: any) {
-                                    alert(err.response?.data?.error || 'Failed to host session');
+                                    addToast('error', err.response?.data?.error || 'Failed to host session');
                                   }
                                 }}
                                 className="p-1.5 rounded-lg transition-colors"
@@ -225,6 +254,36 @@ const QuizzesPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {shareUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShareUrl(null)}>
+          <div className="bg-[#141414] border border-[#2a2a2a] p-6 rounded-2xl max-w-sm w-full mx-4 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4" style={{ color: '#f0f0f0' }}>Share Quiz Link</h3>
+            <div className="flex gap-2">
+              <input 
+                readOnly 
+                value={shareUrl} 
+                className="flex-1 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none" 
+              />
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(shareUrl);
+                  addToast('success', 'Link copied to clipboard!');
+                }}
+                className="bg-[#0ABFBC] hover:bg-[#09aba8] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <button 
+              onClick={() => setShareUrl(null)}
+              className="absolute top-4 right-4 text-[#888] hover:text-white transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

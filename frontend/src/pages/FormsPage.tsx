@@ -4,6 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import type { Form } from '../api/types';
 import StatusDropdown from '../components/StatusDropdown';
+import ShareModal from '../components/ShareModal';
+import { useToastStore } from '../context/ToastStore';
+import { Share2 } from 'lucide-react';
 
 const FormsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +14,8 @@ const FormsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [shareForm, setShareForm] = useState<{ id: string; title: string } | null>(null);
+  const { addToast } = useToastStore();
 
   useEffect(() => { fetchForms(); }, []);
 
@@ -28,8 +33,9 @@ const FormsPage: React.FC = () => {
     try {
       await client.delete(`/api/v1/forms/${id}`);
       setForms(prev => prev.filter(f => f.id !== id));
+      addToast('success', 'Form deleted successfully');
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to delete form');
+      addToast('error', err.response?.data?.error || 'Failed to delete form');
     } finally { setDeletingId(null); }
   };
 
@@ -47,7 +53,7 @@ const FormsPage: React.FC = () => {
           <p className="mt-1 text-sm" style={{ color: '#888' }}>Create and manage your survey forms.</p>
         </div>
         <button
-          onClick={() => navigate('/forms/new')}
+          onClick={() => navigate('/admin/forms/new')}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150"
           style={{ backgroundColor: '#0ABFBC', color: '#0a0a0a' }}
           onMouseEnter={e => e.currentTarget.style.backgroundColor = '#09a8a5'}
@@ -94,7 +100,7 @@ const FormsPage: React.FC = () => {
             </p>
             {!search && (
               <button
-                onClick={() => navigate('/forms/new')}
+                onClick={() => navigate('/admin/forms/new')}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
                 style={{ backgroundColor: 'rgba(10,191,188,0.1)', color: '#0ABFBC', border: '1px solid rgba(10,191,188,0.2)' }}
               >
@@ -145,7 +151,17 @@ const FormsPage: React.FC = () => {
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
-                            onClick={() => navigate(`/forms/${form.id}`)}
+                            onClick={() => setShareForm({ id: form.id, title: typeof form.title === 'string' ? form.title : ((form.title as any)?.en || 'Untitled Form') })}
+                            className="p-1.5 rounded-lg transition-colors"
+                            title="Share Form"
+                            style={{ color: '#888' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#3b82f6'; e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.1)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#888'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => navigate(`/admin/forms/${form.id}`)}
                             className="p-1.5 rounded-lg transition-colors"
                             title="View Fields"
                             style={{ color: '#888' }}
@@ -155,7 +171,7 @@ const FormsPage: React.FC = () => {
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => navigate(`/forms/${form.id}/edit`)}
+                            onClick={() => navigate(`/admin/forms/${form.id}/edit`)}
                             className="p-1.5 rounded-lg transition-colors"
                             title="Edit Form"
                             style={{ color: '#888' }}
@@ -185,6 +201,14 @@ const FormsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {shareForm && (
+        <ShareModal 
+          url={`${window.location.origin}/preview/form/${shareForm.id}`}
+          title={`Share "${shareForm.title}"`}
+          onClose={() => setShareForm(null)}
+        />
+      )}
     </div>
   );
 };

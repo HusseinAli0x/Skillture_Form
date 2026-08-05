@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Gamepad2, ArrowRight } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 
 export default function PlayerJoin() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const initialPin = searchParams.get('pin') || '';
 
   const [step, setStep] = useState<1 | 2 | 3>(initialPin ? 2 : 1);
@@ -56,28 +57,48 @@ export default function PlayerJoin() {
 
   // Step 3: Waiting in Lobby
   useEffect(() => {
-    if (step === 3 && sessionId && playerId) {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host; 
-      const wsUrl = import.meta.env.DEV 
-        ? `ws://localhost:8080/ws/sessions/${sessionId}/join?player_id=${playerId}`
-        : `${protocol}//${host}/ws/sessions/${sessionId}/join?player_id=${playerId}`;
-        
-      const ws = new WebSocket(wsUrl);
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: any = null;
 
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'game_started' || msg.type === 'question_active') {
-            // navigate(`/play/${sessionId}?playerId=${playerId}`);
-            alert('Game started! (Transitioning to live board)');
+    if (step === 3 && sessionId && playerId) {
+      const connectWS = () => {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host; 
+        const wsUrl = import.meta.env.DEV 
+          ? `ws://localhost:8080/ws/sessions/${sessionId}/join?player_id=${playerId}`
+          : `${protocol}//${host}/ws/sessions/${sessionId}/join?player_id=${playerId}`;
+          
+        ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'game_started' || msg.type === 'question_active') {
+              navigate(`/play/${sessionId}?playerId=${playerId}`);
+            } else if (msg.type === 'lobby_snapshot') {
+              if (msg.payload.status === 'active' || msg.payload.status === 'active_question') {
+                navigate(`/play/${sessionId}?playerId=${playerId}`);
+              }
+            }
+          } catch (e) {
+            console.error(e);
           }
-        } catch (e) {
-          console.error(e);
-        }
+        };
+
+        ws.onclose = () => {
+          reconnectTimeout = setTimeout(connectWS, 3000);
+        };
       };
 
-      return () => ws.close();
+      connectWS();
+
+      return () => {
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        if (ws) {
+          ws.onclose = null;
+          ws.close();
+        }
+      };
     }
   }, [step, sessionId, playerId]);
 

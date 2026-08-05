@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import { FieldTypeToInt, FieldTypeLabels } from '../api/types';
 import type { FieldType } from '../api/types';
+import { useToastStore } from '../context/ToastStore';
 import StatusDropdown from '../components/StatusDropdown';
 
 const FIELD_TYPES: FieldType[] = ['text', 'textarea', 'number', 'email', 'select', 'radio', 'checkbox', 'date'];
@@ -26,6 +27,7 @@ const FormBuilder: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditMode = !!id;
+  const { addToast } = useToastStore();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -67,7 +69,7 @@ const FormBuilder: React.FC = () => {
       });
       if (fetchedFields.length > 0) setFields(fetchedFields);
     }).catch(_err => {
-      setError('Failed to load form for editing.');
+      addToast('error', 'Failed to load form for editing.');
     });
   }, [id, isEditMode]);
 
@@ -118,10 +120,15 @@ const FormBuilder: React.FC = () => {
       let formId = id;
 
       // 1. Create or Update form
+      const payload = {
+        title: { en: title },
+        description: { en: description }
+      };
+
       if (isEditMode) {
-        await client.put(`/api/v1/forms/${id}`, { title, description });
+        await client.put(`/api/v1/forms/${id}`, payload);
       } else {
-        const formRes = await client.post('/api/v1/forms', { title, description });
+        const formRes = await client.post('/api/v1/forms', payload);
         formId = formRes.data.id;
       }
 
@@ -156,9 +163,10 @@ const FormBuilder: React.FC = () => {
           await client.put(`/api/v1/forms/${formId}/fields/${f._id}`, payload);
         }
       }
-      navigate('/forms');
+      addToast('success', `Form ${isEditMode ? 'updated' : 'created'} successfully!`);
+      navigate('/admin/forms');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save form.');
+      addToast('error', err.response?.data?.error || 'Failed to save form.');
     } finally {
       setIsSaving(false);
     }
@@ -169,7 +177,7 @@ const FormBuilder: React.FC = () => {
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
-          onClick={() => navigate('/forms')}
+          onClick={() => navigate('/admin/forms')}
           className="p-2 rounded-lg transition-colors"
           style={{ color: '#888', border: '1px solid #2a2a2a' }}
           onMouseEnter={e => e.currentTarget.style.borderColor = '#3a3a3a'}
@@ -252,16 +260,16 @@ const FormBuilder: React.FC = () => {
                   <button 
                     onClick={() => moveField(idx, 'up')}
                     disabled={idx === 0}
-                    className="p-1.5 border border-slate-800 rounded-md transition-all duration-200 disabled:opacity-30 hover:bg-cyan-500/10 hover:border-cyan-500/30 group"
+                    className="p-1.5 border border-[#0ABFBC]/20 bg-[#0ABFBC]/10 rounded-md transition-all duration-200 disabled:opacity-30 disabled:grayscale hover:bg-[#0ABFBC]/20 hover:border-[#0ABFBC]/40 group"
                   >
-                    <ArrowUp className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 transition-colors" />
+                    <ArrowUp className="w-4 h-4 text-[#0ABFBC] transition-colors" />
                   </button>
                   <button 
                     onClick={() => moveField(idx, 'down')}
                     disabled={idx === fields.length - 1}
-                    className="p-1.5 border border-slate-800 rounded-md transition-all duration-200 disabled:opacity-30 hover:bg-cyan-500/10 hover:border-cyan-500/30 group"
+                    className="p-1.5 border border-[#0ABFBC]/20 bg-[#0ABFBC]/10 rounded-md transition-all duration-200 disabled:opacity-30 disabled:grayscale hover:bg-[#0ABFBC]/20 hover:border-[#0ABFBC]/40 group"
                   >
-                    <ArrowDown className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 transition-colors" />
+                    <ArrowDown className="w-4 h-4 text-[#0ABFBC] transition-colors" />
                   </button>
                 </div>
                 <span className="text-sm font-medium" style={{ color: '#888' }}>Field {idx + 1}</span>

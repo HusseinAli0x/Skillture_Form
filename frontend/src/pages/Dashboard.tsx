@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, FileText, GamepadIcon, Activity, ArrowRight, Share2 } from 'lucide-react';
+import { Plus, FileText, GamepadIcon, Activity, ArrowRight, Share2, Bot, Sparkles, Send, Edit2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import client from '../api/client';
@@ -28,6 +28,72 @@ const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: number |
     )}
   </div>
 );
+
+const GeminiPanel: React.FC = () => {
+  const [prompt, setPrompt] = useState('');
+  const [response, setResponse] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleAsk = async () => {
+    if (!prompt.trim()) return;
+    setIsLoading(true);
+    setResponse('');
+    try {
+      const res = await client.post('/api/v1/ai/generate', { prompt });
+      setResponse(res.data.response || 'No response generated.');
+    } catch (err) {
+      setResponse('Error generating response.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border p-6 relative overflow-hidden" style={{ backgroundColor: '#141414', borderColor: '#2a2a2a' }}>
+      <div className="absolute top-0 right-0 p-32 bg-indigo-500/5 blur-[100px] rounded-full pointer-events-none" />
+      <div className="flex items-center gap-3 mb-6 relative z-10">
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-500/20 border border-indigo-500/30">
+          <Bot className="w-5 h-5 text-indigo-400" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            AI Assistant <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold bg-indigo-500/20 text-indigo-300">Beta</span>
+          </h2>
+          <p className="text-xs text-slate-400">Powered by Google Gemini 3.1 Pro</p>
+        </div>
+      </div>
+      
+      <div className="space-y-4 relative z-10">
+        <div className="flex gap-2">
+          <input 
+            type="text" 
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAsk()}
+            placeholder="Ask for insights on your forms or generate new quiz ideas..."
+            className="flex-1 px-4 py-3 bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl text-sm text-slate-200 outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all"
+          />
+          <button 
+            onClick={handleAsk}
+            disabled={isLoading || !prompt.trim()}
+            className="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-medium rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50"
+          >
+            {isLoading ? <Sparkles className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            Ask
+          </button>
+        </div>
+        
+        {response && (
+          <div className="p-4 bg-[#0a0a0a] border border-[#2a2a2a] rounded-xl">
+            <div className="prose prose-invert prose-sm max-w-none text-slate-300 whitespace-pre-wrap">
+              {response}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -72,14 +138,14 @@ const Dashboard: React.FC = () => {
           label="Total Forms"
           value={isLoading ? '...' : forms.length}
           color="#0ABFBC"
-          onClick={() => navigate('/forms')}
+          onClick={() => navigate('/admin/forms')}
         />
         <StatCard
           icon={<GamepadIcon className="w-5 h-5" />}
           label="Total Quizzes"
           value={isLoading ? '...' : quizzes.length}
           color="#0ABFBC"
-          onClick={() => navigate('/quizzes')}
+          onClick={() => navigate('/admin/quizzes')}
         />
         <StatCard
           icon={<Activity className="w-5 h-5" />}
@@ -102,7 +168,7 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: '#2a2a2a' }}>
             <h2 className="font-semibold text-sm" style={{ color: '#f0f0f0' }}>Recent Forms</h2>
             <button
-              onClick={() => navigate('/forms')}
+              onClick={() => navigate('/admin/forms')}
               className="text-xs font-medium flex items-center gap-1 transition-colors"
               style={{ color: '#0ABFBC' }}
             >
@@ -116,7 +182,7 @@ const Dashboard: React.FC = () => {
               <div className="px-5 py-8 text-center">
                 <p className="text-sm mb-3" style={{ color: '#888' }}>No forms yet</p>
                 <button
-                  onClick={() => navigate('/forms/new')}
+                  onClick={() => navigate('/admin/forms/new')}
                   className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
                   style={{ backgroundColor: 'rgba(10,191,188,0.1)', color: '#0ABFBC', border: '1px solid rgba(10,191,188,0.2)' }}
                 >
@@ -137,7 +203,7 @@ const Dashboard: React.FC = () => {
                     <FileText className="w-4 h-4" style={{ color: '#0ABFBC' }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate" style={{ color: '#f0f0f0' }}>{form.title || 'Untitled Form'}</p>
+                    <p className="text-sm font-medium truncate" style={{ color: '#f0f0f0' }}>{form.title?.en || 'Untitled Form'}</p>
                     <div className="mt-1">
                       <StatusDropdown 
                         type="form" 
@@ -147,13 +213,22 @@ const Dashboard: React.FC = () => {
                       />
                     </div>
                   </div>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setShareUrl(`${window.location.origin}/form/${form.id}`); }}
-                    className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
-                    title="Share Form"
-                  >
-                    <Share2 className="w-4 h-4 text-cyan-400" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigate(`/admin/forms/${form.id}/edit`); }}
+                      className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                      title="Edit Form"
+                    >
+                      <Edit2 className="w-4 h-4 text-slate-400 hover:text-[#0ABFBC]" />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setShareUrl(`${window.location.origin}/preview/form/${form.id}`); }}
+                      className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                      title="Share Form"
+                    >
+                      <Share2 className="w-4 h-4 text-cyan-400" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -165,7 +240,7 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: '#2a2a2a' }}>
             <h2 className="font-semibold text-sm" style={{ color: '#f0f0f0' }}>Recent Quizzes</h2>
             <button
-              onClick={() => navigate('/quizzes')}
+              onClick={() => navigate('/admin/quizzes')}
               className="text-xs font-medium flex items-center gap-1 transition-colors"
               style={{ color: '#0ABFBC' }}
             >
@@ -179,7 +254,7 @@ const Dashboard: React.FC = () => {
               <div className="px-5 py-8 text-center">
                 <p className="text-sm mb-3" style={{ color: '#888' }}>No quizzes yet</p>
                 <button
-                  onClick={() => navigate('/builder')}
+                  onClick={() => navigate('/admin/builder')}
                   className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
                   style={{ backgroundColor: 'rgba(10,191,188,0.1)', color: '#0ABFBC', border: '1px solid rgba(10,191,188,0.2)' }}
                 >
@@ -209,19 +284,31 @@ const Dashboard: React.FC = () => {
                       />
                     </div>
                   </div>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setShareUrl(`${window.location.origin}/quiz/${quiz.id}`); }}
-                    className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
-                    title="Share Quiz"
-                  >
-                    <Share2 className="w-4 h-4 text-cyan-400" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigate(`/admin/builder/${quiz.id}`); }}
+                      className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                      title="Edit Quiz"
+                    >
+                      <Edit2 className="w-4 h-4 text-slate-400 hover:text-[#0ABFBC]" />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setShareUrl(`${window.location.origin}/quiz/${quiz.id}`); }}
+                      className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                      title="Share Quiz"
+                    >
+                      <Share2 className="w-4 h-4 text-cyan-400" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
           </div>
         </div>
       </div>
+
+      {/* Gemini AI Panel */}
+      <GeminiPanel />
 
       {/* Share Modal */}
       {shareUrl && (

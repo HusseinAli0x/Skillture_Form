@@ -15,8 +15,8 @@ export type FormStatus = 'draft' | 'published' | 'closed';
 
 export interface Form {
   id: string;
-  title: string;
-  description?: string;
+  title: Record<string, string>;
+  description?: Record<string, string>;
   status: FormStatus;
   creat_at: string;
 }
@@ -45,6 +45,26 @@ export interface FormField {
   type: number;
   created_at: string;
   updated_at: string;
+}
+
+// ── Responses ─────────────────────────────────────────
+export type ResponseStatus = 0 | 1 | 2; // Pending, Submitted, Reviewed
+
+export interface ResponseAnswer {
+  id: string;
+  response_id: string;
+  field_id: string;
+  value: Record<string, any>;
+  created_at: string;
+}
+
+export interface FormResponse {
+  id: string;
+  form_id: string;
+  respondent?: Record<string, any>;
+  status: ResponseStatus;
+  submitted_at: string;
+  answers?: ResponseAnswer[];
 }
 
 // ── Quiz Game ──────────────────────────────────────────

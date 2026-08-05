@@ -20,7 +20,7 @@ const Login: React.FC = () => {
     try {
       const response = await client.post<AuthResponse>('/admin/login', { username, password });
       login(response.data.token, response.data.admin);
-      navigate('/dashboard');
+      navigate('/admin/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to login. Check your credentials.');
     } finally {
