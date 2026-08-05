@@ -3,6 +3,7 @@ import { Check, Copy, Play, Users } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
+import { apiErrorMessage } from '../lib/apiError';
 import type { QuizPlayer } from '../api/types';
 import { hostSocketUrl } from '../api/ws';
 import { gameJoinUrl } from '../lib/links';
@@ -78,12 +79,12 @@ const GameLobby: React.FC = () => {
     try {
       await client.patch(`/api/v1/sessions/${sessionId}/start`);
       navigate(`/host/live/${sessionId}`);
-    } catch (err: any) {
-      const message = err.response?.data?.error;
+    } catch (err) {
+      const message = apiErrorMessage(err, 'Failed to start game');
       if (message === 'session has already started') {
         navigate(`/host/live/${sessionId}`);
       } else {
-        setError(message || 'Failed to start game');
+        setError(message);
       }
     }
   };

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Gamepad2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
+import { apiErrorMessage } from '../lib/apiError';
 import { playerSocketUrl } from '../api/ws';
 import { Button, Card, Spinner } from '../components/ui';
 
@@ -31,8 +32,8 @@ const PlayerJoin: React.FC = () => {
       const res = await client.get(`/api/v1/sessions/pin/${candidate}`);
       setSessionId(res.data.id);
       setStep('nickname');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid Game PIN');
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Invalid Game PIN'));
     } finally {
       setIsJoining(false);
     }
@@ -62,8 +63,8 @@ const PlayerJoin: React.FC = () => {
       const res = await client.post(`/api/v1/sessions/${sessionId}/players`, { name: nickname });
       setPlayerId(res.data.id);
       setStep('waiting');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to join. Nickname might be taken.');
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Failed to join. Nickname might be taken.'));
     } finally {
       setIsJoining(false);
     }

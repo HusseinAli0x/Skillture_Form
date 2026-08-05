@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, Save, ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
+import { apiErrorMessage } from '../lib/apiError';
 import { FieldType, FormStatus } from '../api/types';
-import type { Form } from '../api/types';
+import type { Form, FormField } from '../api/types';
 import { localized, toLocalized } from '../lib/i18n';
 import { useToastStore } from '../context/ToastStore';
 import StatusDropdown from '../components/StatusDropdown';
@@ -30,8 +31,8 @@ const FormBuilder: React.FC = () => {
     if (!isEditMode) return;
     try {
       const [fRes, ffRes] = await Promise.all([
-        client.get(`/api/v1/forms/${id}`),
-        client.get(`/api/v1/forms/${id}/fields`),
+        client.get<Form>(`/api/v1/forms/${id}`),
+        client.get<FormField[]>(`/api/v1/forms/${id}/fields`),
       ]);
 
       // title/description are JSONB maps ({en: "..."}), not strings — reading
@@ -43,19 +44,24 @@ const FormBuilder: React.FC = () => {
 
       const fetched: FieldState[] = (ffRes.data || [])
         .slice()
-        .sort((a: any, b: any) => a.field_order - b.field_order)
-        .map((f: any) => ({
+        .sort((a, b) => a.field_order - b.field_order)
+        .map(f => ({
           _id: f.id,
           label: localized(f.label),
           placeholder: localized(f.placeholder),
           helpText: localized(f.help_text),
           type: (f.type ?? FieldType.Text) as FieldType,
           required: f.required || false,
-          options: f.options
-            ? Object.keys(f.options)
-                .sort()
-                .map(k => f.options[k].label || f.options[k].value || '')
-            : [],
+          // Keys are `opt_0`, `opt_1`, … so a lexical sort restores the order
+          // they were written in. Unlike the read-only views this falls back to
+          // an empty string rather than the key — the key is not something the
+          // author typed, and saving it back would make it the option's label.
+          options: Object.entries(f.options ?? {})
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([, opt]) => {
+              const o = opt as { label?: string; value?: string; en?: string };
+              return o?.label || o?.value || o?.en || '';
+            }),
           isNew: false,
         }));
 
@@ -164,8 +170,8 @@ const FormBuilder: React.FC = () => {
 
       addToast('success', `Form ${isEditMode ? 'updated' : 'created'} successfully!`);
       navigate('/admin/forms');
-    } catch (err: any) {
-      addToast('error', err.response?.data?.error || 'Failed to save form.');
+    } catch (err) {
+      addToast('error', apiErrorMessage(err, 'Failed to save form.'));
     } finally {
       setIsSaving(false);
     }

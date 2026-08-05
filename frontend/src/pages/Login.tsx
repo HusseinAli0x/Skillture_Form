@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { KeyRound, User } from 'lucide-react';
 import { useAuthStore } from '../context/AuthStore';
 import client from '../api/client';
+import { apiErrorMessage } from '../lib/apiError';
 import type { AuthResponse } from '../api/types';
 import { Button, Input } from '../components/ui';
 
@@ -22,8 +23,8 @@ const Login: React.FC = () => {
       const response = await client.post<AuthResponse>('/admin/login', { username, password });
       login(response.data.token, response.data.admin);
       navigate('/admin/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to login. Check your credentials.');
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Failed to login. Check your credentials.'));
     } finally {
       setIsLoading(false);
     }

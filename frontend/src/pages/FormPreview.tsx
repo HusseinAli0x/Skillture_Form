@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 import client from '../api/client';
+import { apiErrorMessage } from '../lib/apiError';
 import { FormStatus } from '../api/types';
 import type { Form, FormField } from '../api/types';
 import { localized } from '../lib/i18n';
@@ -98,8 +99,8 @@ const FormPreview: React.FC = () => {
         answers,
       });
       setSubmitted(true);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to submit form');
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Failed to submit form'));
     } finally {
       setIsSubmitting(false);
     }

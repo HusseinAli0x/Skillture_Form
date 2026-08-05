@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
+import { apiErrorMessage, apiErrorStatus } from '../lib/apiError';
 import { Card, Spinner } from '../components/ui';
 
 /** How often to re-check whether the host has opened a session. */
@@ -25,14 +26,14 @@ const QuizJoinHandler: React.FC = () => {
         } else {
           timeout = setTimeout(checkSession, POLL_MS);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (!isMounted) return;
 
         // 404 means the host has not started yet — keep waiting.
-        if (err.response?.status === 404) {
+        if (apiErrorStatus(err) === 404) {
           timeout = setTimeout(checkSession, POLL_MS);
         } else {
-          setError(err.response?.data?.error || 'Failed to connect to game server');
+          setError(apiErrorMessage(err, 'Failed to connect to game server'));
         }
       }
     };

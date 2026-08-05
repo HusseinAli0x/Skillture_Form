@@ -63,8 +63,23 @@ export async function exportToExcel(
  * the chain continues into `.save()`. Neither interface is exported, so the
  * shape used here is declared locally rather than papered over with `any`.
  */
+/** The slice of the jsPDF document the page footer below actually touches. */
+interface JsPdfDoc {
+  internal: {
+    getNumberOfPages(): number;
+    getFontSize(): number;
+    scaleFactor: number;
+    pageSize: { width: number; height: number };
+  };
+  setPage(page: number): void;
+  setFontSize(size: number): void;
+  setTextColor(grey: number): void;
+  getStringUnitWidth(text: string): number;
+  text(text: string, x: number, y: number): void;
+}
+
 interface PdfWorkerChain {
-  then(onFulfilled: (pdf: any) => void): PdfWorkerChain;
+  then(onFulfilled: (pdf: JsPdfDoc) => void): PdfWorkerChain;
   save(): Promise<void>;
 }
 

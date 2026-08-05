@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Search, FileText, Trash2, Eye, Edit3, Share2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
+import { apiErrorMessage } from '../lib/apiError';
 import type { Form } from '../api/types';
 import { localized } from '../lib/i18n';
 import StatusDropdown from '../components/StatusDropdown';
@@ -53,8 +54,8 @@ const FormsPage: React.FC = () => {
       setForms(prev => prev.filter(f => f.id !== id));
       addToast('success', 'Form deleted successfully');
       setPendingDelete(null);
-    } catch (err: any) {
-      addToast('error', err.response?.data?.error || 'Failed to delete form');
+    } catch (err) {
+      addToast('error', apiErrorMessage(err, 'Failed to delete form'));
     } finally {
       setDeletingId(null);
     }

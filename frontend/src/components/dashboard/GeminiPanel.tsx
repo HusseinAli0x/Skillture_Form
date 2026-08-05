@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Bot, Send, Sparkles } from 'lucide-react';
 import client from '../../api/client';
+import { apiErrorMessage } from '../../lib/apiError';
 import { Button } from '../ui';
 
 /**
@@ -23,8 +24,8 @@ const GeminiPanel: React.FC = () => {
     try {
       const res = await client.get('/api/v1/admin/ai-report');
       setReport(res.data.report || 'No report generated.');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to generate report.');
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Failed to generate report.'));
     } finally {
       setIsLoading(false);
     }

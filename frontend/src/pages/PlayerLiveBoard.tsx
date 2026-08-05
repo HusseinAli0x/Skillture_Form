@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import client from '../api/client';
+import { apiErrorStatus } from '../lib/apiError';
 import type { PublicQuizQuestion, QuizPlayer } from '../api/types';
 import { playerSocketUrl } from '../api/ws';
 import { optionLabel } from '../lib/i18n';
@@ -117,11 +118,11 @@ const PlayerLiveBoard: React.FC = () => {
       setIsCorrect(res.data.is_correct);
       setScoreAwarded(res.data.score_awarded);
       setViewState('result');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       // 409 is the already-answered guard; the score is not returned, so this
       // falls back to the result screen without one.
-      setViewState(err.response?.status === 409 ? 'result' : 'waiting');
+      setViewState(apiErrorStatus(err) === 409 ? 'result' : 'waiting');
     }
   };
 

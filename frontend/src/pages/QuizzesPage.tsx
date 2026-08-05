@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Search, GamepadIcon, Trash2, Play, Archive, Zap, Edit2, Share2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
+import { apiErrorMessage } from '../lib/apiError';
 import { QuizStatus } from '../api/types';
 import type { Quiz } from '../api/types';
 import { localized } from '../lib/i18n';
@@ -51,8 +52,8 @@ const QuizzesPage: React.FC = () => {
       await client.patch(`/api/v1/quizzes/${id}/activate`);
       await fetchQuizzes();
       addToast('success', 'Quiz activated successfully');
-    } catch (err: any) {
-      addToast('error', err.response?.data?.error || 'Failed to activate');
+    } catch (err) {
+      addToast('error', apiErrorMessage(err, 'Failed to activate'));
     } finally {
       setActionId(null);
     }
@@ -64,8 +65,8 @@ const QuizzesPage: React.FC = () => {
       await client.patch(`/api/v1/quizzes/${id}/archive`);
       await fetchQuizzes();
       addToast('success', 'Quiz archived successfully');
-    } catch (err: any) {
-      addToast('error', err.response?.data?.error || 'Failed to archive');
+    } catch (err) {
+      addToast('error', apiErrorMessage(err, 'Failed to archive'));
     } finally {
       setActionId(null);
     }
@@ -80,8 +81,8 @@ const QuizzesPage: React.FC = () => {
       setQuizzes(prev => prev.filter(q => q.id !== id));
       addToast('success', 'Quiz deleted successfully');
       setPendingDelete(null);
-    } catch (err: any) {
-      addToast('error', err.response?.data?.error || 'Failed to delete');
+    } catch (err) {
+      addToast('error', apiErrorMessage(err, 'Failed to delete'));
     } finally {
       setActionId(null);
     }
@@ -94,8 +95,8 @@ const QuizzesPage: React.FC = () => {
       const res = await client.post(`/api/v1/quizzes/${quiz.id}/sessions`);
       addToast('success', 'Session hosted successfully');
       navigate(`/host/lobby/${res.data.id}`);
-    } catch (err: any) {
-      addToast('error', err.response?.data?.error || 'Failed to host session');
+    } catch (err) {
+      addToast('error', apiErrorMessage(err, 'Failed to host session'));
     }
   };
 

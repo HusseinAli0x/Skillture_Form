@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Plus, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
+import { apiErrorMessage } from '../lib/apiError';
 import { QuizStatus } from '../api/types';
-import type { Quiz } from '../api/types';
+import type { Quiz, QuizQuestion } from '../api/types';
 import { localized, toLocalized } from '../lib/i18n';
 import { useToastStore } from '../context/ToastStore';
 import StatusDropdown from '../components/StatusDropdown';
@@ -28,6 +29,12 @@ const readOptions = (raw: unknown): OptionState[] => {
   }));
 };
 
+const readAnswer = (raw: unknown): string => {
+  if (!raw || typeof raw !== 'object') return '';
+  const answer = raw as { value?: string; en?: string };
+  return answer.value || answer.en || '';
+};
+
 const FormQuizBuilder: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -47,8 +54,8 @@ const FormQuizBuilder: React.FC = () => {
     if (!isEditMode) return;
     try {
       const [qRes, qqRes] = await Promise.all([
-        client.get(`/api/v1/quizzes/${id}`),
-        client.get(`/api/v1/quizzes/${id}/questions`),
+        client.get<Quiz>(`/api/v1/quizzes/${id}`),
+        client.get<QuizQuestion[]>(`/api/v1/quizzes/${id}/questions`),
       ]);
 
       setTitle(localized(qRes.data.title));
@@ -58,9 +65,9 @@ const FormQuizBuilder: React.FC = () => {
 
       const fetched: QuestionState[] = (qqRes.data || [])
         .slice()
-        .sort((a: any, b: any) => a.position - b.position)
-        .map((q: any) => {
-          const answer = q.correct_answer?.value || q.correct_answer?.en || '';
+        .sort((a, b) => a.position - b.position)
+        .map(q => {
+          const answer = readAnswer(q.correct_answer);
           const options = readOptions(q.options);
 
           return {
@@ -195,8 +202,8 @@ const FormQuizBuilder: React.FC = () => {
 
       addToast('success', `Quiz ${isEditMode ? 'updated' : 'created'} successfully!`);
       navigate('/admin/quizzes');
-    } catch (err: any) {
-      addToast('error', err.response?.data?.error || 'Failed to save quiz.');
+    } catch (err) {
+      addToast('error', apiErrorMessage(err, 'Failed to save quiz.'));
     } finally {
       setIsSaving(false);
     }
