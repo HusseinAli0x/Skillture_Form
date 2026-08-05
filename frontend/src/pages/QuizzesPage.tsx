@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Search, GamepadIcon, Trash2, Play, Archive, Zap, Edit2, Share2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import client from '../api/client';
 import { apiErrorMessage } from '../lib/apiError';
 import { QuizStatus } from '../api/types';

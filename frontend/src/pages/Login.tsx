@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { KeyRound, User } from 'lucide-react';
 import { useAuthStore } from '../context/AuthStore';
 import client from '../api/client';

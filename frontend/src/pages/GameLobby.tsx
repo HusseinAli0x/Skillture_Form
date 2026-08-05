@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Copy, Play, Users } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import client from '../api/client';
 import { apiErrorMessage } from '../lib/apiError';
 import type { QuizPlayer } from '../api/types';

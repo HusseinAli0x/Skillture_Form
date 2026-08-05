@@ -11,6 +11,7 @@ the [repository README](../README.md).
 - **Vite 8** + **React 19** + **TypeScript** (strict)
 - **Tailwind v4**, configured entirely through the `@theme` block in `src/index.css`
 - **zustand** for auth and toast state, **axios** for HTTP, native `WebSocket` for the game
+- **react-router** v8 (not `react-router-dom`, which upstream discontinued at 7.18.2)
 - **oxlint** for linting
 
 ## Running it
@@ -72,6 +73,10 @@ proxy nor the Tailwind plugin.
 - **Multilingual fields go through `lib/i18n`.** Titles, labels and question text are
   JSONB maps (`{"en": "...", "ar": "..."}`), never plain strings.
 - **No native `alert()` or `confirm()`.** Use the toast store and `ConfirmDialog`.
+- **Keep `npm audit` at zero.** The spreadsheet export is `lib/csv.ts` rather than a
+  library precisely because `xlsx` had an advisory with no published fix. Anything
+  written into a spreadsheet goes through `toCsv`, which escapes leading `=`, `+`,
+  `-` and `@` — respondents type these values and admins open them in Excel.
 - **Editor state lives beside its editor, not in it.** `fieldState.ts` and
   `questionState.ts` hold the shapes and constants so the `.tsx` files export only
   components, which is what React Fast Refresh needs to preserve state on edit.

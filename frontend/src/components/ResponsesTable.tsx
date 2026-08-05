@@ -12,7 +12,7 @@ import {
 import client from '../api/client';
 import type { FormField, FormResponse } from '../api/types';
 import { localized } from '../lib/i18n';
-import { exportToExcel, exportToPdf } from '../lib/exportResponses';
+import { exportToCsv, exportToPdf } from '../lib/exportResponses';
 import type { ExportColumn, ExportRow } from '../lib/exportResponses';
 import { useToastStore } from '../context/ToastStore';
 import { Button, IconButton, Input, LoadingState, Select } from './ui';
@@ -176,14 +176,12 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
       <ChevronDown className="w-3 h-3" />
     );
 
-  const handleExcel = async () => {
-    setIsExporting(true);
+  // Synchronous now that there is no library to fetch first.
+  const handleCsv = () => {
     try {
-      await exportToExcel(sortedRows, columns);
+      exportToCsv(sortedRows, columns);
     } catch {
       addToast('error', 'Failed to generate the spreadsheet');
-    } finally {
-      setIsExporting(false);
     }
   };
 
@@ -237,8 +235,8 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={handleExcel} disabled={isExporting}>
-            <FileText className="w-4 h-4" /> Excel
+          <Button variant="secondary" size="sm" onClick={handleCsv} title="Opens in Excel">
+            <FileText className="w-4 h-4" /> CSV
           </Button>
           <Button variant="secondary" size="sm" onClick={handlePdf} disabled={isExporting}>
             <Download className="w-4 h-4" /> PDF

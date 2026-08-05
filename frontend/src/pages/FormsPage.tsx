@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Search, FileText, Trash2, Eye, Edit3, Share2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import client from '../api/client';
 import { apiErrorMessage } from '../lib/apiError';
 import type { Form } from '../api/types';

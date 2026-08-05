@@ -75,6 +75,12 @@ jobs:
     - name: Lint
       run: npm run lint
 
+    # The tree is at zero advisories. `xlsx` sat here for months as a known
+    # high with no published fix and nothing failed because of it; this is what
+    # makes the next one visible.
+    - name: Audit dependencies
+      run: npm audit --audit-level=high
+
     - name: Run unit tests
       run: npm test
 

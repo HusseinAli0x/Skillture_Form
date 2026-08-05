@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router';
 import client from '../api/client';
 import { apiErrorStatus } from '../lib/apiError';
 import type { PublicQuizQuestion, QuizPlayer } from '../api/types';

@@ -1,15 +1,18 @@
 /**
- * Excel and PDF export for the responses table.
+ * Spreadsheet and PDF export for the responses table.
  *
- * `xlsx` and `html2pdf.js` are the two heaviest dependencies in the project and
- * each is needed on exactly one admin page, behind a button. Imported
- * statically they landed in the entry chunk and were downloaded by every
- * visitor, including anonymous respondents filling in a public form. The
- * dynamic imports below move them into chunks fetched on first click.
+ * `html2pdf.js` is the heaviest dependency in the project and is needed on this
+ * one admin page, behind a button. Imported statically it landed in the entry
+ * chunk and was downloaded by every visitor, including anonymous respondents
+ * filling in a public form, so it is a dynamic import fetched on first click.
  *
- * Note this does not address the xlsx advisory (CVE-2023-30533) tracked as D2
- * in docs/ISSUES.md — the code is still loaded, just later.
+ * The spreadsheet export used to go through `xlsx`, which carried
+ * CVE-2023-30533 and a ReDoS advisory with no fixed version on npm (D2). It
+ * wrote a single flat sheet of strings, which CSV does with no dependency at
+ * all — see lib/csv.ts.
  */
+
+import { downloadCsv, toCsv } from './csv';
 
 export interface ExportColumn {
   id: string;
@@ -24,28 +27,21 @@ export interface ExportRow {
   values: Record<string, string>;
 }
 
-export async function exportToExcel(
+/** Writes the responses as a CSV file, which opens in Excel on double-click. */
+export function exportToCsv(
   rows: ExportRow[],
   columns: ExportColumn[],
-  filename = 'Form_Responses.xlsx'
-): Promise<void> {
-  const XLSX = await import('xlsx');
+  filename = 'Form_Responses.csv'
+): void {
+  const header = ['Respondent', 'Submitted At', ...columns.map(column => column.label)];
 
-  const sheetData = rows.map(row => {
-    const record: Record<string, string> = {
-      Respondent: row.respondent,
-      'Submitted At': row.submittedAt.toLocaleString(),
-    };
-    for (const column of columns) {
-      record[column.label] = row.values[column.id] ?? '';
-    }
-    return record;
-  });
+  const body = rows.map(row => [
+    row.respondent,
+    row.submittedAt.toLocaleString(),
+    ...columns.map(column => row.values[column.id] ?? ''),
+  ]);
 
-  const worksheet = XLSX.utils.json_to_sheet(sheetData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Responses');
-  XLSX.writeFile(workbook, filename);
+  downloadCsv(filename, toCsv(header, body));
 }
 
 /**

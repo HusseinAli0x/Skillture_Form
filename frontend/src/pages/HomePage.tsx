@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowRight, Gamepad2, LayoutDashboard, LogIn, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import client from '../api/client';
 import { Button, Spinner } from '../components/ui';
 

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Gamepad2 } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import client from '../api/client';
 import { apiErrorMessage } from '../lib/apiError';
 import { playerSocketUrl } from '../api/ws';

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Flag, Play, SkipForward, Trophy, Users } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import client from '../api/client';
 import type { QuizPlayer, QuizQuestion, QuizSession } from '../api/types';
 import { hostSocketUrl } from '../api/ws';

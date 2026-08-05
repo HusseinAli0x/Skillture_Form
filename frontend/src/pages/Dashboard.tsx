@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, FileText, GamepadIcon, Activity } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import client from '../api/client';
 import { FormStatus, QuizStatus } from '../api/types';
 import type { Quiz, Form } from '../api/types';

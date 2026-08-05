@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import client from '../api/client';
 import { apiErrorMessage, apiErrorStatus } from '../lib/apiError';
 import { Card, Spinner } from '../components/ui';

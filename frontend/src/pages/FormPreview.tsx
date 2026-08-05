@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 import client from '../api/client';
 import { apiErrorMessage } from '../lib/apiError';

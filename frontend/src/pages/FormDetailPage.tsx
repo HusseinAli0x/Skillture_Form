@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import client from '../api/client';
 import { FormStatus, FormStatusLabels } from '../api/types';
 import type { Form, FormField } from '../api/types';
