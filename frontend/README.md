@@ -24,9 +24,12 @@ The dev server proxies to a backend on `127.0.0.1:8080` (see `vite.config.ts`), 
 start the backend first or those requests fail.
 
 ```bash
-npm run build    # tsc -b && vite build
-npm run lint     # oxlint
-npm run preview  # serve the production build locally
+npm run build         # tsc -b && vite build
+npm run lint          # oxlint
+npm test              # vitest run
+npm run test:watch    # vitest, in watch mode
+npm run test:coverage # vitest run --coverage
+npm run preview       # serve the production build locally
 ```
 
 `npm run build` typechecks first. Note that a bare `tsc --noEmit` checks **nothing**
@@ -47,7 +50,13 @@ src/
   context/      zustand stores (auth, toasts)
   lib/          i18n helpers, id generation, public link builders, export helpers
   pages/        one file per route
+  test/         Vitest setup (jest-dom matchers, unmount between tests)
 ```
+
+Tests live beside what they cover (`lib/i18n.test.ts` next to `lib/i18n.ts`) and
+run under Vitest with jsdom and Testing Library. `vitest.config.ts` is standalone
+rather than merged with `vite.config.ts` — a test run needs neither the dev-server
+proxy nor the Tailwind plugin.
 
 ## Conventions
 

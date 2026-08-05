@@ -18,6 +18,11 @@ interface Props {
  * 433-line file holding page chrome, save orchestration and this editor.
  */
 const FieldEditor: React.FC<Props> = ({ field, index, total, onChange, onRemove, onMove }) => {
+  // Ids are scoped to the field so several editors on the page do not collide,
+  // and so each Label actually names its control — without htmlFor the visible
+  // text is decoration and the field is unnamed to a screen reader.
+  const fieldId = (name: string) => `f-${field._id}-${name}`;
+
   // An option-based field always shows at least one row to type into.
   const options = field.options.length === 0 ? [''] : field.options;
 
@@ -75,8 +80,11 @@ const FieldEditor: React.FC<Props> = ({ field, index, total, onChange, onRemove,
       <div className="p-5 space-y-4">
         <div className="flex gap-4">
           <div className="flex-1">
-            <Label required>Label</Label>
+            <Label htmlFor={fieldId('label')} required>
+              Label
+            </Label>
             <Input
+              id={fieldId('label')}
               value={field.label}
               onChange={e => onChange({ label: e.target.value })}
               placeholder="Field label..."
@@ -84,9 +92,9 @@ const FieldEditor: React.FC<Props> = ({ field, index, total, onChange, onRemove,
             />
           </div>
           <div className="w-44">
-            <Label>Type</Label>
+            <Label htmlFor={fieldId('type')}>Type</Label>
             <div className="relative">
-              <Select value={field.type} onChange={e => onChange({ type: Number(e.target.value) as FieldType })}>
+              <Select id={fieldId('type')} value={field.type} onChange={e => onChange({ type: Number(e.target.value) as FieldType })}>
                 {FIELD_TYPES.map(t => (
                   <option key={t} value={t}>
                     {FieldTypeLabels[t]}
@@ -99,8 +107,9 @@ const FieldEditor: React.FC<Props> = ({ field, index, total, onChange, onRemove,
         </div>
 
         <div>
-          <Label>Placeholder</Label>
+          <Label htmlFor={fieldId('placeholder')}>Placeholder</Label>
           <Input
+            id={fieldId('placeholder')}
             value={field.placeholder}
             onChange={e => onChange({ placeholder: e.target.value })}
             placeholder="Hint text shown inside the field..."
@@ -109,8 +118,9 @@ const FieldEditor: React.FC<Props> = ({ field, index, total, onChange, onRemove,
         </div>
 
         <div>
-          <Label>Help Text</Label>
+          <Label htmlFor={fieldId('help')}>Help Text</Label>
           <Input
+            id={fieldId('help')}
             value={field.helpText}
             onChange={e => onChange({ helpText: e.target.value })}
             placeholder="Helper text shown below the field..."

@@ -8,8 +8,9 @@ Severity: **Blocker** — the documented setup or a headline feature does not wo
 **Security** · **High** — wrong behaviour users will hit · **Medium** — wrong behaviour
 under load or at an edge · **Low** — hygiene.
 
-Summary: **53 items — 40 fixed, 13 deferred.** D12 (frontend structural debt) was
-cleared in a follow-up pass; see below.
+Summary: **53 items — 42 fixed, 11 deferred.** D12 (frontend structural debt) was
+cleared in a follow-up pass, along with D13 and D14, which that pass had carved
+out of it; see below.
 
 ---
 
@@ -120,7 +121,54 @@ stranded past the end of a filtered list, a leaked object URL per image upload,
 and a `?pin=` join flow that advanced past a PIN it had not yet validated. Each
 is described in its commit message.
 
-Two parts of D12 are **not** done and are carried below as D13 and D14.
+### D13 — half-written saves in both builders
+
+Carved out of D12 because it needed a backend change, then fixed.
+
+Both builders saved by firing one request per field/question plus one per
+deletion, in a sequential loop with no transaction. A failure part-way through
+left the form half-written — some items updated, some not, deletions already
+applied — and the author got one error with no way to tell what had landed.
+
+Two endpoints now replace the whole list in one transaction:
+
+    PUT /api/v1/forms/:id/fields       {"fields": [...]}
+    PUT /api/v1/quizzes/:id/questions  {"questions": [...]}
+
+An item keeping its `id` is updated in place, one without an id is inserted,
+and any existing item absent from the list is deleted. Ordering comes from the
+array, so `field_order` / `position` cannot disagree with what the author sees.
+Everything is validated before anything is written.
+
+Deliberately an upsert rather than delete-and-recreate: `response_answers`
+references `form_fields(id)` and `quiz_player_answers` references
+`quiz_questions(id)`, so recreating rows on every save would take collected
+answers and played games with them. An id that is unknown, or belongs to a
+different parent, is treated as an insert rather than trusted into an UPDATE of
+another row. The per-item routes remain for scripted use.
+
+### D14 — no frontend tests
+
+Also carved out of D12, and the reason the refactor came first: the logic worth
+testing is now in plain modules rather than buried in page components.
+
+Vitest + jsdom + Testing Library, 67 tests across 8 files, wired into CI as its
+own step before the build. Coverage is aimed at the code with a history of
+defects rather than at a percentage: `lib/i18n` (the localised-field unpacking
+behind most of the C-series bugs), `lib/apiError`, `lib/id`, `lib/exportResponses`
+(that the PDF template is restored even when rendering throws), and the field
+and question editors (control selection by `FieldType`, option-label reading,
+controlled inputs, immutable option patching, the correct-answer mark being
+cleared with its option).
+
+Writing them surfaced one more defect: neither editor associated its `<label>`
+elements with their inputs, so the visible text was decoration and every control
+was unnamed to a screen reader. Both now use `htmlFor`.
+
+The backend gained matching tests for the D13 use-case gate, and a
+route-registration test — gin rejects conflicting path segments at registration
+time, so a bad route takes the process down on boot rather than failing one
+endpoint.
 
 ---
 
@@ -141,8 +189,6 @@ Real defects, deliberately out of scope for the remediation pass. Roughly in pri
 | D9 | Medium | infra | There is no migration tooling. `schema.sql` runs once via `docker-entrypoint-initdb.d`, so every schema change requires `docker compose down -v` and total data loss. | Introducing golang-migrate or similar is its own piece of work. |
 | D10 | Low | backend-wide | Dead code: ~300 unused lines in `database/db.go` (retry logic, `ExecTx`, `BatchExec`, `CopyFrom`, metrics, `Monitor`, plus multi-tenancy `BeforeAcquire` hooks setting `app.current_school_id` for a school concept that does not exist in this schema); `Hub.RoomExists`; `MsgTypeError`; `AdminHandler.Health` duplicating `HealthCheck`; `ResponseUsecase.Create` which only ever errors; the unused `repository/types.go` error set and its 19-line commented-out block; `validation/form_validation.go:ValidateFormDomain`; two empty placeholder files (`usecase/interfaces/admin_usecase.go`, `validation/admin_validation.go`). Also `CreateBulk` is an N-round-trip loop despite `CopyFrom` existing unused. | Pure deletion; large diff, zero behaviour change. Best done as its own commit. |
 | D11 | Low | backend-wide | Misspelled filenames: `form_field_handker.go`, `response_answer_vector_repositry_interface.go`, `respons_answer_vector_modelname.go`, `form_uscase_interface.go`. Misspelled struct tag `entities.Form.creat_at` (both `db:` and `json:`), which the frontend mirrors deliberately. `Form.IsActive()` compares `Status == 1` with a magic number, and the schema comment says `1=active, 0=inactive` while the Go enum says `0=draft,1=published,2=closed` — three descriptions of one column. | Renaming the `creat_at` tag is a breaking API change needing a coordinated frontend release. |
-| D13 | Medium | `FormBuilder.tsx`, `FormQuizBuilder.tsx` | Saving is a sequential loop of per-field/per-question requests with no transaction and no rollback. A failure part-way leaves the form half-written: some fields updated, some not, deletions already applied. The user sees one error and has no way to tell what landed. | Needs a bulk endpoint on the backend — the fix is an API change, not a frontend one. |
-| D14 | Medium | `frontend/` | No tests at all, across ~4,900 lines. There is no test runner in `package.json` and no CI job to run one. | Choosing and wiring up a runner (Vitest + Testing Library) is its own piece of work. The refactor above is the precondition: the logic worth testing — `lib/i18n`, `lib/id`, `lib/exportResponses`, the field/question state modules — is now in plain modules rather than buried in page components. |
 
 ### Not addressed by design
 

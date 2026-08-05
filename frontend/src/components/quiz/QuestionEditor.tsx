@@ -27,6 +27,12 @@ interface Props {
 const QuestionEditor: React.FC<Props> = ({ question, index, total, onChange, onRemove, onMove }) => {
   const isCorrect = (optionId: string) => question.correctOptionId === optionId;
 
+  // Ids are scoped to the question so several editors on the page do not
+  // collide, and so each Label actually names its control — without htmlFor
+  // the visible text is decoration and the field is unnamed to a screen
+  // reader.
+  const fieldId = (name: string) => `q-${question.id}-${name}`;
+
   const setOptionValue = (optionId: string, value: string) =>
     onChange({ options: question.options.map(o => (o.id === optionId ? { ...o, value } : o)) });
 
@@ -79,8 +85,11 @@ const QuestionEditor: React.FC<Props> = ({ question, index, total, onChange, onR
       <div className="p-5 space-y-4">
         <div className="flex gap-4">
           <div className="flex-1">
-            <Label required>Question Text</Label>
+            <Label htmlFor={fieldId('text')} required>
+              Question Text
+            </Label>
             <Input
+              id={fieldId('text')}
               value={question.question}
               onChange={e => onChange({ question: e.target.value })}
               placeholder="Enter your question..."
@@ -88,9 +97,10 @@ const QuestionEditor: React.FC<Props> = ({ question, index, total, onChange, onR
             />
           </div>
           <div className="w-44">
-            <Label>Type</Label>
+            <Label htmlFor={fieldId('type')}>Type</Label>
             <div className="relative">
               <Select
+                id={fieldId('type')}
                 value={question.type}
                 onChange={e => onChange({ type: e.target.value as QuizQuestionType })}
               >
@@ -107,8 +117,9 @@ const QuestionEditor: React.FC<Props> = ({ question, index, total, onChange, onR
 
         <div className="flex gap-4">
           <div className="w-32">
-            <Label>Time (sec)</Label>
+            <Label htmlFor={fieldId('time')}>Time (sec)</Label>
             <Input
+              id={fieldId('time')}
               type="number"
               min={1}
               value={question.timeLimit}
@@ -117,8 +128,9 @@ const QuestionEditor: React.FC<Props> = ({ question, index, total, onChange, onR
             />
           </div>
           <div className="w-32">
-            <Label>Points</Label>
+            <Label htmlFor={fieldId('points')}>Points</Label>
             <Input
+              id={fieldId('points')}
               type="number"
               min={0}
               value={question.points}

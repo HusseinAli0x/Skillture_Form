@@ -75,6 +75,12 @@ jobs:
     - name: Lint
       run: npm run lint
 
+    - name: Run unit tests
+      run: npm test
+
+    # `npm run build` is `tsc -b && vite build`. A bare `tsc --noEmit` checks
+    # nothing here: the root tsconfig.json holds only project references and
+    # `"files": []`, so it always exits 0.
     - name: Type-check and build
       run: npm run build
 
