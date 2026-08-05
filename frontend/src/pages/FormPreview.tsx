@@ -1,27 +1,36 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { AlertCircle, CheckCircle } from 'lucide-react';
 import client from '../api/client';
-import { FieldType, FormStatus } from '../api/types';
-import { CheckCircle } from 'lucide-react';
+import { FormStatus } from '../api/types';
+import type { Form, FormField } from '../api/types';
+import { localized } from '../lib/i18n';
+import { Button, Card, Spinner } from '../components/ui';
+import FieldInput from '../components/forms/FieldInput';
 
-// entities.FormField sends `type` as an int16 (enums.FieldType) and the
-// required flag as `required`. This used to declare `type: string` and
-// `is_required`, so every comparison below failed: dropdowns, radios,
-// checkboxes and textareas all fell through to a plain text input, and
-// required-field validation never ran because the flag was always undefined.
-interface Field {
-  id: string;
-  type: FieldType;
-  label: { en?: string; ar?: string; value?: string };
-  required: boolean;
-  options?: Record<string, { label?: string; value?: string; en?: string; ar?: string }>;
-}
+const isBlank = (value: unknown) =>
+  value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
+
+/** Best-effort respondent identity, taken from a field labelled name or email. */
+const findRespondent = (fields: FormField[], data: Record<string, unknown>) => {
+  let name = '';
+  let email = '';
+  for (const field of fields) {
+    const label = localized(field.label).toLowerCase();
+    const value = data[field.id];
+    if (typeof value !== 'string' || !value) continue;
+    if (!name && (label.includes('name') || label.includes('اسم'))) name = value;
+    if (!email && (label.includes('email') || label.includes('بريد'))) email = value;
+  }
+  if (!name && !email) return { en: 'Anonymous' };
+  return { name: name || email, email };
+};
 
 const FormPreview: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [form, setForm] = useState<any>(null);
-  const [fields, setFields] = useState<Field[]>([]);
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [form, setForm] = useState<Form | null>(null);
+  const [fields, setFields] = useState<FormField[]>([]);
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -34,76 +43,59 @@ const FormPreview: React.FC = () => {
   const isAcceptingResponses = form != null && form.status === FormStatus.Published;
 
   useEffect(() => {
-    client.get(`/api/v1/forms/${id}`)
+    client
+      .get<Form>(`/api/v1/forms/${id}`)
       .then(res => setForm(res.data))
       .catch(() => setError('Form not found'));
 
-    client.get(`/api/v1/forms/${id}/fields`)
+    client
+      .get<FormField[]>(`/api/v1/forms/${id}/fields`)
       .then(res => setFields(res.data || []))
       .catch(() => setError('Failed to load fields'))
       .finally(() => setIsLoading(false));
   }, [id]);
 
-  const handleChange = (fieldId: string, val: any) => {
-    setFormData(prev => ({ ...prev, [fieldId]: val }));
+  const handleChange = (fieldId: string, value: unknown) => {
+    setFormData(prev => ({ ...prev, [fieldId]: value }));
+    // Clear the inline error as soon as the respondent acts on the field.
+    setValidationErrors(prev => {
+      if (!prev[fieldId]) return prev;
+      const { [fieldId]: _removed, ...rest } = prev;
+      return rest;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setValidationErrors({});
-    setIsSubmitting(true);
-    
-    // Validation Logic
+
+    // Required fields are enforced here rather than with the native `required`
+    // attribute: the browser blocks submit and shows its own tooltip, which
+    // means the inline messages below would never appear, and native required
+    // does not cover a checkbox group where any one box satisfies it.
     const errors: Record<string, string> = {};
     for (const field of fields) {
-      if (field.required) {
-        const val = formData[field.id];
-        if (val === undefined || val === null || val === '' || (Array.isArray(val) && val.length === 0)) {
-          errors[field.id] = 'This field is required';
-        }
+      if (field.required && isBlank(formData[field.id])) {
+        errors[field.id] = 'This field is required';
       }
     }
-
+    setValidationErrors(errors);
     if (Object.keys(errors).length > 0) {
-      setValidationErrors(errors);
-      setError('Please fill in all required fields correctly.');
-      setIsSubmitting(false);
+      setError('Please fill in all required fields.');
       return;
     }
-    
+
+    setIsSubmitting(true);
     try {
-      const answers: Record<string, any> = {};
-      Object.keys(formData).forEach(k => {
-        answers[k] = { en: formData[k] }; // storing as simple json string value
-      });
-      
-      // Auto-detect respondent info
-      let respondentName = "";
-      let respondentEmail = "";
-      
-      fields.forEach(f => {
-        const lbl = (f.label?.en || '').toLowerCase();
-        if (lbl.includes('name') || lbl.includes('اسم')) {
-          if (!respondentName && formData[f.id]) respondentName = formData[f.id];
-        }
-        if (lbl.includes('email') || lbl.includes('بريد')) {
-          if (!respondentEmail && formData[f.id]) respondentEmail = formData[f.id];
-        }
-      });
-      
-      let respondentData: Record<string, any> = { en: "Anonymous" };
-      if (respondentName || respondentEmail) {
-        respondentData = { 
-          name: respondentName || respondentEmail, 
-          email: respondentEmail 
-        };
+      const answers: Record<string, { en: unknown }> = {};
+      for (const [fieldId, value] of Object.entries(formData)) {
+        answers[fieldId] = { en: value };
       }
 
       await client.post('/api/v1/responses', {
         form_id: id,
-        respondent: respondentData,
-        answers
+        respondent: findRespondent(fields, formData),
+        answers,
       });
       setSubmitted(true);
     } catch (err: any) {
@@ -113,132 +105,89 @@ const FormPreview: React.FC = () => {
     }
   };
 
-  if (isLoading) return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#0ABFBC] border-t-transparent rounded-full animate-spin"></div></div>;
-  
-  if (submitted) return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
-      <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
-        <CheckCircle className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-white mb-2">Thank You!</h2>
-        <p className="text-slate-400">Your response has been submitted successfully.</p>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center">
+        <Spinner />
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center p-4">
+        <Card className="p-8 max-w-md w-full text-center shadow-2xl">
+          <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-text mb-2">Thank You!</h2>
+          <p className="text-muted">Your response has been submitted successfully.</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] py-12 px-4 font-sans text-slate-200">
+    <div className="min-h-screen bg-bg py-12 px-4 font-sans text-text">
       <div className="max-w-2xl mx-auto">
-        <div className="bg-[#141414] border border-[#2a2a2a] rounded-t-xl border-t-[6px] border-t-[#0ABFBC] p-8 mb-4 shadow-xl">
-          <h1 className="text-3xl font-bold text-white mb-2">{form?.title?.en || 'Form'}</h1>
-          {form?.description?.en && <p className="text-slate-400">{form.description.en}</p>}
-        </div>
+        <Card className="rounded-t-xl border-t-[6px] border-t-primary p-8 mb-4 shadow-xl">
+          <h1 className="text-3xl font-bold text-text mb-2">{localized(form?.title, 'Form')}</h1>
+          {form?.description && <p className="text-muted">{localized(form.description)}</p>}
+        </Card>
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg mb-6">
+          <div role="alert" className="bg-danger-soft border border-danger-border text-danger px-4 py-3 rounded-lg mb-6">
             {error}
           </div>
         )}
 
         {form && !isAcceptingResponses && (
-          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 px-4 py-3 rounded-lg mb-6">
+          <div role="status" className="bg-warning-soft border border-warning-border text-warning px-4 py-3 rounded-lg mb-6">
             {form.status === FormStatus.Closed
               ? 'This form is closed and is no longer accepting responses.'
               : 'This form is still a draft and is not yet accepting responses.'}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           {fields.map(field => {
-            const labelStr = field.label?.en || field.label?.value || 'Question';
+            const fieldError = validationErrors[field.id];
             return (
-              <div key={field.id} className={`bg-[#141414] border ${validationErrors[field.id] ? 'border-red-500/50 bg-red-500/5' : 'border-[#2a2a2a]'} rounded-xl p-6 shadow-md transition-all hover:border-[#3a3a3a]`}>
-                <label className="block text-sm font-medium text-slate-200 mb-3 flex items-center justify-between">
-                  <span>
-                    {labelStr}
-                    {field.required && <span className="text-red-400 ml-1">*</span>}
+              <Card
+                key={field.id}
+                className={`p-6 shadow-md transition-colors ${
+                  fieldError ? 'border-danger-border bg-danger-soft' : 'hover:border-border-strong'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-text">
+                    {localized(field.label, 'Question')}
+                    {field.required && <span className="text-danger ml-1">*</span>}
                   </span>
-                  {validationErrors[field.id] && (
-                    <span className="text-red-400 text-xs flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                      {validationErrors[field.id]}
+                  {fieldError && (
+                    <span
+                      id={`${field.id}-error`}
+                      className="text-danger text-xs flex items-center gap-1 bg-danger-soft px-2 py-1 rounded"
+                    >
+                      <AlertCircle className="w-3 h-3" />
+                      {fieldError}
                     </span>
                   )}
-                </label>
-                
-                {field.type === FieldType.Textarea ? (
-                  <textarea
-                    required={field.required}
-                    onChange={e => handleChange(field.id, e.target.value)}
-                    className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-[#0ABFBC] resize-y min-h-[100px]"
-                    placeholder="Your answer"
-                  />
-                ) : field.type === FieldType.Select ? (
-                  <select
-                    required={field.required}
-                    onChange={e => handleChange(field.id, e.target.value)}
-                    className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-[#0ABFBC]"
-                  >
-                    <option value="">Choose...</option>
-                    {field.options && Object.entries(field.options).map(([k, opt]) => (
-                      <option key={k} value={k}>{opt.label || opt.en || opt.value || k}</option>
-                    ))}
-                  </select>
-                ) : field.type === FieldType.Radio ? (
-                  <div className="space-y-2">
-                    {field.options && Object.entries(field.options).map(([k, opt]) => (
-                      <label key={k} className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="radio"
-                          name={field.id}
-                          value={k}
-                          required={field.required}
-                          onChange={e => handleChange(field.id, e.target.value)}
-                          className="w-4 h-4 text-[#0ABFBC] bg-[#0a0a0a] border-[#2a2a2a] focus:ring-[#0ABFBC] focus:ring-offset-[#0a0a0a]"
-                        />
-                        <span className="text-sm">{opt.label || opt.en || opt.value || k}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : field.type === FieldType.Checkbox ? (
-                  <div className="space-y-2">
-                    {field.options && Object.entries(field.options).map(([k, opt]) => (
-                      <label key={k} className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          value={k}
-                          onChange={e => {
-                            const current = formData[field.id] || [];
-                            const updated = e.target.checked ? [...current, k] : current.filter((x: string) => x !== k);
-                            handleChange(field.id, updated);
-                          }}
-                          className="w-4 h-4 text-[#0ABFBC] bg-[#0a0a0a] border-[#2a2a2a] rounded focus:ring-[#0ABFBC] focus:ring-offset-[#0a0a0a]"
-                        />
-                        <span className="text-sm">{opt.label || opt.en || opt.value || k}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <input
-                    type={field.type === FieldType.Number ? 'number' : field.type === FieldType.Email ? 'email' : field.type === FieldType.Date ? 'date' : 'text'}
-                    required={field.required}
-                    onChange={e => handleChange(field.id, e.target.value)}
-                    className="w-full bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-[#0ABFBC]"
-                    placeholder="Your answer"
-                  />
-                )}
-              </div>
+                </div>
+
+                <FieldInput
+                  field={field}
+                  value={formData[field.id]}
+                  invalid={!!fieldError}
+                  onChange={value => handleChange(field.id, value)}
+                />
+              </Card>
             );
           })}
-          
+
           <div className="pt-4 flex justify-between items-center">
-            <p className="text-xs text-slate-500">Never submit passwords through forms.</p>
-            <button
-              type="submit"
-              disabled={isSubmitting || fields.length === 0 || !isAcceptingResponses}
-              className="px-6 py-2.5 rounded-lg bg-[#0ABFBC] text-black font-semibold hover:bg-[#09a8a5] transition-colors disabled:opacity-50"
-            >
-              {isSubmitting ? 'Submitting...' : 'Submit'}
-            </button>
+            <p className="text-xs text-muted">Never submit passwords through forms.</p>
+            <Button type="submit" loading={isSubmitting} disabled={fields.length === 0 || !isAcceptingResponses}>
+              {isSubmitting ? 'Submitting…' : 'Submit'}
+            </Button>
           </div>
         </form>
       </div>
