@@ -190,7 +190,6 @@ const QuizzesPage: React.FC = () => {
                           type="quiz"
                           id={quiz.id}
                           initialStatus={quiz.status}
-                          fullObject={quiz}
                           onStatusChange={fetchQuizzes}
                         />
                       </td>

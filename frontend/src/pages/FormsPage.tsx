@@ -143,7 +143,7 @@ const FormsPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <StatusDropdown type="form" id={form.id} initialStatus={form.status} fullObject={form} />
+                        <StatusDropdown type="form" id={form.id} initialStatus={form.status} />
                       </td>
                       <td className="px-5 py-4 text-sm text-muted hidden sm:table-cell">
                         {form.creat_at ? new Date(form.creat_at).toLocaleDateString() : '—'}

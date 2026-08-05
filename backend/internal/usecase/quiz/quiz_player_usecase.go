@@ -36,10 +36,21 @@ func NewQuizPlayerUseCase(
 	}
 }
 
-// JoinSession adds a new player to a lobby session.
+// JoinSession adds a new player to a session.
+//
+// Late joining is deliberate: a player may join a session that has already
+// started, and lands on whatever question is current with a score of 0. This
+// is what makes reconnecting work — a player whose phone died mid-game rejoins
+// through exactly this path.
+//
+// This was previously documented and typed as rejecting anything but a lobby
+// session, which it never actually did — the behaviour was right and the
+// contract around it was wrong. The contract now matches, and the unused
+// domain error it named is gone.
+//
 // Business rules enforced:
 //   - Session must exist
-//   - Session must be in lobby state (game not yet started)
+//   - Session must not be finished
 //   - Nickname must be unique within the session
 func (u *quizPlayerUseCase) JoinSession(ctx context.Context, sessionID uuid.UUID, name string) (*entities.QuizPlayer, error) {
 	if name == "" {
@@ -51,10 +62,12 @@ func (u *quizPlayerUseCase) JoinSession(ctx context.Context, sessionID uuid.UUID
 		return nil, err
 	}
 	if session == nil {
-		return nil, errors.New("session not found")
+		return nil, domainErrors.ErrNotFound
 	}
+	// A finished game is the one state that cannot be joined: there is nothing
+	// left to answer and the leaderboard is finalised.
 	if session.IsFinished() {
-		return nil, errors.New("session is already finished")
+		return nil, domainErrors.ErrSessionFinished
 	}
 
 	player := &entities.QuizPlayer{

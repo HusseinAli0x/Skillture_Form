@@ -45,7 +45,6 @@ const FormQuizBuilder: React.FC = () => {
   const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<QuestionState[]>([emptyQuestion()]);
   const [status, setStatus] = useState<QuizStatus>(QuizStatus.Draft);
-  const [fullObject, setFullObject] = useState<Quiz | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -60,7 +59,6 @@ const FormQuizBuilder: React.FC = () => {
       setTitle(localized(qRes.data.title));
       setDescription(localized(qRes.data.description));
       setStatus((qRes.data.status ?? QuizStatus.Draft) as QuizStatus);
-      setFullObject(qRes.data);
 
       const fetched: QuestionState[] = (qqRes.data || [])
         .slice()
@@ -235,12 +233,11 @@ const FormQuizBuilder: React.FC = () => {
       <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-text">Quiz Settings</h2>
-          {isEditMode && fullObject && (
+          {isEditMode && (
             <StatusDropdown
               type="quiz"
               id={id!}
               initialStatus={status}
-              fullObject={fullObject}
               onStatusChange={setStatus}
             />
           )}

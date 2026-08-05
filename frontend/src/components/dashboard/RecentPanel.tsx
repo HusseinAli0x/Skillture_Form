@@ -88,7 +88,7 @@ const RecentPanel: React.FC<Props> = ({
           <div className="flex items-center gap-1">
             {/* Rendered outside the button above — a dropdown cannot be nested
                 inside another button element. */}
-            <StatusDropdown type={type} id={item.id} initialStatus={item.status} fullObject={item.raw} />
+            <StatusDropdown type={type} id={item.id} initialStatus={item.status} />
             <IconButton label={`Edit ${type}`} tone="primary" onClick={() => onEdit(item.id)}>
               <Edit2 className="w-4 h-4" />
             </IconButton>

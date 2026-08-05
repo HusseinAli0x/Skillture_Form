@@ -36,10 +36,12 @@ type QuizUseCase interface {
 type QuizQuestionUseCase interface {
 	// Create adds a new question to a quiz
 	Create(ctx context.Context, question *entities.QuizQuestion) error
-	// Update modifies an existing question
-	Update(ctx context.Context, question *entities.QuizQuestion) error
-	// Delete removes a question
-	Delete(ctx context.Context, questionID uuid.UUID) error
+	// Update modifies an existing question. quizID scopes the lookup: a
+	// question belonging to another quiz reports not-found rather than being
+	// rewritten.
+	Update(ctx context.Context, quizID uuid.UUID, question *entities.QuizQuestion) error
+	// Delete removes a question, scoped to its quiz for the same reason.
+	Delete(ctx context.Context, quizID, questionID uuid.UUID) error
 	// GetByID retrieves a question by primary key
 	GetByID(ctx context.Context, questionID uuid.UUID) (*entities.QuizQuestion, error)
 	// ListByQuizID returns all questions for a quiz ordered by position
@@ -73,9 +75,14 @@ type QuizSessionUseCase interface {
 
 // QuizPlayerUseCase handles players joining and their score state
 type QuizPlayerUseCase interface {
-	// JoinSession adds a player to a lobby session.
-	// Returns ErrSessionNotInLobby if the game has already started.
-	// Returns ErrDuplicatePlayerName if the nickname is already taken.
+	// JoinSession adds a player to a session.
+	//
+	// Joining a game already in progress is allowed by design — it is also how
+	// a disconnected player rejoins. The late joiner starts at 0 points on the
+	// current question.
+	//
+	// Returns ErrSessionFinished if the game is over, and
+	// ErrDuplicatePlayerName if the nickname is taken.
 	JoinSession(ctx context.Context, sessionID uuid.UUID, name string) (*entities.QuizPlayer, error)
 	// GetPlayer retrieves a single player by ID. Returns (nil, nil) if no such
 	// player exists. Callers must confirm the player belongs to the session

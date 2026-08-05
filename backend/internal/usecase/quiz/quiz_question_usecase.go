@@ -41,11 +41,22 @@ func (u *quizQuestionUseCase) Create(ctx context.Context, question *entities.Qui
 		return err
 	}
 	if quiz == nil {
-		return errors.New("quiz not found")
+		return domainErrors.ErrNotFound
 	}
 
 	if question.ID == uuid.Nil {
 		question.ID = uuid.New()
+	}
+
+	// Position is 1-based and unique per quiz. A request that omits it (or
+	// sends 0, which Go's validator cannot distinguish from absent) appends to
+	// the end rather than being rejected.
+	if question.Position <= 0 {
+		existing, err := u.questionRepo.List(ctx, repo.QuizQuestionFilter{QuizID: &question.QuizID})
+		if err != nil {
+			return err
+		}
+		question.Position = len(existing) + 1
 	}
 
 	// Delegate domain invariant checks to the entity
@@ -57,13 +68,20 @@ func (u *quizQuestionUseCase) Create(ctx context.Context, question *entities.Qui
 }
 
 // Update modifies an existing question's content.
-func (u *quizQuestionUseCase) Update(ctx context.Context, question *entities.QuizQuestion) error {
+//
+// quizID is the quiz from the route. The handlers used to read only :qid and
+// ignore :id, so any authenticated admin could rewrite any question in the
+// system by addressing it through a quiz they owned — the URL implied a
+// containment the code never checked.
+func (u *quizQuestionUseCase) Update(ctx context.Context, quizID uuid.UUID, question *entities.QuizQuestion) error {
 	existing, err := u.questionRepo.GetByID(ctx, question.ID)
 	if err != nil {
 		return err
 	}
-	if existing == nil {
-		return errors.New("question not found")
+	// Not-found rather than forbidden: a caller poking at ids should not learn
+	// that a question exists under some other quiz.
+	if existing == nil || existing.QuizID != quizID {
+		return domainErrors.ErrNotFound
 	}
 
 	// Preserve immutable parent link and timestamps
@@ -77,14 +95,14 @@ func (u *quizQuestionUseCase) Update(ctx context.Context, question *entities.Qui
 	return u.questionRepo.Update(ctx, question)
 }
 
-// Delete removes a question by ID.
-func (u *quizQuestionUseCase) Delete(ctx context.Context, questionID uuid.UUID) error {
+// Delete removes a question, scoped to its quiz. See Update.
+func (u *quizQuestionUseCase) Delete(ctx context.Context, quizID, questionID uuid.UUID) error {
 	existing, err := u.questionRepo.GetByID(ctx, questionID)
 	if err != nil {
 		return err
 	}
-	if existing == nil {
-		return errors.New("question not found")
+	if existing == nil || existing.QuizID != quizID {
+		return domainErrors.ErrNotFound
 	}
 	return u.questionRepo.Delete(ctx, questionID)
 }
@@ -96,7 +114,7 @@ func (u *quizQuestionUseCase) GetByID(ctx context.Context, questionID uuid.UUID)
 		return nil, err
 	}
 	if q == nil {
-		return nil, errors.New("question not found")
+		return nil, domainErrors.ErrNotFound
 	}
 	return q, nil
 }

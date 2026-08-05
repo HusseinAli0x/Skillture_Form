@@ -62,6 +62,12 @@ and `/ws` to the backend — so the browser only ever talks to one origin.
 > because the schema was mounted as a Postgres init script and those only run on an
 > empty volume.
 
+> **Run one backend replica.** WebSocket game rooms are held in process memory, so
+> two replicas would split players across separate hubs: some players in one room,
+> some in another, leaderboards disagreeing, and no error to indicate it. Scaling the
+> backend horizontally needs a Redis or NATS broker behind the hub first — see D7 in
+> [`docs/ISSUES.md`](docs/ISSUES.md).
+
 ## Default Admin Credentials
 
 On first startup — when the `admins` table is empty — the schema seeds one account:

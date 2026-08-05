@@ -171,6 +171,14 @@ base points. `time_taken_ms` is measured in the browser and therefore untrusted,
 
 ## 4. WebSocket model
 
+> **Single replica only.** Rooms live in the hub's process memory. Two backend
+> replicas would each hold their own `rooms` map, splitting players across
+> hubs: some in one room, some in another, leaderboards disagreeing, and no
+> error anywhere to indicate it. Horizontal scaling needs a Redis or NATS
+> broker behind the hub *and* a resync protocol — `Client.Send` drops messages
+> when its 64-slot buffer fills, and a lagging player desyncs permanently with
+> no recovery path. Tracked as D7.
+
 ```mermaid
 flowchart TD
     Hub["Hub<br/>rooms: map[sessionID]*Room<br/>unregister: chan *Client"]
@@ -311,6 +319,19 @@ Plus two standalone CMS tables: `homepage_content` (single row) and `homepage_im
 - `response_answer_vectors.embedding` is `vector(1536)` with an HNSW index. **This table is
   currently never written to** — see `ISSUES.md`.
 
+### Form state machine
+
+```
+draft ──PATCH /forms/:id/publish──> published ──PATCH /forms/:id/close──> closed
+                                        ^                                   │
+                                        └────PATCH /forms/:id/publish───────┘
+```
+
+`draft` is the initial state and nothing returns to it. `PUT /forms/:id` does
+**not** accept a `status` field: writing that column directly bypasses these
+transitions, which is how forms used to get published without passing through
+`formUseCase.Publish` at all.
+
 ### Status enums
 
 These are the most error-prone part of the wire contract, because they are not consistent
@@ -336,6 +357,7 @@ stateDiagram-v2
     [*] --> lobby: POST /quizzes/:id/sessions
     lobby --> lobby: POST /sessions/:id/players<br/>(player joins, PIN active)
     lobby --> active: PATCH /sessions/:id/start<br/>broadcasts game_started
+    active --> active: POST /sessions/:id/players<br/>(late join / reconnect)
     active --> active: PATCH /sessions/:id/advance<br/>broadcasts question
     active --> active: POST /sessions/:id/answer<br/>broadcasts answer_result + leaderboard
     active --> active: POST /sessions/:id/show_results<br/>broadcasts show_leaderboard
@@ -345,6 +367,10 @@ stateDiagram-v2
 
 Answers are accepted only while the session is `active` **and** the submitted
 `question_id` equals the session's `current_question_id`.
+
+Joining is allowed in both `lobby` and `active`: a late joiner starts at 0
+points on the current question, and this is also the path a player takes to
+rejoin after a disconnect. Only `finished` refuses new players.
 
 ---
 

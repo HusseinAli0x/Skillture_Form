@@ -27,7 +27,6 @@ func respondError(c *gin.Context, err error) {
 	case errors.Is(err, domainErrors.ErrFormClosed),
 		errors.Is(err, domainErrors.ErrFormNotPublished),
 		errors.Is(err, domainErrors.ErrQuizNotActive),
-		errors.Is(err, domainErrors.ErrSessionNotInLobby),
 		errors.Is(err, domainErrors.ErrSessionNotActive),
 		errors.Is(err, domainErrors.ErrSessionAlreadyStarted),
 		errors.Is(err, domainErrors.ErrSessionFinished),

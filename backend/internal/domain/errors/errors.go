@@ -17,7 +17,6 @@ var (
 
 	// Quiz
 	ErrQuizNotActive         = errors.New("quiz is not active")
-	ErrSessionNotInLobby     = errors.New("session is not in lobby state")
 	ErrSessionNotActive      = errors.New("session is not in active state")
 	ErrSessionAlreadyStarted = errors.New("session has already started")
 	ErrSessionFinished       = errors.New("session is already finished")

@@ -72,10 +72,12 @@ func (h *FormHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// No `status` field: writing the column directly bypasses the state
+	// machine in formUseCase.Publish/Close. Use PATCH /forms/:id/publish and
+	// /forms/:id/close instead.
 	var req struct {
 		Title       map[string]string `json:"title"`
 		Description map[string]string `json:"description"`
-		Status      *int16            `json:"status"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -100,9 +102,6 @@ func (h *FormHandler) Update(c *gin.Context) {
 	if req.Description != nil {
 		form.Description = req.Description
 	}
-	if req.Status != nil {
-		form.Status = enums.FormStatus(*req.Status)
-	}
 
 	if err := h.formUC.Update(c.Request.Context(), form); err != nil {
 		respondError(c, err)
@@ -110,6 +109,50 @@ func (h *FormHandler) Update(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, form)
+}
+
+// Publish handles PATCH /forms/:id/publish.
+//
+// Publish and Close existed on the use case with no routes at all, so the only
+// way to change a form's state was the untyped `status` field on
+// PUT /forms/:id — which writes the column directly and bypasses every rule
+// these methods enforce. That field is gone from Update; this is the way.
+//
+// Draft -> Published is the normal path. Closed -> Published reopens a form.
+// Publishing an already-published form is a no-op, so a repeated request is
+// safe.
+func (h *FormHandler) Publish(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid form id"})
+		return
+	}
+
+	if err := h.formUC.Publish(c.Request.Context(), id); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "published"})
+}
+
+// Close handles PATCH /forms/:id/close.
+//
+// A closed form stops accepting responses. Closing an already-closed form is a
+// no-op.
+func (h *FormHandler) Close(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid form id"})
+		return
+	}
+
+	if err := h.formUC.Close(c.Request.Context(), id); err != nil {
+		respondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "closed"})
 }
 
 func (h *FormHandler) List(c *gin.Context) {

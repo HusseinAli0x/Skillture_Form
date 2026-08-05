@@ -22,7 +22,6 @@ const FormBuilder: React.FC = () => {
   const [description, setDescription] = useState('');
   const [fields, setFields] = useState<FieldState[]>([emptyField()]);
   const [status, setStatus] = useState<FormStatus>(FormStatus.Draft);
-  const [fullObject, setFullObject] = useState<Form | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -39,7 +38,6 @@ const FormBuilder: React.FC = () => {
       setTitle(localized(fRes.data.title));
       setDescription(localized(fRes.data.description));
       setStatus((fRes.data.status ?? FormStatus.Draft) as FormStatus);
-      setFullObject(fRes.data);
 
       const fetched: FieldState[] = (ffRes.data || [])
         .slice()
@@ -202,12 +200,11 @@ const FormBuilder: React.FC = () => {
       <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-text">Form Details</h2>
-          {isEditMode && fullObject && (
+          {isEditMode && (
             <StatusDropdown
               type="form"
               id={id!}
               initialStatus={status}
-              fullObject={fullObject}
               onStatusChange={setStatus}
             />
           )}

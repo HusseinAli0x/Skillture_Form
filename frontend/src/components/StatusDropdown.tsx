@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import client from '../api/client';
 import { FormStatusLabels, QuizStatusLabels } from '../api/types';
 import { useToastStore } from '../context/ToastStore';
+import { apiErrorMessage } from '../lib/apiError';
 
 export type StatusValue = 0 | 1 | 2;
 
@@ -11,8 +12,6 @@ interface Props {
   id: string;
   initialStatus: StatusValue;
   onStatusChange?: (newStatus: StatusValue) => void;
-  /** Sent back with the PUT, which is a full-object update. */
-  fullObject?: unknown;
 }
 
 const tones: Record<StatusValue, { trigger: string; dot: string; text: string }> = {
@@ -28,9 +27,23 @@ const labels: Record<Props['type'], Record<StatusValue, string>> = {
   quiz: QuizStatusLabels,
 };
 
-const STATUSES: StatusValue[] = [0, 1, 2];
+/**
+ * The endpoint that moves an entity into each state.
+ *
+ * Draft is absent on purpose: it is the initial state and neither state
+ * machine has a path back to it. The dropdown used to offer it and force it
+ * through an untyped PUT, which is exactly the bypass D4 describes. To stop a
+ * published form taking responses, close it.
+ */
+const TRANSITIONS: Record<Props['type'], Partial<Record<StatusValue, string>>> = {
+  form: { 1: 'publish', 2: 'close' },
+  quiz: { 1: 'activate', 2: 'archive' },
+};
 
-const StatusDropdown: React.FC<Props> = ({ type, id, initialStatus, onStatusChange, fullObject }) => {
+/** States a user can move an entity *into*, in menu order. */
+const STATUSES: StatusValue[] = [1, 2];
+
+const StatusDropdown: React.FC<Props> = ({ type, id, initialStatus, onStatusChange }) => {
   const [status, setStatus] = useState<StatusValue>(initialStatus);
   const [isOpen, setIsOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -69,21 +82,17 @@ const StatusDropdown: React.FC<Props> = ({ type, id, initialStatus, onStatusChan
 
     setIsUpdating(true);
     try {
-      if (type === 'quiz' && newStatus === 1) {
-        await client.patch(`/api/v1/quizzes/${id}/activate`);
-      } else if (type === 'quiz' && newStatus === 2) {
-        await client.patch(`/api/v1/quizzes/${id}/archive`);
-      } else {
-        // No dedicated endpoint for reverting to draft, or for forms at all;
-        // the full-object PUT is the only route. See D4 in docs/ISSUES.md.
-        const path = type === 'quiz' ? 'quizzes' : 'forms';
-        await client.put(`/api/v1/${path}/${id}`, { ...(fullObject as object), status: newStatus });
-      }
+      // Every transition goes through its own endpoint. This used to PUT the
+      // whole object with a `status` field, which writes the column directly
+      // and bypasses the state machine the use cases enforce — the form
+      // routes did not even exist until D4.
+      const path = type === 'quiz' ? 'quizzes' : 'forms';
+      await client.patch(`/api/v1/${path}/${id}/${TRANSITIONS[type][newStatus]}`);
 
       setStatus(newStatus);
       onStatusChange?.(newStatus);
-    } catch {
-      addToast('error', 'Failed to update status.');
+    } catch (err) {
+      addToast('error', apiErrorMessage(err, 'Failed to update status.'));
     } finally {
       setIsUpdating(false);
       setIsOpen(false);

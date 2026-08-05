@@ -150,13 +150,16 @@ func (h *QuizHandler) CreateQuestion(c *gin.Context) {
 	}
 
 	var req struct {
-		Question      map[string]string `json:"question"       binding:"required"`
-		Type          string            `json:"type"           binding:"required"`
-		Position      int               `json:"position"       binding:"required"`
-		TimeLimitSec  int               `json:"time_limit_sec"`
-		Points        int               `json:"points"`
-		Options       map[string]any    `json:"options"`
-		CorrectAnswer map[string]any    `json:"correct_answer" binding:"required"`
+		Question map[string]string `json:"question"       binding:"required"`
+		Type     string            `json:"type"           binding:"required"`
+		// Not binding:"required": Go's validator treats 0 as absent, so a
+		// legitimate position 0 was rejected and positions had to start at 1
+		// by accident. Omitted or non-positive now means "append".
+		Position      int            `json:"position"`
+		TimeLimitSec  int            `json:"time_limit_sec"`
+		Points        int            `json:"points"`
+		Options       map[string]any `json:"options"`
+		CorrectAnswer map[string]any `json:"correct_answer" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -182,7 +185,7 @@ func (h *QuizHandler) CreateQuestion(c *gin.Context) {
 	}
 
 	if err := h.questionUC.Create(c.Request.Context(), question); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, question)
@@ -271,6 +274,14 @@ func (h *QuizHandler) ListQuestions(c *gin.Context) {
 
 // PUT /api/v1/quizzes/:id/questions/:qid
 func (h *QuizHandler) UpdateQuestion(c *gin.Context) {
+	// Both ids matter. This route used to read only :qid and ignore :id, so
+	// the containment the URL implies was never checked and any authenticated
+	// admin could rewrite any question in the system.
+	quizID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quiz id"})
+		return
+	}
 	qid, err := uuid.Parse(c.Param("qid"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid question id"})
@@ -302,8 +313,8 @@ func (h *QuizHandler) UpdateQuestion(c *gin.Context) {
 		CorrectAnswer: req.CorrectAnswer,
 	}
 
-	if err := h.questionUC.Update(c.Request.Context(), question); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := h.questionUC.Update(c.Request.Context(), quizID, question); err != nil {
+		respondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "updated"})
@@ -311,13 +322,19 @@ func (h *QuizHandler) UpdateQuestion(c *gin.Context) {
 
 // DELETE /api/v1/quizzes/:id/questions/:qid
 func (h *QuizHandler) DeleteQuestion(c *gin.Context) {
+	// See UpdateQuestion: :id was previously ignored here too.
+	quizID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid quiz id"})
+		return
+	}
 	qid, err := uuid.Parse(c.Param("qid"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid question id"})
 		return
 	}
-	if err := h.questionUC.Delete(c.Request.Context(), qid); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := h.questionUC.Delete(c.Request.Context(), quizID, qid); err != nil {
+		respondError(c, err)
 		return
 	}
 	c.Status(http.StatusNoContent)

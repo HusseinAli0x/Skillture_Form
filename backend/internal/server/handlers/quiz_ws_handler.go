@@ -256,14 +256,10 @@ func (h *QuizWSHandler) JoinSession(c *gin.Context) {
 
 	player, err := h.playerUC.JoinSession(c.Request.Context(), sessionID, req.Name)
 	if err != nil {
-		switch err {
-		case domainErrors.ErrSessionNotInLobby:
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
-		case domainErrors.ErrDuplicatePlayerName:
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
+		// There is no ErrSessionNotInLobby case here any more: joining a game
+		// in progress is allowed, so that branch was unreachable. respondError
+		// maps ErrSessionFinished to 422 and ErrDuplicatePlayerName to 409.
+		respondError(c, err)
 		return
 	}
 

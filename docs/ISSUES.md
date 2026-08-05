@@ -8,7 +8,7 @@ Severity: **Blocker** — the documented setup or a headline feature does not wo
 **Security** · **High** — wrong behaviour users will hit · **Medium** — wrong behaviour
 under load or at an edge · **Low** — hygiene.
 
-Summary: **53 items — 45 fixed, 8 deferred.** D12 (frontend structural debt) was
+Summary: **53 items — 48 fixed, 4 deferred, 1 accepted as a constraint (D7).** D12 (frontend structural debt) was
 cleared in a follow-up pass, along with D13 and D14, which that pass had carved
 out of it; see below.
 
@@ -167,6 +167,47 @@ null host, 0 columns remain `TIMESTAMP`, the trigger fires, and every `CHECK`
 rejects an out-of-enum value. `internal/database/migrate_integration_test.go`
 covers the same ground and skips unless `TEST_DATABASE_URL` is set.
 
+### D4, D5, D6 — the API surface around forms and quizzes
+
+**D4 — the form state machine had no routes.** `formUseCase.Publish` and
+`Close` existed and were never reachable, so the only way to change a form's
+state was the untyped `status` field on `PUT /forms/:id`, which writes the
+column directly and skips every rule those methods enforce.
+
+`PATCH /forms/:id/publish` and `PATCH /forms/:id/close` now exist, and the
+`status` field is gone from `PUT`. `Publish` was relaxed from "draft only" to
+also accept a closed form, because rejecting that left no way to reopen one —
+which is precisely why the UI reached around the state machine in the first
+place. Both are no-ops when the form is already in the target state, so a
+repeated request is safe.
+
+`StatusDropdown` no longer offers **Draft** as a destination. Neither state
+machine has a path back to it; the dropdown offered it anyway and forced it
+through the untyped PUT. To stop a published form taking responses, close it.
+
+**D5 — question position and ownership.** `Position int` was tagged
+`binding:"required"`, and Go's validator cannot tell `0` from absent, so
+position 0 was rejected outright and positions started at 1 by accident. The
+tag is gone; omitted or non-positive now means "append to the end".
+
+The more serious half: `UpdateQuestion` and `DeleteQuestion` read `:qid` and
+**ignored `:id`**. Nothing checked that the question belonged to the quiz in
+the URL, so any authenticated admin could rewrite or delete any question in the
+system by addressing it through a quiz of their own. Both now take the quiz id
+and report `ErrNotFound` on a mismatch — not-found rather than forbidden, so a
+caller poking at ids cannot learn that a question exists elsewhere.
+
+**D6 — late joining is intended.** Decided rather than guessed: a player may
+join a session already in progress, and starts at 0 points on the current
+question. It is also the path a disconnected player takes to rejoin, so the
+alternative would have broken reconnection.
+
+The code was typed and documented as rejecting anything but a lobby session and
+never did, leaving the handler's 422 branch unreachable. The contract now
+matches the behaviour: the dead branch is gone, joining a *finished* game is
+the one rejection (`ErrSessionFinished`, 422), and `ErrSessionNotInLobby` is
+deleted — nothing produced it.
+
 ### D13 — half-written saves in both builders
 
 Carved out of D12 because it needed a backend change, then fixed.
@@ -263,14 +304,23 @@ Real defects, deliberately out of scope for the remediation pass. Roughly in pri
 |---|---|---|---|---|
 | D1 | Security | `AuthStore.ts`, `client.ts` | The JWT lives in `localStorage`, readable by any XSS on the origin. An httpOnly, SameSite cookie plus a refresh-token flow is the correct design. | Needs a refresh-token endpoint, CSRF protection, and a coordinated frontend change. Meaningful only after D2. |
 | D3 | High | `response_handler.go` | `Submit` always passes `nil` for vectors, so `response_answer_vector_repository.go` (152 lines), the `response_answer_vectors` table, its HNSW index and the model-name enum are **entirely unreachable**. The embedding dimension is also `vector(1536)` (an OpenAI size) while the project uses Gemini, whose models are 768/3072. | Semantic search is an unbuilt feature, not a regression. Needs a product decision before the dimension is fixed. |
-| D4 | High | `form_usecase.go` | `Publish` and `Close` have no routes. The only way to publish a form is the untyped `status` field on `PUT /forms/:id`, which bypasses the state-machine rules those methods enforce. | Small, but it changes the public API surface. |
-| D5 | Medium | `quiz_handler.go` | `Position int` is tagged `binding:"required"`, and Go's validator treats `0` as absent — so **position 0 is rejected** and positions must start at 1 by accident. `UpdateQuestion`/`DeleteQuestion` read `:qid` but ignore `:id`, so no check that the question belongs to that quiz. | Ownership check needs a repository method that does not exist yet. |
-| D6 | Medium | `quiz_player_usecase.go` | Documented and typed as returning `ErrSessionNotInLobby`, but only rejects *finished* sessions — **players can join a game already in progress**, and the handler's 422 branch is unreachable. | Arguably intended behaviour (late joiners). Needs a product decision. |
-| D7 | Medium | `ws/hub.go` | Rooms are in-process, so two backend replicas split players across hubs. `Client.Send` also drops messages when the 64-slot buffer fills, and there is no resync protocol, so a lagging player desyncs permanently. `Hub.Run` has no shutdown path and `main.go`'s `defer db.Close()` never runs because `log.Fatalf` calls `os.Exit`. | Horizontal scaling needs a Redis/NATS broker — a design change, not a fix. |
 | D10 | Low | backend-wide | Dead code: ~300 unused lines in `database/db.go` (retry logic, `ExecTx`, `BatchExec`, `CopyFrom`, metrics, `Monitor`, plus multi-tenancy `BeforeAcquire` hooks setting `app.current_school_id` for a school concept that does not exist in this schema); `Hub.RoomExists`; `MsgTypeError`; `AdminHandler.Health` duplicating `HealthCheck`; `ResponseUsecase.Create` which only ever errors; the unused `repository/types.go` error set and its 19-line commented-out block; `validation/form_validation.go:ValidateFormDomain`; two empty placeholder files (`usecase/interfaces/admin_usecase.go`, `validation/admin_validation.go`). Also `CreateBulk` is an N-round-trip loop despite `CopyFrom` existing unused. | Pure deletion; large diff, zero behaviour change. Best done as its own commit. |
 | D11 | Low | backend-wide | Misspelled filenames: `form_field_handker.go`, `response_answer_vector_repositry_interface.go`, `respons_answer_vector_modelname.go`, `form_uscase_interface.go`. Misspelled struct tag `entities.Form.creat_at` (both `db:` and `json:`), which the frontend mirrors deliberately. `Form.IsActive()` compares `Status == 1` with a magic number, and the schema comment says `1=active, 0=inactive` while the Go enum says `0=draft,1=published,2=closed` — three descriptions of one column. | Renaming the `creat_at` tag is a breaking API change needing a coordinated frontend release. |
 
 ### Not addressed by design
+
+**D7 — WebSocket rooms are in-process.**
+
+Not a fix: a recorded constraint. The hub keeps rooms in memory, so **the
+backend must run as a single replica.** Two would split players across separate
+hubs and a game would silently half-work — some players in one room, some in
+another, leaderboards disagreeing.
+
+Confirmed with the repository owner that a single replica is the deployment
+model, so no broker is being introduced. Should that change, it needs Redis or
+NATS behind the hub *and* a resync protocol: `Client.Send` drops messages when
+its 64-slot buffer fills, and a lagging player currently desyncs permanently
+with no recovery path.
 
 - **`.git` is 154 MB** for a few MB of source — a 36 MB `api` binary appears twice in
   history, along with committed `node_modules` and design mockups. Cleaning this needs

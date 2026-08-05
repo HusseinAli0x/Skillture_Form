@@ -50,6 +50,11 @@ func TestSetupRoutes(t *testing.T) {
 		"PUT /api/v1/quizzes/:id/questions":     "bulk question replace (D13)",
 		"POST /api/v1/forms/:id/fields":         "single field create",
 		"PUT /api/v1/forms/:id/fields/:fieldID": "single field update",
+		// D4: these use-case methods had no routes at all, so the only way to
+		// publish a form was the untyped `status` field on PUT, which bypassed
+		// the state machine they enforce.
+		"PATCH /api/v1/forms/:id/publish": "form publish (D4)",
+		"PATCH /api/v1/forms/:id/close":   "form close (D4)",
 	}
 
 	got := make(map[string]bool)

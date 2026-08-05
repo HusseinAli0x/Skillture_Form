@@ -93,12 +93,15 @@ func (u *formUseCase) Publish(ctx context.Context, formID uuid.UUID) error {
 		return domainErrors.ErrNotFound
 	}
 
-	// Only draft forms can be published
-	if form.Status != enums.FormStatusDraft {
-		return errors.New("only draft forms can be published")
+	// Already published: nothing to do, and a repeated PATCH should not fail.
+	if form.Status == enums.FormStatusPublished {
+		return nil
 	}
 
-	// Change status to Published
+	// Draft -> Published is the normal path; Closed -> Published reopens a
+	// form for responses. This used to reject anything but Draft, which left
+	// no way back from Closed at all — so the UI reached around the state
+	// machine and forced the status through the untyped PUT instead.
 	form.Status = enums.FormStatusPublished
 
 	// Persist status change
