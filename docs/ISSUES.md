@@ -8,7 +8,8 @@ Severity: **Blocker** — the documented setup or a headline feature does not wo
 **Security** · **High** — wrong behaviour users will hit · **Medium** — wrong behaviour
 under load or at an edge · **Low** — hygiene.
 
-Summary: **51 items — 39 fixed, 12 deferred.**
+Summary: **53 items — 40 fixed, 13 deferred.** D12 (frontend structural debt) was
+cleared in a follow-up pass; see below.
 
 ---
 
@@ -93,6 +94,34 @@ Summary: **51 items — 39 fixed, 12 deferred.**
 | H7 | `config.go` | Package doc still said "for the Nahj application". Corrected. |
 | H8 | Tests | Added table tests for `clampTimeTaken`, `calculateScore` and `checkAnswer`, including a property test that no client-supplied `time_taken_ms` can exceed base points. |
 
+### D12 — frontend structural debt
+
+Deferred out of the original pass, cleared in a follow-up. What it covered, and
+where each part landed:
+
+| Was | Now |
+|---|---|
+| No shared primitives; the same 6-line inline-style hover pattern repeated dozens of times, the spinner div at least 6 times | `components/ui/` — Button, IconButton, Input/Textarea/Select/Label, Card, Modal, Spinner, EmptyState, PageHeader, ConfirmDialog. One `onMouseEnter` left in the tree, inside a comment. |
+| `#0ABFBC` hardcoded ~90 times (153 counting rgba forms) | 0. Every colour is a token from the `@theme` block in `index.css`. The fixed answer-tile palette in `PlayerLiveBoard` is the one deliberate exception and says so. |
+| `FormQuizBuilder.tsx` 522 lines, `ResponsesTable.tsx` 449, `FormBuilder.tsx` 433 | 295 / 389 / 262, with the per-item editors, the PDF template and the export logic extracted into their own modules. |
+| Three hand-rolled share modals | One `ShareModal`; the five inline `window.location.origin` URLs are in `lib/links.ts`. |
+| `generateId` copy-pasted three times | `lib/id.ts`, wrapping `crypto.randomUUID()`. |
+| Blocking `confirm()`/`alert()` | `ConfirmDialog` and the Toast store. None left. |
+| 1.65 MB unsplit JS bundle | Entry chunk 409 kB (gzip 126). `xlsx` (425 kB) and `html2pdf` (936 kB) are dynamic imports fetched on first export click. **This does not resolve D2** — the vulnerable code still loads, just later. |
+| Dead `src/App.css`, `src/assets/`, `index.html` titled "frontend", stock Vite `frontend/README.md` | Deleted, retitled, rewritten. |
+| 12 oxlint warnings | 0 across 51 files. |
+| ~50 `any` types | 22, nearly all on axios error objects and the untyped html2pdf worker. |
+
+The pass also fixed defects found while moving the code — in-place state mutation
+in the quiz option editor, uncontrolled inputs and unreachable required-field
+validation in `FormPreview`, a PDF export that could leave its 1200px template
+covering the app, lexical sorting of the "Submitted At" column, pagination
+stranded past the end of a filtered list, a leaked object URL per image upload,
+and a `?pin=` join flow that advanced past a PIN it had not yet validated. Each
+is described in its commit message.
+
+Two parts of D12 are **not** done and are carried below as D13 and D14.
+
 ---
 
 ## Deferred
@@ -112,7 +141,8 @@ Real defects, deliberately out of scope for the remediation pass. Roughly in pri
 | D9 | Medium | infra | There is no migration tooling. `schema.sql` runs once via `docker-entrypoint-initdb.d`, so every schema change requires `docker compose down -v` and total data loss. | Introducing golang-migrate or similar is its own piece of work. |
 | D10 | Low | backend-wide | Dead code: ~300 unused lines in `database/db.go` (retry logic, `ExecTx`, `BatchExec`, `CopyFrom`, metrics, `Monitor`, plus multi-tenancy `BeforeAcquire` hooks setting `app.current_school_id` for a school concept that does not exist in this schema); `Hub.RoomExists`; `MsgTypeError`; `AdminHandler.Health` duplicating `HealthCheck`; `ResponseUsecase.Create` which only ever errors; the unused `repository/types.go` error set and its 19-line commented-out block; `validation/form_validation.go:ValidateFormDomain`; two empty placeholder files (`usecase/interfaces/admin_usecase.go`, `validation/admin_validation.go`). Also `CreateBulk` is an N-round-trip loop despite `CopyFrom` existing unused. | Pure deletion; large diff, zero behaviour change. Best done as its own commit. |
 | D11 | Low | backend-wide | Misspelled filenames: `form_field_handker.go`, `response_answer_vector_repositry_interface.go`, `respons_answer_vector_modelname.go`, `form_uscase_interface.go`. Misspelled struct tag `entities.Form.creat_at` (both `db:` and `json:`), which the frontend mirrors deliberately. `Form.IsActive()` compares `Status == 1` with a magic number, and the schema comment says `1=active, 0=inactive` while the Go enum says `0=draft,1=published,2=closed` — three descriptions of one column. | Renaming the `creat_at` tag is a breaking API change needing a coordinated frontend release. |
-| D12 | Low | frontend | Structural debt: no tests at all (4,530 lines); `FormQuizBuilder.tsx` 522 lines, `ResponsesTable.tsx` 449, `FormBuilder.tsx` 433; no shared `Button`/`Input`/`Modal`/`Spinner` primitives, so the same 6-line inline-style hover pattern is repeated dozens of times and the spinner div at least 6 times; three hand-rolled copies of the share modal despite `ShareModal.tsx` existing; ~50 `any` types; the `#0ABFBC` brand colour hardcoded ~90 times instead of using the `@theme` token; `generateId` copy-pasted three times where `crypto.randomUUID()` exists; blocking `confirm()`/`alert()` used despite a Toast system; a 1.65 MB unsplit JS bundle (xlsx and html2pdf are needed on one admin page each); dead `src/App.css`, a 0-byte `react.svg`, `index.html` still titled "frontend"; `frontend/README.md` is the stock Vite template; 12 remaining oxlint warnings (exhaustive-deps and unused catch params); multi-step saves in both builders fire sequential per-field requests with no rollback. | Each is a refactor, not a bug fix. |
+| D13 | Medium | `FormBuilder.tsx`, `FormQuizBuilder.tsx` | Saving is a sequential loop of per-field/per-question requests with no transaction and no rollback. A failure part-way leaves the form half-written: some fields updated, some not, deletions already applied. The user sees one error and has no way to tell what landed. | Needs a bulk endpoint on the backend — the fix is an API change, not a frontend one. |
+| D14 | Medium | `frontend/` | No tests at all, across ~4,900 lines. There is no test runner in `package.json` and no CI job to run one. | Choosing and wiring up a runner (Vitest + Testing Library) is its own piece of work. The refactor above is the precondition: the logic worth testing — `lib/i18n`, `lib/id`, `lib/exportResponses`, the field/question state modules — is now in plain modules rather than buried in page components. |
 
 ### Not addressed by design
 

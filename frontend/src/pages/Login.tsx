@@ -32,10 +32,7 @@ const Login: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-bg">
       {/* Ambient glow */}
-      <div
-        className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(10,191,188,0.06) 0%, transparent 70%)' }}
-      />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full pointer-events-none bg-[radial-gradient(circle,var(--color-primary)_0%,transparent_70%)] opacity-[0.06]" />
 
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
