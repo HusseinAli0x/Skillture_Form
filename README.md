@@ -55,9 +55,12 @@ and `/ws` to the backend — so the browser only ever talks to one origin.
    - Admin dashboard: <http://localhost:5175/admin/dashboard>
    - Backend API: <http://localhost:8080>
 
-> **Schema changes:** `schema.sql` is mounted as a Postgres init script, and init scripts
-> only run once, on an empty data volume. After editing the schema you must run
-> `docker compose down -v` before `up` for the change to take effect.
+> **Schema changes:** the backend applies its own migrations on boot from
+> `backend/internal/database/migrations/`, which are embedded in the binary. Add a new
+> `NNNN_description.up.sql` and restart — `docker compose up --build -d` is enough, and
+> your data survives. This used to require `docker compose down -v` and total data loss,
+> because the schema was mounted as a Postgres init script and those only run on an
+> empty volume.
 
 ## Default Admin Credentials
 
@@ -66,15 +69,15 @@ On first startup — when the `admins` table is empty — the schema seeds one a
 - **Username:** `admin`
 - **Password:** `Skillture@2025`
 
-This password is published in `backend/internal/database/schema.sql`, so it is public by
-definition. **Change it immediately after the first login.**
+This password is published in `backend/internal/database/migrations/0001_baseline.up.sql`,
+so it is public by definition. **Change it immediately after the first login.**
 
 ## Local Development (without Docker)
 
 ### Backend
 
 1. Ensure PostgreSQL is running and the `vector` extension is available.
-2. Create the database and apply `backend/internal/database/schema.sql`.
+2. Create an empty database. The backend applies the schema itself on first start.
 3. Copy `backend/.env.example` to `backend/.env` and fill it in (see step 2 above).
 4. Run:
 

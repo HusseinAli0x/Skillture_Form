@@ -267,7 +267,19 @@ sequenceDiagram
 
 ## 6. Data model
 
-Thirteen tables in `backend/internal/database/schema.sql`.
+Thirteen tables, created by the migrations in
+`backend/internal/database/migrations/`.
+
+Migrations are embedded in the backend binary with `go:embed` and applied on boot by
+`database.Migrate`, under a Postgres advisory lock so two replicas starting together
+cannot both apply the same file. Each runs in its own transaction; a failure leaves the
+schema at the last complete version and the process exits rather than serving requests
+against a schema the code does not expect.
+
+They are forward-only — there are no `.down.sql` files. Rolling a production schema
+backwards is rarely what is wanted, and a half-applied "down" is worse than the change
+it undoes. To reverse something, write the next migration. Applied versions are recorded
+in `schema_migrations`.
 
 ```mermaid
 erDiagram

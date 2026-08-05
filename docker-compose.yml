@@ -16,9 +16,10 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Init scripts run ONCE, on an empty data volume. After changing
-      # schema.sql you must `docker compose down -v` to re-apply it.
-      - ./backend/internal/database/schema.sql:/docker-entrypoint-initdb.d/init.sql
+      # No init script is mounted. The schema lives in
+      # backend/internal/database/migrations/, is embedded in the backend
+      # binary, and is applied on boot. Init scripts only ever ran on an empty
+      # data volume, so every schema change used to mean `down -v`.
     networks:
       - skillture_network
     restart: unless-stopped

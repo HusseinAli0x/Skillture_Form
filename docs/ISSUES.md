@@ -8,7 +8,7 @@ Severity: **Blocker** — the documented setup or a headline feature does not wo
 **Security** · **High** — wrong behaviour users will hit · **Medium** — wrong behaviour
 under load or at an edge · **Low** — hygiene.
 
-Summary: **53 items — 43 fixed, 10 deferred.** D12 (frontend structural debt) was
+Summary: **53 items — 45 fixed, 8 deferred.** D12 (frontend structural debt) was
 cleared in a follow-up pass, along with D13 and D14, which that pass had carved
 out of it; see below.
 
@@ -121,6 +121,52 @@ stranded past the end of a filtered list, a leaked object URL per image upload,
 and a `?pin=` join flow that advanced past a PIN it had not yet validated. Each
 is described in its commit message.
 
+### D9 — no migration tooling, and D8 — the schema defects it blocked
+
+D9 blocked D8: `schema.sql` was mounted into `docker-entrypoint-initdb.d`, which
+only runs on an empty data volume, so editing it fixed nothing on any deployed
+database and every schema change meant `docker compose down -v`.
+
+**D9.** Migrations live in `backend/internal/database/migrations/`, are embedded
+in the binary with `go:embed`, and are applied on boot by `database.Migrate`
+under a Postgres advisory lock — two replicas starting together cannot both
+apply the same file. Each migration runs in its own transaction, so a failure
+leaves the schema at the last complete version, and the process exits rather
+than serving requests against a schema the code does not expect. Applied
+versions are recorded in `schema_migrations`.
+
+Forward-only by design: there are no `.down.sql` files. Rolling a production
+schema backwards is rarely what is actually wanted, and a half-applied "down"
+is worse than the change it undoes. To reverse something, write the next
+migration.
+
+Hand-rolled rather than golang-migrate, which was the original plan: adding it
+pulled gRPC from 1.66 to 1.74 and bumped the whole Google Cloud stack as a side
+effect, which is a wide blast radius for a tooling change. The runner is ~180
+lines against the pgx pool that already exists, and adds no dependency.
+
+`0001_baseline.up.sql` is the previous `schema.sql` verbatim apart from
+`IF NOT EXISTS` on every `CREATE`, so applying it to a database created the old
+way records version 1 and changes nothing. `schema.sql` is deleted — one source
+of truth.
+
+**D8.** `0002_schema_corrections.up.sql`:
+
+| Defect | Fix |
+|---|---|
+| `quiz_sessions.host_id` was `ON DELETE CASCADE` to `admins(id)`, and players and answers cascade from the session — so deleting one admin erased every game they had ever run, every player in it and every answer. Verified: before this migration, deleting the admin took a seeded session, player and answer with it. | `ON DELETE SET NULL`, so the games outlive the account. `host_id` is nullable; `entities.QuizSession.HostID` is `*uuid.UUID`, and `IsValid` still requires one at creation. |
+| All 17 timestamps were `TIMESTAMP WITHOUT TIME ZONE`. Go wrote `time.Time` in the process's zone and defaults used `NOW()` in the server's, so a container in another TZ shifted every value — and scoring compares timestamps. | `TIMESTAMPTZ`, existing values read as UTC. |
+| Three `updated_at` columns had a default and no trigger, so they recorded the insert time and never moved. | `set_updated_at()` trigger on `form_fields`, `quiz_questions`, `homepage_content`. |
+| `idx_quiz_sessions_pin` duplicated the index the `UNIQUE` constraint already creates. | Dropped; uniqueness still enforced. |
+| No index on `quiz_sessions.host_id` or `response_answer_vectors.response_answer_id`, so cascades scanned the child tables. | Both added. |
+| No `CHECK` on any status column, and `forms.status` defaulted to `1` — which `enums.FormStatus` reads as **Published**, so a form inserted without an explicit status was born publicly answerable. It was also nullable. | `CHECK` constraints matching the Go enums on `forms`, `quizzes`, `responses`, `form_fields.type`, `quiz_sessions.status`, `quiz_questions.type`; `forms.status` and `quizzes.status` default to 0, and `forms.status` is `NOT NULL`. |
+
+Verified against a live PostgreSQL 18 cluster: baseline applies twice cleanly,
+0002 applies over seeded data, the admin deletion now leaves the session with a
+null host, 0 columns remain `TIMESTAMP`, the trigger fires, and every `CHECK`
+rejects an out-of-enum value. `internal/database/migrate_integration_test.go`
+covers the same ground and skips unless `TEST_DATABASE_URL` is set.
+
 ### D13 — half-written saves in both builders
 
 Carved out of D12 because it needed a backend change, then fixed.
@@ -221,8 +267,6 @@ Real defects, deliberately out of scope for the remediation pass. Roughly in pri
 | D5 | Medium | `quiz_handler.go` | `Position int` is tagged `binding:"required"`, and Go's validator treats `0` as absent — so **position 0 is rejected** and positions must start at 1 by accident. `UpdateQuestion`/`DeleteQuestion` read `:qid` but ignore `:id`, so no check that the question belongs to that quiz. | Ownership check needs a repository method that does not exist yet. |
 | D6 | Medium | `quiz_player_usecase.go` | Documented and typed as returning `ErrSessionNotInLobby`, but only rejects *finished* sessions — **players can join a game already in progress**, and the handler's 422 branch is unreachable. | Arguably intended behaviour (late joiners). Needs a product decision. |
 | D7 | Medium | `ws/hub.go` | Rooms are in-process, so two backend replicas split players across hubs. `Client.Send` also drops messages when the 64-slot buffer fills, and there is no resync protocol, so a lagging player desyncs permanently. `Hub.Run` has no shutdown path and `main.go`'s `defer db.Close()` never runs because `log.Fatalf` calls `os.Exit`. | Horizontal scaling needs a Redis/NATS broker — a design change, not a fix. |
-| D8 | Medium | `schema.sql` | `quiz_sessions.host_id → admins(id) ON DELETE CASCADE` means deleting an admin destroys every session they hosted, cascading to players and answers — all historical results. Should be `RESTRICT` or `SET NULL`. Also: all timestamps are `TIMESTAMP` not `TIMESTAMPTZ`; `updated_at` columns have defaults but no trigger so they never update; `idx_quiz_sessions_pin` duplicates the implicit unique index; no index on `response_answer_vectors.response_answer_id` or `quiz_sessions.host_id`; status columns have no `CHECK` constraints. | Needs a migration tool (D9); editing `schema.sql` alone only affects fresh volumes. |
-| D9 | Medium | infra | There is no migration tooling. `schema.sql` runs once via `docker-entrypoint-initdb.d`, so every schema change requires `docker compose down -v` and total data loss. | Introducing golang-migrate or similar is its own piece of work. |
 | D10 | Low | backend-wide | Dead code: ~300 unused lines in `database/db.go` (retry logic, `ExecTx`, `BatchExec`, `CopyFrom`, metrics, `Monitor`, plus multi-tenancy `BeforeAcquire` hooks setting `app.current_school_id` for a school concept that does not exist in this schema); `Hub.RoomExists`; `MsgTypeError`; `AdminHandler.Health` duplicating `HealthCheck`; `ResponseUsecase.Create` which only ever errors; the unused `repository/types.go` error set and its 19-line commented-out block; `validation/form_validation.go:ValidateFormDomain`; two empty placeholder files (`usecase/interfaces/admin_usecase.go`, `validation/admin_validation.go`). Also `CreateBulk` is an N-round-trip loop despite `CopyFrom` existing unused. | Pure deletion; large diff, zero behaviour change. Best done as its own commit. |
 | D11 | Low | backend-wide | Misspelled filenames: `form_field_handker.go`, `response_answer_vector_repositry_interface.go`, `respons_answer_vector_modelname.go`, `form_uscase_interface.go`. Misspelled struct tag `entities.Form.creat_at` (both `db:` and `json:`), which the frontend mirrors deliberately. `Form.IsActive()` compares `Status == 1` with a magic number, and the schema comment says `1=active, 0=inactive` while the Go enum says `0=draft,1=published,2=closed` — three descriptions of one column. | Renaming the `creat_at` tag is a breaking API change needing a coordinated frontend release. |
 

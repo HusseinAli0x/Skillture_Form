@@ -160,7 +160,8 @@ export type QuizSessionStatus = 'lobby' | 'active' | 'finished';
 export interface QuizSession {
   id: string;
   quiz_id: string;
-  host_id: string;
+  /** Null once the hosting admin is deleted — the session outlives them. */
+  host_id?: string;
   pin: string;
   status: QuizSessionStatus;
   current_question_id?: string;

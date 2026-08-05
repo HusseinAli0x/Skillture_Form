@@ -20,9 +20,12 @@ var (
 // Created by the host when they choose to "Start" a quiz from the dashboard.
 // Players join via the PIN before the game begins (lobby phase).
 type QuizSession struct {
-	ID                uuid.UUID               `db:"id"                  json:"id"`
-	QuizID            uuid.UUID               `db:"quiz_id"             json:"quiz_id"`
-	HostID            uuid.UUID               `db:"host_id"             json:"host_id"`
+	ID     uuid.UUID `db:"id"                  json:"id"`
+	QuizID uuid.UUID `db:"quiz_id"             json:"quiz_id"`
+	// Nullable: quiz_sessions.host_id is ON DELETE SET NULL so that removing an
+	// admin account does not erase the games they ran. A session always has a
+	// host when it is created — see IsValid.
+	HostID            *uuid.UUID              `db:"host_id"             json:"host_id,omitempty"`
 	PIN               string                  `db:"pin"                 json:"pin"`
 	Status            enums.QuizSessionStatus `db:"status"              json:"status"`
 	CurrentQuestionID *uuid.UUID              `db:"current_question_id" json:"current_question_id,omitempty"`
@@ -56,7 +59,7 @@ func (qs *QuizSession) IsValid() error {
 	if qs.QuizID == uuid.Nil {
 		return ErrMissingQuizID
 	}
-	if qs.HostID == uuid.Nil {
+	if qs.HostID == nil || *qs.HostID == uuid.Nil {
 		return ErrMissingHostID
 	}
 	if qs.PIN == "" {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"skillture/backend/internal/auth"
@@ -35,6 +36,20 @@ func main() {
 	}
 	defer db.Close()
 
+	// 2b. Apply schema migrations.
+	//
+	// The schema used to be mounted into docker-entrypoint-initdb.d, which
+	// only runs on an empty data volume, so every change meant
+	// `docker compose down -v` and total data loss. Migrations are embedded in
+	// the binary and applied here, under a Postgres advisory lock so two
+	// replicas starting together cannot both apply the same file.
+	//
+	// Fatal on failure by design: serving requests against a schema the code
+	// does not expect is worse than not starting.
+	if err := database.Migrate(context.Background(), db.Pool()); err != nil {
+		log.Fatalf("Failed to apply migrations: %v", err)
+	}
+
 	// 3. Base Repository
 	baseRepo := postgres.NewBaseRepository(db.Pool(), cfg.Database.QueryTimeout)
 
@@ -56,7 +71,8 @@ func main() {
 	// NOTE: this used to unconditionally create the admins "admin"/"admin",
 	// "hussein"/"hussein" and "husssein"/"hussein" on every process start —
 	// a permanent backdoor that reappeared after any manual cleanup. The
-	// initial account now comes from the schema seed, which is applied once.
+	// initial account comes from the baseline migration's seed, which only
+	// inserts when the admins table is empty.
 	adminUC := admin.NewAdminUseCase(adminRepo, cfg.JWT.BcryptCost)
 	quizUC := quiz.NewQuizUseCase(quizRepo)
 	quizQuestionUC := quiz.NewQuizQuestionUseCase(quizRepo, quizQuestionRepo)

@@ -1,4 +1,20 @@
 -- =====================================================
+-- 0001 — baseline
+--
+-- The schema as it stood when migration tooling was introduced, verbatim
+-- apart from IF NOT EXISTS on every CREATE.
+--
+-- That matters: databases created before this migration existed already have
+-- these objects, because schema.sql used to be mounted into
+-- docker-entrypoint-initdb.d. Running this against one of them must be a
+-- no-op that simply records version 1, not an error. On an empty database it
+-- creates everything.
+--
+-- Corrections to this schema belong in a later migration, not here — editing
+-- an applied migration changes nothing on any database that already ran it.
+-- =====================================================
+
+-- =====================================================
 -- Enable pgvector extension (required for vector indexing)
 -- =====================================================
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -7,7 +23,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- Table: admins
 -- Stores system administrators credentials
 -- =====================================================
-CREATE TABLE admins (
+CREATE TABLE IF NOT EXISTS admins (
     id UUID PRIMARY KEY,                  
     username VARCHAR(255) NOT NULL UNIQUE, -- Admin login username
     hashed_password TEXT NOT NULL,        -- Securely hashed password
@@ -18,7 +34,7 @@ CREATE TABLE admins (
 -- Table: forms
 -- Represents a form that users can submit
 -- =====================================================
-CREATE TABLE forms (
+CREATE TABLE IF NOT EXISTS forms (
     id UUID PRIMARY KEY,                  
     title JSONB NOT NULL,                 -- {"en": "Survey", "ar": "استبيان"}
     description JSONB,                    -- Optional description in multiple languages
@@ -30,7 +46,7 @@ CREATE TABLE forms (
 -- Table: form_fields
 -- Defines fields/questions belonging to a form
 -- =====================================================
-CREATE TABLE form_fields (
+CREATE TABLE IF NOT EXISTS form_fields (
     id UUID PRIMARY KEY,
     form_id UUID NOT NULL,
 
@@ -57,7 +73,7 @@ CREATE TABLE form_fields (
 -- Table: responses
 -- Represents a single form submission
 -- =====================================================
-CREATE TABLE responses (
+CREATE TABLE IF NOT EXISTS responses (
     id UUID PRIMARY KEY,                  
     form_id UUID NOT NULL,                
     respondent JSONB,                     -- {"email": "...", "name": "..."} optional
@@ -74,7 +90,7 @@ CREATE TABLE responses (
 -- Table: response_answers
 -- Stores answers for each field in a response
 -- =====================================================
-CREATE TABLE response_answers (
+CREATE TABLE IF NOT EXISTS response_answers (
     id UUID PRIMARY KEY,                  
     response_id UUID NOT NULL,            
     field_id UUID NOT NULL,               
@@ -96,7 +112,7 @@ CREATE TABLE response_answers (
 -- Table: response_answer_vectors
 -- Stores vector embeddings for AI / semantic search
 -- =====================================================
-CREATE TABLE response_answer_vectors (
+CREATE TABLE IF NOT EXISTS response_answer_vectors (
     id UUID PRIMARY KEY,                  
     response_answer_id UUID NOT NULL,     
     embedding vector(1536) NOT NULL,      -- Vector embedding (e.g. OpenAI)
@@ -110,12 +126,12 @@ CREATE TABLE response_answer_vectors (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_form_fields_form_id ON form_fields(form_id);
-CREATE INDEX idx_responses_form_id ON responses(form_id);
-CREATE INDEX idx_response_answers_response_id ON response_answers(response_id);
-CREATE INDEX idx_response_answers_field_id ON response_answers(field_id);
-CREATE INDEX idx_response_answers_value ON response_answers USING GIN (value); -- JSONB search
-CREATE INDEX idx_response_answer_vectors_embedding ON response_answer_vectors USING hnsw (embedding vector_cosine_ops); -- Vector similarity
+CREATE INDEX IF NOT EXISTS idx_form_fields_form_id ON form_fields(form_id);
+CREATE INDEX IF NOT EXISTS idx_responses_form_id ON responses(form_id);
+CREATE INDEX IF NOT EXISTS idx_response_answers_response_id ON response_answers(response_id);
+CREATE INDEX IF NOT EXISTS idx_response_answers_field_id ON response_answers(field_id);
+CREATE INDEX IF NOT EXISTS idx_response_answers_value ON response_answers USING GIN (value); -- JSONB search
+CREATE INDEX IF NOT EXISTS idx_response_answer_vectors_embedding ON response_answer_vectors USING hnsw (embedding vector_cosine_ops); -- Vector similarity
 
 -- =====================================================
 -- QUIZ MODULE SCHEMA
@@ -125,7 +141,7 @@ CREATE INDEX idx_response_answer_vectors_embedding ON response_answer_vectors US
 -- =====================================================
 -- Table: quizzes
 -- =====================================================
-CREATE TABLE quizzes (
+CREATE TABLE IF NOT EXISTS quizzes (
     id          UUID PRIMARY KEY,
     title       JSONB NOT NULL,
     description JSONB,
@@ -136,7 +152,7 @@ CREATE TABLE quizzes (
 -- =====================================================
 -- Table: quiz_questions
 -- =====================================================
-CREATE TABLE quiz_questions (
+CREATE TABLE IF NOT EXISTS quiz_questions (
     id             UUID PRIMARY KEY,
     quiz_id        UUID NOT NULL,
 
@@ -158,13 +174,13 @@ CREATE TABLE quiz_questions (
         ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX uq_quiz_questions_position ON quiz_questions(quiz_id, position);
-CREATE INDEX idx_quiz_questions_quiz_id ON quiz_questions(quiz_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_quiz_questions_position ON quiz_questions(quiz_id, position);
+CREATE INDEX IF NOT EXISTS idx_quiz_questions_quiz_id ON quiz_questions(quiz_id);
 
 -- =====================================================
 -- Table: quiz_sessions
 -- =====================================================
-CREATE TABLE quiz_sessions (
+CREATE TABLE IF NOT EXISTS quiz_sessions (
     id                  UUID PRIMARY KEY,
     quiz_id             UUID NOT NULL,
     host_id             UUID NOT NULL,
@@ -192,14 +208,14 @@ CREATE TABLE quiz_sessions (
         ON DELETE SET NULL
 );
 
-CREATE INDEX idx_quiz_sessions_quiz_id ON quiz_sessions(quiz_id);
-CREATE INDEX idx_quiz_sessions_pin     ON quiz_sessions(pin);
-CREATE INDEX idx_quiz_sessions_status  ON quiz_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_quiz_sessions_quiz_id ON quiz_sessions(quiz_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_sessions_pin     ON quiz_sessions(pin);
+CREATE INDEX IF NOT EXISTS idx_quiz_sessions_status  ON quiz_sessions(status);
 
 -- =====================================================
 -- Table: quiz_players
 -- =====================================================
-CREATE TABLE quiz_players (
+CREATE TABLE IF NOT EXISTS quiz_players (
     id         UUID PRIMARY KEY,
     session_id UUID         NOT NULL,
     name       VARCHAR(255) NOT NULL,
@@ -212,13 +228,13 @@ CREATE TABLE quiz_players (
         ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX uq_quiz_players_session_name ON quiz_players(session_id, name);
-CREATE INDEX idx_quiz_players_session_id ON quiz_players(session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_quiz_players_session_name ON quiz_players(session_id, name);
+CREATE INDEX IF NOT EXISTS idx_quiz_players_session_id ON quiz_players(session_id);
 
 -- =====================================================
 -- Table: quiz_player_answers
 -- =====================================================
-CREATE TABLE quiz_player_answers (
+CREATE TABLE IF NOT EXISTS quiz_player_answers (
     id            UUID PRIMARY KEY,
     player_id     UUID      NOT NULL,
     session_id    UUID      NOT NULL,
@@ -247,14 +263,14 @@ CREATE TABLE quiz_player_answers (
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_quiz_player_answers_player_id   ON quiz_player_answers(player_id);
-CREATE INDEX idx_quiz_player_answers_session_id  ON quiz_player_answers(session_id);
-CREATE INDEX idx_quiz_player_answers_question_id ON quiz_player_answers(question_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_player_answers_player_id   ON quiz_player_answers(player_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_player_answers_session_id  ON quiz_player_answers(session_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_player_answers_question_id ON quiz_player_answers(question_id);
 
 -- =====================================================
 -- Table: homepage_content
 -- =====================================================
-CREATE TABLE homepage_content (
+CREATE TABLE IF NOT EXISTS homepage_content (
   id SERIAL PRIMARY KEY,
   hero_title TEXT NOT NULL DEFAULT 'Build Smarter Assessments',
   hero_subtitle TEXT,
@@ -271,7 +287,7 @@ ON CONFLICT (id) DO NOTHING;
 -- =====================================================
 -- Table: homepage_images
 -- =====================================================
-CREATE TABLE homepage_images (
+CREATE TABLE IF NOT EXISTS homepage_images (
   id UUID PRIMARY KEY,
   file_path TEXT NOT NULL,
   alt_text TEXT,

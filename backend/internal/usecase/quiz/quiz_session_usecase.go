@@ -82,7 +82,7 @@ func (u *quizSessionUseCase) CreateSession(ctx context.Context, quizID, hostID u
 	session := &entities.QuizSession{
 		ID:     uuid.New(),
 		QuizID: quizID,
-		HostID: hostID,
+		HostID: &hostID,
 		PIN:    pin,
 		Status: enums.QuizSessionStatusLobby,
 	}
