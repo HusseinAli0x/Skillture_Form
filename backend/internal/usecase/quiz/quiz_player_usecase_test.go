@@ -62,7 +62,7 @@ func TestJoinSessionAllowsJoiningAGameInProgress(t *testing.T) {
 	playerRepo := &fakePlayerRepo{}
 	uc := NewQuizPlayerUseCase(&fakeSessionRepo{session: session(enums.QuizSessionStatusActive)}, playerRepo)
 
-	player, err := uc.JoinSession(context.Background(), uuid.New(), "latecomer")
+	player, err := uc.JoinSession(context.Background(), uuid.New(), "latecomer", nil, nil)
 	if err != nil {
 		t.Fatalf("JoinSession on an active session: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestJoinSessionAllowsJoiningAGameInProgress(t *testing.T) {
 func TestJoinSessionAllowsJoiningALobby(t *testing.T) {
 	uc := NewQuizPlayerUseCase(&fakeSessionRepo{session: session(enums.QuizSessionStatusLobby)}, &fakePlayerRepo{})
 
-	if _, err := uc.JoinSession(context.Background(), uuid.New(), "early"); err != nil {
+	if _, err := uc.JoinSession(context.Background(), uuid.New(), "early", nil, nil); err != nil {
 		t.Fatalf("JoinSession on a lobby: %v", err)
 	}
 }
@@ -88,7 +88,7 @@ func TestJoinSessionRejectsAFinishedGame(t *testing.T) {
 
 	// The one state that cannot be joined: nothing left to answer and the
 	// leaderboard is final. respondError maps this to 422.
-	_, err := uc.JoinSession(context.Background(), uuid.New(), "too late")
+	_, err := uc.JoinSession(context.Background(), uuid.New(), "too late", nil, nil)
 	if !errors.Is(err, domainErrors.ErrSessionFinished) {
 		t.Errorf("err = %v, want ErrSessionFinished", err)
 	}
@@ -101,7 +101,7 @@ func TestJoinSessionRejectsAMissingSession(t *testing.T) {
 	// Repositories signal "not found" as (nil, nil).
 	uc := NewQuizPlayerUseCase(&fakeSessionRepo{session: nil}, &fakePlayerRepo{})
 
-	_, err := uc.JoinSession(context.Background(), uuid.New(), "nobody")
+	_, err := uc.JoinSession(context.Background(), uuid.New(), "nobody", nil, nil)
 	if !errors.Is(err, domainErrors.ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
@@ -110,7 +110,7 @@ func TestJoinSessionRejectsAMissingSession(t *testing.T) {
 func TestJoinSessionRequiresAName(t *testing.T) {
 	uc := NewQuizPlayerUseCase(&fakeSessionRepo{session: session(enums.QuizSessionStatusLobby)}, &fakePlayerRepo{})
 
-	if _, err := uc.JoinSession(context.Background(), uuid.New(), ""); err == nil {
+	if _, err := uc.JoinSession(context.Background(), uuid.New(), "", nil, nil); err == nil {
 		t.Error("an empty nickname was accepted")
 	}
 }

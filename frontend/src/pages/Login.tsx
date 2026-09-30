@@ -37,9 +37,8 @@ const Login: React.FC = () => {
 
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="" className="w-16 h-16 mx-auto mb-4 object-contain" />
-          <h1 className="text-2xl font-bold tracking-tight text-text">Skillture Admin</h1>
-          <p className="mt-1 text-sm text-muted">Sign in to access your dashboard</p>
+          <img src="/logo-full.png" alt="Skillture" className="h-9 mx-auto mb-4 object-contain" />
+          <p className="text-sm text-muted">Sign in to access your dashboard</p>
         </div>
 
         <div className="rounded-2xl border border-border bg-panel p-8">

@@ -157,8 +157,10 @@ func (h *QuizWSHandler) ConnectPlayer(c *gin.Context) {
 	h.hub.BroadcastExcept(sessionID, ws.Message{
 		Type: ws.MsgTypePlayerJoined,
 		Payload: gin.H{
-			"player_id": playerID,
-			"name":      player.Name,
+			"player_id":  playerID,
+			"name":       player.Name,
+			"avatar_id":  player.AvatarID,
+			"avatar_url": player.AvatarURL,
 		},
 	}, client)
 }
@@ -248,13 +250,26 @@ func (h *QuizWSHandler) JoinSession(c *gin.Context) {
 
 	var req struct {
 		Name string `json:"name" binding:"required"`
+		// AvatarID indexes the frontend's fixed 7-entry glyph list (see
+		// frontend/src/lib/avatars.ts); AvatarURL is a data: URL for an
+		// uploaded photo. Both optional — the client may send neither, either,
+		// but not both meaningfully (a glyph pick omits avatar_url and vice
+		// versa).
+		AvatarID  *int16  `json:"avatar_id" binding:"omitempty,min=0,max=6"`
+		AvatarURL *string `json:"avatar_url"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// Matches chk_quiz_players_avatar_url_size — reject oversized payloads here
+	// rather than letting the insert fail with an opaque constraint error.
+	if req.AvatarURL != nil && len(*req.AvatarURL) > 7_000_000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "avatar_url is too large"})
+		return
+	}
 
-	player, err := h.playerUC.JoinSession(c.Request.Context(), sessionID, req.Name)
+	player, err := h.playerUC.JoinSession(c.Request.Context(), sessionID, req.Name, req.AvatarID, req.AvatarURL)
 	if err != nil {
 		// There is no ErrSessionNotInLobby case here any more: joining a game
 		// in progress is allowed, so that branch was unreachable. respondError

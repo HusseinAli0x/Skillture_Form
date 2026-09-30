@@ -52,7 +52,7 @@ func NewQuizPlayerUseCase(
 //   - Session must exist
 //   - Session must not be finished
 //   - Nickname must be unique within the session
-func (u *quizPlayerUseCase) JoinSession(ctx context.Context, sessionID uuid.UUID, name string) (*entities.QuizPlayer, error) {
+func (u *quizPlayerUseCase) JoinSession(ctx context.Context, sessionID uuid.UUID, name string, avatarID *int16, avatarURL *string) (*entities.QuizPlayer, error) {
 	if name == "" {
 		return nil, errors.New("player name is required")
 	}
@@ -75,6 +75,8 @@ func (u *quizPlayerUseCase) JoinSession(ctx context.Context, sessionID uuid.UUID
 		SessionID: sessionID,
 		Name:      name,
 		Score:     0,
+		AvatarID:  avatarID,
+		AvatarURL: avatarURL,
 	}
 
 	if err := u.playerRepo.Create(ctx, player); err != nil {

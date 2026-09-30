@@ -6,6 +6,7 @@ import { apiErrorStatus } from '../lib/apiError';
 import type { PublicQuizQuestion, QuizPlayer } from '../api/types';
 import { playerSocketUrl } from '../api/ws';
 import { optionLabel } from '../lib/i18n';
+import { avatarForPlayer } from '../lib/avatars';
 import { Card } from '../components/ui';
 
 type ViewState = 'waiting' | 'question' | 'answered' | 'result' | 'leaderboard' | 'finished';
@@ -201,6 +202,7 @@ const PlayerLiveBoard: React.FC = () => {
             <div className="space-y-3">
               {leaderboard.slice(0, LEADERBOARD_SIZE).map((row, idx) => {
                 const isMe = row.id === playerId;
+                const avatar = avatarForPlayer(row.id, row.avatar_id);
                 return (
                   <div
                     key={row.id}
@@ -210,6 +212,18 @@ const PlayerLiveBoard: React.FC = () => {
                   >
                     <div className="flex items-center gap-4">
                       <span className="font-bold text-muted w-6">{idx + 1}</span>
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 border border-border-strong bg-panel-3"
+                        aria-hidden
+                      >
+                        {row.avatar_url ? (
+                          <img src={row.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span style={{ color: avatar.color }} className="text-base leading-none">
+                            {avatar.glyph}
+                          </span>
+                        )}
+                      </div>
                       <span className={`font-bold ${isMe ? 'text-primary' : 'text-text'}`}>
                         {row.name} {isMe && '(You)'}
                       </span>

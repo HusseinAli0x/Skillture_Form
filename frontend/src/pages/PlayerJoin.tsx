@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, Gamepad2 } from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import client from '../api/client';
 import { apiErrorMessage } from '../lib/apiError';
 import { playerSocketUrl } from '../api/ws';
-import { Button, Card, Spinner } from '../components/ui';
+import { AVATARS, AVATAR_UPLOAD_TYPES, MAX_AVATAR_UPLOAD_MB } from '../lib/avatars';
+import { Button, Card } from '../components/ui';
 
 type Step = 'pin' | 'nickname' | 'waiting';
 
@@ -23,6 +24,42 @@ const PlayerJoin: React.FC = () => {
   const [playerId, setPlayerId] = useState('');
   const [error, setError] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+
+  // Avatar pick — sent with the join request and stored by the backend
+  // (avatar_id/avatar_url on quiz_players), so it also renders in the lobby
+  // and on the leaderboard for every other client.
+  const [avatarIndex, setAvatarIndex] = useState(4); // Star, matches the design's default
+  const [customAvatar, setCustomAvatar] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const pickAvatar = (i: number) => {
+    setAvatarIndex(i);
+    setCustomAvatar(null);
+    setUploadError('');
+  };
+
+  const onAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!AVATAR_UPLOAD_TYPES.includes(file.type)) {
+      setUploadError('Use a PNG, JPG, WEBP or GIF image.');
+      return;
+    }
+    if (file.size > MAX_AVATAR_UPLOAD_MB * 1024 * 1024) {
+      setUploadError(`Image is too large — keep it under ${MAX_AVATAR_UPLOAD_MB} MB.`);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCustomAvatar(reader.result as string);
+      setUploadError('');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const picked = AVATARS[avatarIndex];
 
   const lookupPin = useCallback(async (candidate: string) => {
     if (!candidate) return;
@@ -60,7 +97,11 @@ const PlayerJoin: React.FC = () => {
     setError('');
     setIsJoining(true);
     try {
-      const res = await client.post(`/api/v1/sessions/${sessionId}/players`, { name: nickname });
+      const res = await client.post(`/api/v1/sessions/${sessionId}/players`, {
+        name: nickname,
+        avatar_id: customAvatar ? undefined : avatarIndex,
+        avatar_url: customAvatar ?? undefined,
+      });
       setPlayerId(res.data.id);
       setStep('waiting');
     } catch (err) {
@@ -113,10 +154,8 @@ const PlayerJoin: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-bg">
       <div className="w-full max-w-md space-y-8">
-        <div className="flex flex-col items-center justify-center space-y-4">
-          <div className="w-20 h-20 rounded-3xl flex items-center justify-center bg-primary-soft border border-primary-border">
-            <Gamepad2 className="w-10 h-10 text-primary" />
-          </div>
+        <div className="flex flex-col items-center justify-center space-y-3">
+          <img src="/logo-icon.png" alt="" className="w-16 h-16 object-contain" />
           <h1 className="text-3xl font-bold tracking-tight text-text">Skillture Quiz</h1>
         </div>
 
@@ -149,7 +188,23 @@ const PlayerJoin: React.FC = () => {
           )}
 
           {step === 'nickname' && (
-            <form onSubmit={handleNicknameSubmit} className="space-y-4">
+            <form onSubmit={handleNicknameSubmit} className="space-y-5">
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden border-2 border-primary bg-primary-soft"
+                  aria-hidden
+                >
+                  {customAvatar ? (
+                    <img src={customAvatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span style={{ color: picked.color }} className="text-3xl leading-none">
+                      {picked.glyph}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted">{customAvatar ? 'Your photo' : picked.label}</p>
+              </div>
+
               <input
                 type="text"
                 placeholder="Nickname"
@@ -159,6 +214,54 @@ const PlayerJoin: React.FC = () => {
                 className="w-full text-center text-2xl font-bold py-4 rounded-xl outline-none transition-colors placeholder:font-normal placeholder:text-xl bg-bg text-text border-2 border-border focus:border-primary"
                 autoFocus
               />
+
+              <div>
+                <p className="text-left text-xs font-bold text-muted uppercase tracking-wide mb-2">
+                  Pick an avatar
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {AVATARS.map((a, i) => (
+                    <button
+                      key={a.label}
+                      type="button"
+                      title={a.label}
+                      onClick={() => pickAvatar(i)}
+                      className="aspect-square min-h-11 rounded-xl flex items-center justify-center text-lg cursor-pointer transition-colors"
+                      style={{
+                        color: a.color,
+                        background: !customAvatar && avatarIndex === i ? 'var(--color-primary-soft)' : 'var(--color-panel-2)',
+                        border: `2px solid ${!customAvatar && avatarIndex === i ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                      }}
+                    >
+                      {a.glyph}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    title="Upload your own photo"
+                    onClick={() => fileRef.current?.click()}
+                    className="aspect-square min-h-11 rounded-xl overflow-hidden flex items-center justify-center cursor-pointer p-0 bg-panel-2"
+                    style={{ border: `2px ${customAvatar ? 'solid' : 'dashed'} ${customAvatar ? 'var(--color-primary)' : 'var(--color-border-strong)'}` }}
+                  >
+                    {customAvatar ? (
+                      <img src={customAvatar} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Plus className="w-4 h-4 text-primary" />
+                    )}
+                  </button>
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept={AVATAR_UPLOAD_TYPES.join(',')}
+                  onChange={onAvatarFile}
+                  className="hidden"
+                />
+                <p className={`text-[11px] mt-2 ${uploadError ? 'text-danger' : 'text-muted'}`}>
+                  {uploadError || `Or upload your own — PNG, JPG, WEBP, GIF · max ${MAX_AVATAR_UPLOAD_MB} MB`}
+                </p>
+              </div>
+
               <Button type="submit" size="lg" block disabled={!nickname} loading={isJoining}>
                 {isJoining ? 'Joining…' : 'Join Game'}
               </Button>
@@ -167,12 +270,20 @@ const PlayerJoin: React.FC = () => {
 
           {step === 'waiting' && (
             <div className="text-center space-y-6 py-4">
-              <Spinner size="w-16 h-16" className="border-4" />
+              <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center overflow-hidden border-2 border-primary bg-primary-soft animate-pulse">
+                {customAvatar ? (
+                  <img src={customAvatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span style={{ color: picked.color }} className="text-4xl leading-none">
+                    {picked.glyph}
+                  </span>
+                )}
+              </div>
               <div>
                 <h2 className="text-xl font-bold mb-2 text-text">You're in!</h2>
                 <p className="text-lg font-medium text-primary">{nickname}</p>
               </div>
-              <p className="font-medium animate-pulse text-muted">See your nickname on screen</p>
+              <p className="font-medium animate-pulse text-muted">Waiting for host to start…</p>
             </div>
           )}
         </Card>

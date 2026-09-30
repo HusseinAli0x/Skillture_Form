@@ -170,11 +170,19 @@ export interface QuizSession {
   finished_at?: string;
 }
 
-/** A row of the leaderboard — entities.QuizPlayer. */
+/**
+ * A row of the leaderboard — entities.QuizPlayer.
+ *
+ * avatar_id/avatar_url are optional: a player who joined before avatars
+ * existed has neither, and the UI falls back to a deterministic glyph
+ * (see lib/avatars.ts) rather than rendering blank.
+ */
 export interface QuizPlayer {
   id: string;
   session_id: string;
   name: string;
   score: number;
   joined_at: string;
+  avatar_id?: number;
+  avatar_url?: string;
 }

@@ -36,6 +36,8 @@ func SetupRoutes(
 	responseHandler *handlers.ResponseHandler,
 	homepageHandler *handlers.HomepageHandler,
 	geminiHandler *handlers.GeminiHandler,
+	workshopHandler *handlers.WorkshopHandler,
+	contactHandler *handlers.ContactHandler,
 ) {
 	requireAdmin := auth.RequireAdmin(tokens)
 
@@ -68,6 +70,8 @@ func SetupRoutes(
 		// Landing page content is read by anonymous visitors.
 		api.GET("/homepage", homepageHandler.GetContent)
 		api.GET("/homepage/images", homepageHandler.GetImages)
+		api.GET("/workshops", workshopHandler.ListUpcoming)
+		api.POST("/contact", contactHandler.Submit)
 
 		// Respondents open a form by link and submit it without an account.
 		api.GET("/forms/:id", formHandler.GetByID)
@@ -91,6 +95,25 @@ func SetupRoutes(
 		// CMS
 		authed.PUT("/homepage", homepageHandler.UpdateContent)
 		authed.POST("/homepage/images", homepageHandler.UploadImage)
+		authed.PUT("/homepage/facts", homepageHandler.UpdateFacts)
+		authed.PUT("/homepage/pillars", homepageHandler.UpdatePillars)
+
+		// Workshops CRUD (admin) — public read is above, unauthenticated.
+		workshops := authed.Group("/admin/workshops")
+		{
+			workshops.GET("", workshopHandler.ListAll)
+			workshops.POST("", workshopHandler.Create)
+			workshops.PUT("/:id", workshopHandler.Update)
+			workshops.DELETE("/:id", workshopHandler.Delete)
+			workshops.POST("/image", workshopHandler.UploadImage)
+		}
+
+		// Contact form submissions (admin inbox) — public submit is above.
+		contact := authed.Group("/admin/contact")
+		{
+			contact.GET("", contactHandler.List)
+			contact.DELETE("/:id", contactHandler.Delete)
+		}
 
 		// AI analytics
 		authed.GET("/admin/ai-report", geminiHandler.GenerateReport)

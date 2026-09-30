@@ -12,25 +12,34 @@ flowchart LR
     Browser["Browser<br/>(admin, respondent, quiz player)"]
 
     subgraph Docker["docker compose — skillture_network"]
-        Nginx["frontend<br/>nginx :80 → host :5175<br/>serves the SPA bundle"]
-        API["backend<br/>Go / Gin :8080"]
+        subgraph App["app — one container, root Dockerfile"]
+            Caddy["Caddy :8080 → host :5175<br/>serves the SPA bundle"]
+            API["Go / Gin<br/>127.0.0.1:8081 (not published)"]
+        end
         DB[("postgres_db<br/>pgvector/pgvector:pg16<br/>→ host :5433")]
     end
 
     Gemini["Google Gemini API<br/>gemini-2.5-flash"]
 
-    Browser -->|"HTTP + WS"| Nginx
-    Nginx -->|"/api /admin /uploads /ws"| API
+    Browser -->|"HTTP + WS"| Caddy
+    Caddy -->|"/api /admin /uploads /ws"| API
     API -->|"pgxpool"| DB
     API -->|"HTTPS"| Gemini
 ```
 
-The browser only ever talks to one origin. nginx serves the static bundle and reverse-proxies
+The browser only ever talks to one origin. Caddy serves the static bundle and reverse-proxies
 everything else to the API, so the SPA uses relative URLs and needs no build-time
-configuration. In development, the Vite dev server plays nginx's role via the proxy block in
+configuration. In development, the Vite dev server plays Caddy's role via the proxy block in
 `frontend/vite.config.ts`.
 
-**Ports.** nginx is published on `5175`, the API on `8080`, Postgres on `5433`. `5173` is
+**One image.** The root `Dockerfile` builds the SPA and the API and ships both with Caddy in a
+single image; the Caddy config and entrypoint script are inlined in it. The entrypoint starts the API and Caddy; if either exits, it stops the
+other and the container exits, so the restart policy restarts both together. The API binds to
+loopback and trusts only `127.0.0.1` for `X-Forwarded-For`, so client IPs cannot be spoofed.
+Postgres stays a separate service so its data outlives image rebuilds.
+
+**Ports.** The app is published on `5175`, Postgres on `5433`. The API is not published; in the
+container it listens on `127.0.0.1:8081`. `5173` is
 the Vite dev-server default and only applies to `npm run dev`.
 
 ---

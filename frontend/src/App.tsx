@@ -11,6 +11,8 @@ import PlayerJoin from './pages/PlayerJoin';
 import MainLayout from './components/layout/MainLayout';
 import HomePage from './pages/HomePage';
 import HomepageEditor from './pages/HomepageEditor';
+import WorkshopsAdmin from './pages/WorkshopsAdmin';
+import ContactMessagesAdmin from './pages/ContactMessagesAdmin';
 import FormPreview from './pages/FormPreview';
 import QuizJoinHandler from './pages/QuizJoinHandler';
 import { useAuthStore } from './context/AuthStore';
@@ -39,6 +41,8 @@ function App() {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="homepage" element={<HomepageEditor />} />
+          <Route path="workshops" element={<WorkshopsAdmin />} />
+          <Route path="messages" element={<ContactMessagesAdmin />} />
           <Route path="forms" element={<FormsPage />} />
           <Route path="forms/new" element={<FormBuilder />} />
           <Route path="forms/:id/edit" element={<FormBuilder />} />

@@ -11,6 +11,8 @@ import {
   PanelLeftOpen,
   Menu,
   Home,
+  Calendar,
+  Mail,
 } from 'lucide-react';
 import { useAuthStore } from '../../context/AuthStore';
 
@@ -44,9 +46,11 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, isColla
 const navItems = [
   { icon: <LayoutDashboard className="w-5 h-5" />, label: 'Dashboard', path: '/admin/dashboard' },
   { icon: <Home className="w-5 h-5" />, label: 'Homepage Editor', path: '/admin/homepage' },
+  { icon: <Calendar className="w-5 h-5" />, label: 'Workshops', path: '/admin/workshops' },
   { icon: <FileText className="w-5 h-5" />, label: 'Forms', path: '/admin/forms' },
   { icon: <GamepadIcon className="w-5 h-5" />, label: 'Quiz Game', path: '/admin/quizzes' },
   { icon: <PenTool className="w-5 h-5" />, label: 'Quiz Builder', path: '/admin/builder' },
+  { icon: <Mail className="w-5 h-5" />, label: 'Messages', path: '/admin/messages' },
 ];
 
 const MainLayout: React.FC = () => {

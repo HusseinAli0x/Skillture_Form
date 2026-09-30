@@ -5,6 +5,7 @@ import client from '../api/client';
 import type { QuizPlayer, QuizQuestion, QuizSession } from '../api/types';
 import { hostSocketUrl } from '../api/ws';
 import { localized } from '../lib/i18n';
+import { avatarForPlayer } from '../lib/avatars';
 import { Button, Card } from '../components/ui';
 
 type ViewState = 'lobby' | 'question' | 'leaderboard' | 'finished';
@@ -226,15 +227,42 @@ const HostLiveBoard: React.FC = () => {
               {leaderboard.length === 0 ? (
                 <p className="text-center text-muted text-xl">No scores yet!</p>
               ) : (
-                leaderboard.map((row, idx) => (
-                  <Card key={row.id} className="flex justify-between items-center p-6 rounded-2xl">
-                    <div className="flex items-center gap-6">
-                      <span className="text-2xl font-black text-muted w-8 text-center">{idx + 1}</span>
-                      <span className="text-2xl font-bold">{row.name}</span>
-                    </div>
-                    <span className="text-2xl font-bold text-primary">{row.score} pts</span>
-                  </Card>
-                ))
+                (() => {
+                  const topScore = leaderboard[0]?.score || 1;
+                  return leaderboard.map((row, idx) => {
+                    const avatar = avatarForPlayer(row.id, row.avatar_id);
+                    const pct = Math.max(4, Math.round((row.score / topScore) * 100));
+                    return (
+                      <Card key={row.id} className="flex items-center gap-5 p-6 rounded-2xl">
+                        <span className="text-2xl font-black text-muted w-8 text-center flex-shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div
+                          className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 border-2 border-border-strong bg-panel-2"
+                          aria-hidden
+                        >
+                          {row.avatar_url ? (
+                            <img src={row.avatar_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span style={{ color: avatar.color }} className="text-2xl leading-none">
+                              {avatar.glyph}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-2xl font-bold truncate block">{row.name}</span>
+                          <div className="h-2 rounded-full bg-panel-3 overflow-hidden mt-2">
+                            <div
+                              className="h-full rounded-full bg-primary transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                        <span className="text-2xl font-bold text-primary flex-shrink-0">{row.score} pts</span>
+                      </Card>
+                    );
+                  });
+                })()
               )}
             </div>
             <div className="flex justify-center mt-8">

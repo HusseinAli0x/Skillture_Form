@@ -29,14 +29,16 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- Go Backend Application Service ---
-  backend:
+  # --- Application (SPA + Go API + Caddy, one image) ---
+  # Built from the root Dockerfile. Caddy serves the SPA and proxies to the API
+  # over loopback inside the container; the API itself is not published.
+  app:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: skillture_backend
+    container_name: skillture_app
     ports:
-      - "8080:8080"
+      - "5175:8080"
     env_file:
       - path: ./backend/.env
         required: true
@@ -45,8 +47,14 @@ services:
       # its container port, overriding whatever .env says for host-side use.
       - DB_HOST=postgres_db
       - DB_PORT=5432
+      # These are baked into the image, but env_file would override them with
+      # the host-side values from .env. The API must stay on loopback behind
+      # Caddy, and Caddy (127.0.0.1) is its only trusted proxy.
+      - SERVER_HOST=127.0.0.1
+      - SERVER_PORT=8081
+      - TRUSTED_PROXIES=127.0.0.1,::1
     volumes:
-      # Must match WORKDIR in backend/Dockerfile — the app resolves "./uploads"
+      # Must match WORKDIR in the Dockerfile — the API resolves "./uploads"
       # relative to its working directory.
       - ./backend/uploads:/app/uploads
     depends_on:
@@ -55,29 +63,8 @@ services:
     networks:
       - skillture_network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-
-  # --- Frontend Application Service ---
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: skillture_frontend
-    ports:
-      - "5175:80"
-    depends_on:
-      # Wait for the API to answer /health, not merely for the container to
-      # exist — nginx otherwise starts proxying to a backend that is not up.
-      backend:
-        condition: service_healthy
-    networks:
-      - skillture_network
-    restart: unless-stopped
+    # The healthcheck is defined in the Dockerfile: /health through Caddy, so it
+    # fails if either process is down.
 
 # --- Networks & Volumes Definitions ---
 networks:

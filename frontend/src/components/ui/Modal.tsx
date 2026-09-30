@@ -19,9 +19,20 @@ interface Props {
 const Modal: React.FC<Props> = ({ title, onClose, children, maxWidth = 'max-w-md' }) => {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Callers almost always pass onClose as an inline lambda, so its identity
+  // changes on every render of the caller — including one triggered by a
+  // keystroke in a text field this modal contains (e.g. an edit form). This
+  // ref lets the effect below read the latest onClose without listing it as
+  // a dependency, so the effect body (and the panelRef.current.focus() call
+  // in it) runs once on mount rather than after every keystroke — which
+  // otherwise yanked focus off the field being typed into and swallowed the
+  // rest of the keystrokes.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKeyDown);
 
@@ -35,7 +46,9 @@ const Modal: React.FC<Props> = ({ title, onClose, children, maxWidth = 'max-w-md
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [onClose]);
+    // Deliberately mount-only — see onCloseRef above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div

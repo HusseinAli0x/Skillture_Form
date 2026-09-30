@@ -43,6 +43,8 @@ func TestSetupRoutes(t *testing.T) {
 		(*handlers.ResponseHandler)(nil),
 		(*handlers.HomepageHandler)(nil),
 		(*handlers.GeminiHandler)(nil),
+		(*handlers.WorkshopHandler)(nil),
+		(*handlers.ContactHandler)(nil),
 	)
 
 	want := map[string]string{

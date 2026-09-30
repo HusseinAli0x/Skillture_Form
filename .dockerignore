@@ -1,0 +1,36 @@
+# The build context is the whole repository; only frontend/ and backend/
+# are needed.
+
+# VCS / editor / tooling
+.git
+.github
+.claude
+.idea/
+.vscode/
+docs/
+*.md
+*.zip
+
+# Secrets — never ship into an image layer
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Frontend: 238 MB of local deps and stale build output — the image
+# reinstalls from the lockfile and builds its own
+frontend/node_modules
+frontend/dist
+
+# Backend: build artifacts (~44 MB each, bust the layer cache on every build)
+backend/main
+backend/tmp_build
+**/*.exe
+**/*.test
+**/*.out
+
+# Backend runtime data (mounted as a volume by docker-compose)
+backend/uploads/
+
+Dockerfile
+.dockerignore
+docker-compose.yml

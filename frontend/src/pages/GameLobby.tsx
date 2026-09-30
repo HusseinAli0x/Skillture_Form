@@ -7,6 +7,7 @@ import { apiErrorMessage } from '../lib/apiError';
 import type { QuizPlayer } from '../api/types';
 import { hostSocketUrl } from '../api/ws';
 import { gameJoinUrl } from '../lib/links';
+import { avatarForPlayer } from '../lib/avatars';
 import { Button, Card } from '../components/ui';
 
 const GameLobby: React.FC = () => {
@@ -134,14 +135,24 @@ const GameLobby: React.FC = () => {
 
       <div className="w-full max-w-4xl pt-8">
         <div className="flex flex-wrap justify-center gap-3">
-          {players.map(player => (
-            <div
-              key={player.id}
-              className="px-4 py-2 rounded-lg font-medium border bg-hover-overlay-strong border-border text-text"
-            >
-              {player.name}
-            </div>
-          ))}
+          {players.map(player => {
+            const avatar = avatarForPlayer(player.id, player.avatar_id);
+            return (
+              <div
+                key={player.id}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium border bg-hover-overlay-strong border-border text-text"
+              >
+                {player.avatar_url ? (
+                  <img src={player.avatar_url} alt="" className="w-4 h-4 rounded-full object-cover" />
+                ) : (
+                  <span style={{ color: avatar.color }} className="text-xs leading-none">
+                    {avatar.glyph}
+                  </span>
+                )}
+                {player.name}
+              </div>
+            );
+          })}
           {players.length === 0 && (
             <p className="text-center w-full mt-8 animate-pulse text-muted">Waiting for players to join…</p>
           )}

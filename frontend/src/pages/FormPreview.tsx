@@ -3,7 +3,7 @@ import { useParams } from 'react-router';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 import client from '../api/client';
 import { apiErrorMessage } from '../lib/apiError';
-import { FormStatus } from '../api/types';
+import { FieldType, FormStatus } from '../api/types';
 import type { Form, FormField } from '../api/types';
 import { localized } from '../lib/i18n';
 import { Button, Card, Spinner } from '../components/ui';
@@ -11,6 +11,10 @@ import FieldInput from '../components/forms/FieldInput';
 
 const isBlank = (value: unknown) =>
   value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
+
+// Matches the backend's sanity check in response_usecase.go — permissive by
+// design, not a full RFC 5322 validator.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Best-effort respondent identity, taken from a field labelled name or email. */
 const findRespondent = (fields: FormField[], data: Record<string, unknown>) => {
@@ -76,8 +80,11 @@ const FormPreview: React.FC = () => {
     // does not cover a checkbox group where any one box satisfies it.
     const errors: Record<string, string> = {};
     for (const field of fields) {
-      if (field.required && isBlank(formData[field.id])) {
+      const value = formData[field.id];
+      if (field.required && isBlank(value)) {
         errors[field.id] = 'This field is required';
+      } else if (field.type === FieldType.Email && !isBlank(value) && !EMAIL_RE.test(String(value))) {
+        errors[field.id] = 'Enter a valid email address';
       }
     }
     setValidationErrors(errors);

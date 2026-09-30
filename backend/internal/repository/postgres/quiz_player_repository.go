@@ -41,6 +41,8 @@ func scanQuizPlayer(row pgx.Row) (*entities.QuizPlayer, error) {
 		&p.Name,
 		&p.Score,
 		&p.JoinedAt,
+		&p.AvatarID,
+		&p.AvatarURL,
 	)
 	if err != nil {
 		return nil, err
@@ -56,8 +58,8 @@ func (r *quizPlayerRepository) Create(ctx context.Context, player *entities.Quiz
 	}
 
 	const query = `
-		INSERT INTO quiz_players (id, session_id, name, score, joined_at)
-		VALUES ($1, $2, $3, $4, NOW())
+		INSERT INTO quiz_players (id, session_id, name, score, joined_at, avatar_id, avatar_url)
+		VALUES ($1, $2, $3, $4, NOW(), $5, $6)
 	`
 
 	return r.Exec(ctx, query,
@@ -65,6 +67,8 @@ func (r *quizPlayerRepository) Create(ctx context.Context, player *entities.Quiz
 		player.SessionID,
 		player.Name,
 		player.Score,
+		player.AvatarID,
+		player.AvatarURL,
 	)
 }
 
@@ -72,7 +76,7 @@ func (r *quizPlayerRepository) Create(ctx context.Context, player *entities.Quiz
 // Returns nil, nil when no row is found.
 func (r *quizPlayerRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.QuizPlayer, error) {
 	const query = `
-		SELECT id, session_id, name, score, joined_at
+		SELECT id, session_id, name, score, joined_at, avatar_id, avatar_url
 		FROM quiz_players
 		WHERE id = $1
 	`
@@ -125,7 +129,7 @@ func (r *quizPlayerRepository) Delete(ctx context.Context, id uuid.UUID) error {
 // This is the primary leaderboard query, called after each question is resolved.
 func (r *quizPlayerRepository) ListBySessionID(ctx context.Context, sessionID uuid.UUID) ([]*entities.QuizPlayer, error) {
 	const query = `
-		SELECT id, session_id, name, score, joined_at
+		SELECT id, session_id, name, score, joined_at, avatar_id, avatar_url
 		FROM quiz_players
 		WHERE session_id = $1
 		ORDER BY score DESC, joined_at ASC
@@ -140,7 +144,7 @@ func (r *quizPlayerRepository) ListBySessionID(ctx context.Context, sessionID uu
 	var players []*entities.QuizPlayer
 	for rows.Next() {
 		var p entities.QuizPlayer
-		if err := rows.Scan(&p.ID, &p.SessionID, &p.Name, &p.Score, &p.JoinedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.SessionID, &p.Name, &p.Score, &p.JoinedAt, &p.AvatarID, &p.AvatarURL); err != nil {
 			return nil, fmt.Errorf("quizPlayerRepository.ListBySessionID.Scan: %w", err)
 		}
 		players = append(players, &p)

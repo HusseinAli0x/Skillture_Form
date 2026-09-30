@@ -3,6 +3,8 @@ package response
 import (
 	"context"
 	"errors"
+	"regexp"
+	"strings"
 	"time"
 
 	"skillture/backend/internal/domain/entities"
@@ -14,6 +16,11 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// emailRegex is a permissive sanity check, not a full RFC 5322 validator —
+// it exists to catch the FormPreview.tsx failure mode ("not-an-email" saved
+// as a valid answer), not to reject every edge case of a real address.
+var emailRegex = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 
 // ResponseUsecase handles all business logic for responses
 type ResponseUsecase struct {
@@ -97,6 +104,34 @@ func (u *ResponseUsecase) Submit(
 			ans.FieldType = field.Type
 		} else {
 			return errors.New("invalid field id in answers")
+		}
+	}
+
+	// -------------------
+	// 2️⃣.5 Required fields and per-type format checks.
+	// -------------------
+	// Everything up to here only checks that submitted answers reference real
+	// fields. The client (FormPreview.tsx) already blocks an empty required
+	// field and an unparsable email before the request is sent, but that is a
+	// UX nicety, not a boundary — a direct API call bypasses it entirely, and
+	// nothing server-side re-checked required-ness or the value's shape.
+	answersByField := make(map[uuid.UUID]*entities.ResponseAnswer, len(answers))
+	for _, ans := range answers {
+		answersByField[ans.FieldID] = ans
+	}
+
+	for _, field := range fields {
+		ans, answered := answersByField[field.ID]
+		value := ""
+		if answered {
+			value = strings.TrimSpace(ans.GetValue("en"))
+		}
+
+		if field.Required && value == "" {
+			return domainErrors.ErrMissingRequiredField
+		}
+		if value != "" && field.Type == enums.FieldTypeEmail && !emailRegex.MatchString(value) {
+			return domainErrors.ErrInvalidInput
 		}
 	}
 

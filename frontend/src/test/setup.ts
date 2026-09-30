@@ -26,3 +26,31 @@ if (!globalThis.localStorage) {
     },
   });
 }
+
+// jsdom implements neither. HomePage's scroll-journey effect (lib/
+// scrollJourney.ts) calls both unconditionally on mount, so any test that
+// renders it — including the App routing smoke test — would throw on mount
+// without these.
+if (!window.matchMedia) {
+  window.matchMedia = (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  });
+}
+
+// A plain-object stand-in rather than `implements IntersectionObserver` —
+// that interface has picked up new required members across TS/DOM-lib
+// versions (e.g. scrollMargin), and this only needs to satisfy `new
+// IntersectionObserver(cb, opts)` at the two call sites that use it.
+if (!globalThis.IntersectionObserver) {
+  function NoopIntersectionObserver() {
+    return { observe() {}, unobserve() {}, disconnect() {}, takeRecords: () => [] };
+  }
+  globalThis.IntersectionObserver = NoopIntersectionObserver as unknown as typeof IntersectionObserver;
+}

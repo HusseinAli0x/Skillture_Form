@@ -103,6 +103,8 @@ func main() {
 	responseHandler := handlers.NewResponseHandler(responseUC)
 	homepageHandler := handlers.NewHomepageHandler(db.Pool(), cfg.Upload)
 	geminiHandler := handlers.NewGeminiHandler(geminiSvc)
+	workshopHandler := handlers.NewWorkshopHandler(db.Pool(), cfg.Upload)
+	contactHandler := handlers.NewContactHandler(db.Pool())
 
 	// 7. Gin Setup
 	if cfg.Server.IsProduction() {
@@ -111,7 +113,7 @@ func main() {
 
 	r := gin.Default()
 
-	// Requests arrive through nginx, so client IPs must come from the
+	// Requests arrive through Caddy, so client IPs must come from the
 	// configured trusted proxies rather than being taken on faith.
 	if err := r.SetTrustedProxies(cfg.Security.TrustedProxies); err != nil {
 		log.Fatalf("Failed to set trusted proxies: %v", err)
@@ -125,7 +127,7 @@ func main() {
 	r.Static("/uploads", "./uploads")
 
 	// 8. Wire Routes
-	server.SetupRoutes(r, tokens, adminHandler, quizHandler, sessionHandler, wsHandler, formHandler, formFieldHandler, responseHandler, homepageHandler, geminiHandler)
+	server.SetupRoutes(r, tokens, adminHandler, quizHandler, sessionHandler, wsHandler, formHandler, formFieldHandler, responseHandler, homepageHandler, geminiHandler, workshopHandler, contactHandler)
 
 	// 9. Start server
 	addr := cfg.Server.Address()

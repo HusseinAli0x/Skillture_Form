@@ -83,7 +83,10 @@ type QuizPlayerUseCase interface {
 	//
 	// Returns ErrSessionFinished if the game is over, and
 	// ErrDuplicatePlayerName if the nickname is taken.
-	JoinSession(ctx context.Context, sessionID uuid.UUID, name string) (*entities.QuizPlayer, error)
+	//
+	// avatarID and avatarURL are mutually exclusive picks from the join
+	// screen — either or both may be nil if the player hasn't picked one.
+	JoinSession(ctx context.Context, sessionID uuid.UUID, name string, avatarID *int16, avatarURL *string) (*entities.QuizPlayer, error)
 	// GetPlayer retrieves a single player by ID. Returns (nil, nil) if no such
 	// player exists. Callers must confirm the player belongs to the session
 	// they are acting on — the player ID arrives from the client.

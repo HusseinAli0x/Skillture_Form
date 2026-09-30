@@ -15,12 +15,13 @@ Further reading:
 - `/frontend` — React 19 SPA: Vite, TypeScript, Tailwind v4, zustand, axios.
 - PostgreSQL 16 with the `pgvector` extension.
 
-In production the SPA is served by nginx, which also proxies `/api`, `/admin`, `/uploads`
-and `/ws` to the backend — so the browser only ever talks to one origin.
+The whole application ships as one Docker image (root `Dockerfile`): Caddy serves the SPA and
+proxies `/api`, `/admin`, `/uploads` and `/ws` to the Go API in the same container — so the
+browser only ever talks to one origin. `docker-compose.yml` runs that image next to Postgres.
 
 ## Prerequisites
 
-- Docker and Docker Compose
+- Docker and Docker Compose, with the buildx plugin (BuildKit) — the Dockerfile uses heredocs
 - Node.js 22+ for local frontend development
 - Go 1.25.4+ for local backend development (see `backend/go.mod`)
 - PostgreSQL 16 with `pgvector` (if running locally without Docker)
@@ -53,7 +54,7 @@ and `/ws` to the backend — so the browser only ever talks to one origin.
 4. **Access the application:**
    - Public homepage: <http://localhost:5175>
    - Admin dashboard: <http://localhost:5175/admin/dashboard>
-   - Backend API: <http://localhost:8080>
+   - Backend API: <http://localhost:5175/api/v1> (the API port itself is not published)
 
 > **Schema changes:** the backend applies its own migrations on boot from
 > `backend/internal/database/migrations/`, which are embedded in the binary. Add a new

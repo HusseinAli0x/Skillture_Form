@@ -27,7 +27,9 @@ describe('App routing', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /build smarter assessments/i })).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: /from university to industry/i })
+    ).toBeVisible();
   });
 
   it('renders the login page at /login', async () => {
