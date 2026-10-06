@@ -45,6 +45,7 @@ func TestSetupRoutes(t *testing.T) {
 		(*handlers.GeminiHandler)(nil),
 		(*handlers.WorkshopHandler)(nil),
 		(*handlers.ContactHandler)(nil),
+		(*handlers.TeamHandler)(nil),
 	)
 
 	want := map[string]string{
@@ -57,6 +58,11 @@ func TestSetupRoutes(t *testing.T) {
 		// the state machine they enforce.
 		"PATCH /api/v1/forms/:id/publish": "form publish (D4)",
 		"PATCH /api/v1/forms/:id/close":   "form close (D4)",
+		"GET /api/v1/workshops/past":      "Our Work: past workshops",
+		"GET /api/v1/workshops/:id":       "workshop detail page",
+		"GET /api/v1/impact":              "Our Work: impact numbers",
+		"GET /api/v1/team":                "public Team page",
+		"POST /api/v1/admin/team":         "admin team create",
 	}
 
 	got := make(map[string]bool)

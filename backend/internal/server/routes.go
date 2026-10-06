@@ -38,6 +38,7 @@ func SetupRoutes(
 	geminiHandler *handlers.GeminiHandler,
 	workshopHandler *handlers.WorkshopHandler,
 	contactHandler *handlers.ContactHandler,
+	teamHandler *handlers.TeamHandler,
 ) {
 	requireAdmin := auth.RequireAdmin(tokens)
 
@@ -71,6 +72,10 @@ func SetupRoutes(
 		api.GET("/homepage", homepageHandler.GetContent)
 		api.GET("/homepage/images", homepageHandler.GetImages)
 		api.GET("/workshops", workshopHandler.ListUpcoming)
+		api.GET("/workshops/past", workshopHandler.ListPast)
+		api.GET("/workshops/:id", workshopHandler.GetByID)
+		api.GET("/impact", workshopHandler.Impact)
+		api.GET("/team", teamHandler.List)
 		api.POST("/contact", contactHandler.Submit)
 
 		// Respondents open a form by link and submit it without an account.
@@ -106,6 +111,15 @@ func SetupRoutes(
 			workshops.PUT("/:id", workshopHandler.Update)
 			workshops.DELETE("/:id", workshopHandler.Delete)
 			workshops.POST("/image", workshopHandler.UploadImage)
+		}
+
+		// Team CRUD (admin) — public read is above, unauthenticated.
+		team := authed.Group("/admin/team")
+		{
+			team.POST("", teamHandler.Create)
+			team.PUT("/:id", teamHandler.Update)
+			team.DELETE("/:id", teamHandler.Delete)
+			team.POST("/image", teamHandler.UploadImage)
 		}
 
 		// Contact form submissions (admin inbox) — public submit is above.

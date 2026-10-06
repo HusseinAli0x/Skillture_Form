@@ -105,6 +105,7 @@ func main() {
 	geminiHandler := handlers.NewGeminiHandler(geminiSvc)
 	workshopHandler := handlers.NewWorkshopHandler(db.Pool(), cfg.Upload)
 	contactHandler := handlers.NewContactHandler(db.Pool())
+	teamHandler := handlers.NewTeamHandler(db.Pool(), cfg.Upload)
 
 	// 7. Gin Setup
 	if cfg.Server.IsProduction() {
@@ -127,7 +128,7 @@ func main() {
 	r.Static("/uploads", "./uploads")
 
 	// 8. Wire Routes
-	server.SetupRoutes(r, tokens, adminHandler, quizHandler, sessionHandler, wsHandler, formHandler, formFieldHandler, responseHandler, homepageHandler, geminiHandler, workshopHandler, contactHandler)
+	server.SetupRoutes(r, tokens, adminHandler, quizHandler, sessionHandler, wsHandler, formHandler, formFieldHandler, responseHandler, homepageHandler, geminiHandler, workshopHandler, contactHandler, teamHandler)
 
 	// 9. Start server
 	addr := cfg.Server.Address()
