@@ -20,6 +20,8 @@ interface Props {
  * actions. Those block the main thread, cannot be styled, and are suppressed
  * outright in some embedded browsers — meaning the delete would either hang or
  * proceed without ever asking.
+ *
+ * Focus lands on Cancel for destructive dialogs, so a stray Enter keeps data.
  */
 const ConfirmDialog: React.FC<Props> = ({
   title,
@@ -42,10 +44,15 @@ const ConfirmDialog: React.FC<Props> = ({
     </div>
 
     <div className="flex justify-end gap-3 mt-6">
-      <Button variant="secondary" onClick={onCancel} disabled={loading}>
+      <Button variant="secondary" onClick={onCancel} disabled={loading} autoFocus={destructive}>
         {cancelLabel}
       </Button>
-      <Button variant={destructive ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>
+      <Button
+        variant={destructive ? 'danger' : 'primary'}
+        onClick={onConfirm}
+        loading={loading}
+        autoFocus={!destructive}
+      >
         {confirmLabel}
       </Button>
     </div>

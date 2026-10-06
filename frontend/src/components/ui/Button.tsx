@@ -12,22 +12,31 @@ interface Props extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   block?: boolean;
 }
 
-// Hover states used to be hand-wired with onMouseEnter/onMouseLeave handlers
-// that reassigned style properties — six lines per button, repeated dozens of
-// times. Tailwind's hover: variants do the same job declaratively.
-const variants: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-bg hover:bg-primary-hover',
-  secondary: 'bg-panel-2 text-text border border-border hover:bg-panel-3 hover:border-border-strong',
+// Brand rules (docs/BRAND_UX.md): primary is a solid turquoise block with
+// black text (text-bg is near-black in the app and white inside `.site`, where
+// the primary token is the darker teal). Coral is reserved for destructive
+// actions, so `danger` is the only variant that uses it.
+const buttonVariants: Record<ButtonVariant, string> = {
+  primary: 'bg-primary text-bg hover:bg-primary-hover active:brightness-95',
+  secondary:
+    'bg-panel-2 text-text border border-border hover:bg-panel-3 hover:border-border-strong active:bg-panel-3',
   ghost: 'bg-transparent text-muted hover:text-text hover:bg-hover-overlay-strong',
-  danger: 'bg-danger-soft text-danger border border-danger-border hover:bg-danger hover:text-text',
-  subtle: 'bg-primary-soft text-primary border border-primary-border hover:bg-primary hover:text-bg',
+  danger:
+    'bg-danger-soft text-danger border border-danger-border hover:bg-danger hover:text-bg active:brightness-95',
+  subtle:
+    'bg-primary-soft text-primary border border-primary-border hover:bg-primary hover:text-bg active:brightness-95',
 };
 
-const sizes: Record<ButtonSize, string> = {
-  sm: 'px-3 py-1.5 text-xs gap-1.5 rounded-lg',
-  md: 'px-4 py-2.5 text-sm gap-2 rounded-lg',
-  lg: 'px-6 py-3 text-base gap-2 rounded-xl',
+const buttonSizes: Record<ButtonSize, string> = {
+  sm: 'px-3 py-1.5 text-xs gap-1.5 rounded-lg min-h-8',
+  md: 'px-4 py-2.5 text-sm gap-2 rounded-lg min-h-10',
+  lg: 'px-6 py-3 text-base gap-2 rounded-xl min-h-12',
 };
+
+const buttonBase =
+  'inline-flex items-center justify-center font-semibold transition-colors duration-150 select-none ' +
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg ' +
+  'disabled:opacity-50 disabled:cursor-not-allowed';
 
 const Button: React.FC<Props> = ({
   variant = 'primary',
@@ -42,15 +51,8 @@ const Button: React.FC<Props> = ({
   <button
     {...rest}
     disabled={disabled || loading}
-    className={[
-      'inline-flex items-center justify-center font-semibold transition-colors duration-150',
-      'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
-      'disabled:opacity-50 disabled:cursor-not-allowed',
-      variants[variant],
-      sizes[size],
-      block ? 'w-full' : '',
-      className,
-    ].join(' ')}
+    aria-busy={loading || undefined}
+    className={[buttonBase, buttonVariants[variant], buttonSizes[size], block ? 'w-full' : '', className].join(' ')}
   >
     {loading && (
       <span

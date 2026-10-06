@@ -8,8 +8,8 @@ interface Props extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   tone?: IconTone;
 }
 
-// The small square action buttons in table rows. Each one previously carried
-// its own pair of mouse handlers to swap colour and background on hover.
+// The small square action buttons in table rows. Hover tones only; the global
+// touch rule in index.css lifts these to 44px on phones.
 const tones: Record<IconTone, string> = {
   default: 'text-muted hover:text-text hover:bg-hover-overlay-strong',
   primary: 'text-muted hover:text-primary hover:bg-primary-soft',
@@ -23,7 +23,7 @@ const IconButton: React.FC<Props> = ({ label, tone = 'default', className = '', 
     title={label}
     aria-label={label}
     className={[
-      'p-1.5 rounded-lg transition-colors',
+      'inline-flex items-center justify-center p-1.5 rounded-lg transition-colors',
       'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
       'disabled:opacity-40 disabled:cursor-not-allowed',
       tones[tone],

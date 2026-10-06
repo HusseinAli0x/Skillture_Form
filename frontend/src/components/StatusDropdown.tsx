@@ -14,6 +14,8 @@ interface Props {
   onStatusChange?: (newStatus: StatusValue) => void;
 }
 
+// Draft is amber (needs action), live-to-the-audience is turquoise, finished is
+// neutral. Coral is kept for destructive actions and LIVE sessions.
 const tones: Record<StatusValue, { trigger: string; dot: string; text: string }> = {
   0: { trigger: 'bg-warning-soft border-warning-border text-warning', dot: 'bg-warning', text: 'text-warning' },
   1: { trigger: 'bg-primary-soft border-primary-border text-primary', dot: 'bg-primary', text: 'text-primary' },
@@ -25,6 +27,12 @@ const tones: Record<StatusValue, { trigger: string; dot: string; text: string }>
 const labels: Record<Props['type'], Record<StatusValue, string>> = {
   form: FormStatusLabels,
   quiz: QuizStatusLabels,
+};
+
+/** What the dropdown tells the user once a transition has gone through. */
+const SUCCESS: Record<Props['type'], Partial<Record<StatusValue, string>>> = {
+  form: { 1: 'Form published', 2: 'Form closed' },
+  quiz: { 1: 'Quiz activated', 2: 'Quiz archived' },
 };
 
 /**
@@ -49,6 +57,7 @@ const StatusDropdown: React.FC<Props> = ({ type, id, initialStatus, onStatusChan
   const [isUpdating, setIsUpdating] = useState(false);
   const { addToast } = useToastStore();
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Re-sync when the parent refetches. State seeded once from a prop went stale
   // as soon as the list reloaded, so the badge could disagree with the server.
@@ -64,7 +73,10 @@ const StatusDropdown: React.FC<Props> = ({ type, id, initialStatus, onStatusChan
       if (!rootRef.current?.contains(e.target as Node)) setIsOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
@@ -91,8 +103,9 @@ const StatusDropdown: React.FC<Props> = ({ type, id, initialStatus, onStatusChan
 
       setStatus(newStatus);
       onStatusChange?.(newStatus);
+      addToast('success', SUCCESS[type][newStatus] ?? 'Status updated');
     } catch (err) {
-      addToast('error', apiErrorMessage(err, 'Failed to update status.'));
+      addToast('error', apiErrorMessage(err, 'Could not change the status. Try again.'));
     } finally {
       setIsUpdating(false);
       setIsOpen(false);
@@ -103,39 +116,39 @@ const StatusDropdown: React.FC<Props> = ({ type, id, initialStatus, onStatusChan
   const label = labels[type][status] ?? labels[type][0];
 
   return (
-    <div ref={rootRef} className="relative inline-block text-left" onClick={e => e.stopPropagation()}>
+    <div ref={rootRef} className="relative inline-block text-start" onClick={e => e.stopPropagation()}>
       <button
+        ref={triggerRef}
+        type="button"
         onClick={() => setIsOpen(open => !open)}
         disabled={isUpdating}
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-70 ${tone.trigger}`}
+        aria-label={`Status: ${label}. Change status`}
+        className={`inline-flex items-center gap-1.5 ps-2.5 pe-2 py-1 rounded-full text-xs font-medium border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-70 ${tone.trigger}`}
       >
-        <span className="relative flex h-2 w-2 mr-1">
-          {status === 1 && (
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${tone.dot}`} />
-          )}
-          <span className={`relative inline-flex rounded-full h-2 w-2 ${tone.dot}`} />
-        </span>
+        <span className={`inline-flex rounded-full h-1.5 w-1.5 ${tone.dot}`} aria-hidden="true" />
         {label}
-        <ChevronDown className="w-3.5 h-3.5 ml-0.5 opacity-70" />
+        <ChevronDown className="w-3.5 h-3.5 opacity-70" aria-hidden="true" />
       </button>
 
       {isOpen && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-48 rounded-xl border border-border bg-panel shadow-2xl overflow-hidden z-50 py-1"
+          className="absolute start-0 mt-2 w-44 rounded-xl border border-border bg-panel shadow-2xl overflow-hidden z-50 py-1"
         >
           {STATUSES.map(value => (
             <button
               key={value}
+              type="button"
               role="menuitem"
+              autoFocus={value === STATUSES[0]}
               onClick={() => handleUpdate(value)}
-              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 hover:bg-hover-overlay-strong ${
+              className={`w-full text-start px-4 min-h-10 text-sm transition-colors flex items-center gap-2 hover:bg-hover-overlay-strong focus:outline-none focus-visible:bg-hover-overlay-strong ${
                 status === value ? tones[value].text : 'text-text'
               }`}
             >
-              <span className={`w-2 h-2 rounded-full ${tones[value].dot}`} />
+              <span className={`w-2 h-2 rounded-full ${tones[value].dot}`} aria-hidden="true" />
               {labels[type][value]}
             </button>
           ))}
