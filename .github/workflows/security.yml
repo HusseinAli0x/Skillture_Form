@@ -87,8 +87,10 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Dependency review: on a PR, block newly *introduced* vulnerable packages.
-  # Needs the dependency graph (always on for public repos; a paid feature on
-  # private ones), so it is advisory there rather than a hard failure.
+  # Needs the dependency graph to be enabled (Settings -> Code security ->
+  # Dependency graph). Until it is, GitHub refuses the call outright, so this job
+  # is advisory (continue-on-error) rather than a failure nobody can fix in code.
+  # Once the graph is on, delete the continue-on-error line to make it strict.
   # ---------------------------------------------------------------------------
   dependency-review:
     name: Dependency review
@@ -98,7 +100,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    continue-on-error: ${{ github.event.repository.private }}
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/dependency-review-action@v4
@@ -144,7 +146,7 @@ jobs:
           npm audit --audit-level=moderate
 
       - name: Trivy (repository files and lockfiles)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
