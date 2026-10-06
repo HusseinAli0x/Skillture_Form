@@ -1,0 +1,153 @@
+name: Security
+
+# Static analysis, secret scanning and scheduled dependency scans. Separate from
+# CI so it can run on a timer: new advisories are published every week, and a
+# repo nobody has touched since last month still needs to hear about them.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '23 4 * * 1' # Mondays 04:23 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # CodeQL: data-flow analysis that finds injection, path traversal, unsafe
+  # redirects and the like — what linters cannot see.
+  # ---------------------------------------------------------------------------
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          check-latest: true
+          cache-dependency-path: backend/go.sum
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+
+      # The Go module lives in backend/, so autobuild can't find it.
+      - name: Build (Go)
+        if: matrix.language == 'go'
+        working-directory: backend
+        run: go build ./...
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
+
+  # ---------------------------------------------------------------------------
+  # Secrets: scan the whole history, not just the diff - a key that was removed
+  # in a later commit is still a leaked key. Run as a plain container so it
+  # needs no licence or token.
+  # ---------------------------------------------------------------------------
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            detect --source /repo --redact --no-banner --verbose --exit-code 1
+
+  # ---------------------------------------------------------------------------
+  # Dependency review: on a PR, block newly *introduced* vulnerable packages.
+  # Needs the dependency graph (always on for public repos; a paid feature on
+  # private ones), so it is advisory there rather than a hard failure.
+  # ---------------------------------------------------------------------------
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    continue-on-error: ${{ github.event.repository.private }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+
+  # ---------------------------------------------------------------------------
+  # Weekly sweep. Nothing in the code changed, but the advisory databases did.
+  # A failure here is the alert; the fix is usually a dependency bump, which
+  # Dependabot will already have opened.
+  # ---------------------------------------------------------------------------
+  scheduled-scan:
+    name: Weekly vulnerability sweep
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          check-latest: true
+          cache-dependency-path: backend/go.sum
+
+      - name: govulncheck (reachable Go vulnerabilities)
+        working-directory: backend
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Everything, dev tools included, down to moderate. CI itself only gates
+      # on production dependencies at "high"; this is the full picture.
+      - name: npm audit (all dependencies)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm audit --audit-level=moderate
+
+      - name: Trivy (repository files and lockfiles)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'

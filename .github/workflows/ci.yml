@@ -1,0 +1,438 @@
+name: CI
+
+# One workflow, one required check. Branch protection should require exactly
+# "CI gate" (see the last job) — it fails if any job failed or was cancelled,
+# and treats jobs skipped by path filtering as fine, so docs-only PRs still merge.
+
+on:
+  push:
+    branches: [main, dev, stage, AIdev]
+    tags: ['v*']
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+# A new push to a PR supersedes the old run. Never cancel runs on main or tags:
+# a half-finished publish is worse than a queued one.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Least privilege by default; jobs that need more ask for it explicitly.
+permissions:
+  contents: read
+
+env:
+  # Floors, not goals. Raise them as coverage grows; never lower them to make a
+  # red build green. Backend is low today because most handlers and use cases
+  # are only exercised by the end-to-end smoke test.
+  BACKEND_COVERAGE_FLOOR: '12.0'
+  # govulncheck is pinned: the newest releases need Go 1.26 to *build*, but the
+  # scan must run on the project's own toolchain (go.mod) to report the right
+  # standard-library advisories.
+  GOVULNCHECK_VERSION: v1.1.4
+  GOLANGCI_LINT_VERSION: v2.14.0
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Decide what changed so a README edit doesn't run a 10-minute pipeline. Only
+  # pull requests are filtered: every push to a branch or tag runs everything.
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ github.event_name != 'pull_request' || steps.filter.outputs.backend == 'true' }}
+      frontend: ${{ github.event_name != 'pull_request' || steps.filter.outputs.frontend == 'true' }}
+      docker: ${{ github.event_name != 'pull_request' || steps.filter.outputs.docker == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+            docker:
+              - 'Dockerfile'
+              - '.dockerignore'
+              - 'docker-compose.yml'
+              - 'scripts/**'
+              - 'backend/**'
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+
+  # ---------------------------------------------------------------------------
+  # Backend: static checks
+  # ---------------------------------------------------------------------------
+  backend-lint:
+    name: Backend lint
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Read from go.mod so the pipeline can never drift from the code.
+          # check-latest picks the newest patch of that minor, which is what
+          # carries the standard-library security fixes.
+          go-version-file: backend/go.mod
+          check-latest: true
+          cache-dependency-path: backend/go.sum
+
+      # Compare before and after `go mod tidy` rather than against git, so the
+      # check means the same thing in CI and on a dirty working tree.
+      - name: go.mod and go.sum are tidy
+        run: |
+          before=$(mktemp -d)
+          cp go.mod go.sum "$before"
+          go mod tidy
+          if ! diff -q "$before/go.mod" go.mod >/dev/null || ! diff -q "$before/go.sum" go.sum >/dev/null; then
+            echo '::error::go.mod/go.sum are not tidy. Run "go mod tidy" in backend/ and commit the result.'
+            diff -u "$before/go.mod" go.mod || true
+            exit 1
+          fi
+
+      # `go fmt` rewrites files and always exits 0, so it can't gate anything.
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::These files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          working-directory: backend
+
+  # ---------------------------------------------------------------------------
+  # Backend: tests against a REAL Postgres. The repository and migration tests
+  # skip themselves when TEST_DATABASE_URL is unset, so without the service
+  # below they silently never run — and two of them were broken for months.
+  # ---------------------------------------------------------------------------
+  backend-test:
+    name: Backend tests
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        # The baseline migration needs the pgvector extension.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: skillture_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d skillture_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      TEST_DATABASE_URL: postgres://test:test@localhost:5432/skillture_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          check-latest: true
+          cache-dependency-path: backend/go.sum
+
+      # -race: the quiz hub is concurrent. -shuffle: catches tests that only
+      # pass in a particular order (one did, against the seeded admin row).
+      # -count=1: never trust a cached "ok" for tests that hit a database.
+      # -p 1: packages share one database and one test TRUNCATEs a table the
+      # others read, so packages must not run at the same time.
+      - name: Test
+        run: go test -race -shuffle=on -count=1 -p 1 -covermode=atomic -coverprofile=coverage.out ./...
+
+      # Guard the guard: if the database wiring ever breaks, the DB tests go
+      # back to skipping and everything stays green. Fail loudly instead.
+      - name: Database tests actually ran
+        run: |
+          go test -count=1 -v ./internal/database/... ./internal/repository/... | tee db-tests.log
+          if grep -q -- '--- SKIP' db-tests.log; then
+            echo '::error::Database integration tests were skipped - TEST_DATABASE_URL is not reaching them.'
+            exit 1
+          fi
+
+      - name: Coverage gate
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$3); print $3}')
+          {
+            echo '### Backend coverage'
+            echo
+            echo "**Total: ${total}%** (floor: ${BACKEND_COVERAGE_FLOOR}%)"
+            echo
+            echo '| Package | Coverage |'
+            echo '|---|---|'
+            # Per-package figures straight from the profile (no second test run).
+            awk 'NR > 1 {
+              split($1, loc, ":"); n = split(loc[1], parts, "/"); pkg = parts[1]
+              for (i = 2; i < n; i++) pkg = pkg "/" parts[i]
+              stmts[pkg] += $2; if ($3 > 0) hit[pkg] += $2
+            } END {
+              for (p in stmts) printf "| `%s` | %.1f%% |\n", p, 100 * hit[p] / stmts[p]
+            }' coverage.out | sort
+          } >> "$GITHUB_STEP_SUMMARY"
+          awk -v t="$total" -v f="$BACKEND_COVERAGE_FLOOR" 'BEGIN { exit (t+0 < f+0) }' || {
+            echo "::error::Backend coverage ${total}% fell below the ${BACKEND_COVERAGE_FLOOR}% floor."
+            exit 1
+          }
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.out
+          retention-days: 14
+
+      - name: Build the API binary
+        run: go build -trimpath -o /dev/null ./cmd/api
+
+  # ---------------------------------------------------------------------------
+  # Backend: known vulnerabilities in code that is actually reachable.
+  # ---------------------------------------------------------------------------
+  backend-vulncheck:
+    name: Backend vulnerabilities
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          check-latest: true
+          cache-dependency-path: backend/go.sum
+      # Fails only on vulnerabilities the code can reach, not on every advisory
+      # in the dependency tree - so a red result here is always actionable.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }} ./...
+
+  # ---------------------------------------------------------------------------
+  # Frontend
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the node:22-alpine build stage in the root Dockerfile.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install (exactly what the lockfile pins)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # `npm run build` also runs tsc, but a separate step makes a type error
+      # read as one in the PR checks instead of as a build failure.
+      - name: Type-check
+        run: npx tsc -b
+
+      # Thresholds live in vitest.config.ts so they apply locally too.
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Build
+        run: npm run build
+
+      - name: Bundle size
+        run: |
+          {
+            echo '### Frontend bundle'
+            echo
+            echo '| File | Size | Gzip |'
+            echo '|---|---|---|'
+            for f in $(find dist/assets -type f \( -name '*.js' -o -name '*.css' \) | sort); do
+              raw=$(wc -c < "$f")
+              gz=$(gzip -c "$f" | wc -c)
+              echo "| \`$(basename "$f")\` | $((raw / 1024)) kB | $((gz / 1024)) kB |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Production dependencies only: this is the code users download. Dev-tool
+      # advisories are reported by the scheduled security workflow instead, so
+      # a new advisory in the test runner can't block every merge.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Docker: build the exact image we ship, scan it, then run it for real.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker image
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint the Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          # DL3018: apk versions are pinned by the Alpine release tag instead.
+          ignore: DL3018
+          failure-threshold: warning
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: skillture:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Fixable HIGH/CRITICAL only: an unfixable CVE in the base image is not
+      # something a PR can resolve and would only train people to ignore red.
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: skillture:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: '1'
+
+      - name: Smoke test the running image
+        run: scripts/ci-smoke.sh skillture:ci
+
+  # ---------------------------------------------------------------------------
+  # The single required check. `if: always()` makes it run even when an
+  # upstream job failed, so it can report that failure instead of being skipped
+  # (a skipped required check blocks merging forever). Skipped-by-filter jobs
+  # count as success; failed or cancelled jobs do not.
+  # ---------------------------------------------------------------------------
+  ci-gate:
+    name: CI gate
+    if: always()
+    needs: [changes, backend-lint, backend-test, backend-vulncheck, frontend, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check results
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "job results: $RESULTS"
+          if echo "$RESULTS" | grep -Eq '"(failure|cancelled)"'; then
+            echo '::error::One or more CI jobs failed or were cancelled.'
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Publish: only from main or a version tag, and only after the gate is green.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish image
+    needs: ci-gate
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    concurrency:
+      group: publish-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Supply-chain evidence stored next to the image in the registry.
+          provenance: mode=max
+          sbom: true
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

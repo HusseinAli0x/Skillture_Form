@@ -21,7 +21,7 @@ COPY frontend/ .
 RUN npm run build
 
 # --- Stage 2: Build the API ---
-FROM golang:1.25.4-alpine AS backend
+FROM golang:1.25.14-alpine AS backend
 WORKDIR /src
 # Copy dependency files first so the module download layer is cached.
 COPY backend/go.mod backend/go.sum ./
@@ -32,7 +32,9 @@ COPY backend/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o main ./cmd/api/main.go
 
 # --- Stage 3: Caddy binary ---
-FROM caddy:2.10-alpine AS caddy
+# 2.10.x bundles a Go toolchain and libraries with known HIGH/CRITICAL advisories
+# (see the Trivy scan in CI); 2.11 is clean.
+FROM caddy:2.11-alpine AS caddy
 
 # --- Stage 4: Runtime ---
 FROM alpine:3.21
@@ -40,7 +42,9 @@ FROM alpine:3.21
 # ca-certificates is required for the outbound TLS call to the Gemini API.
 # Without it every request fails with:
 #   x509: certificate signed by unknown authority
-RUN apk add --no-cache ca-certificates tzdata
+# `apk upgrade` pulls in security fixes published since the base image was
+# built (OpenSSL had a HIGH advisory fixed in a patch after the 3.21 image).
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata
 
 # Run as an unprivileged user. Caddy therefore listens on 8080, not 80.
 RUN adduser -D -H -u 10001 skillture
@@ -152,7 +156,8 @@ USER skillture
 
 EXPOSE 8080
 
+# Exec form: wget exits non-zero on any failure, so no shell wrapper is needed.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \
-    CMD wget -q --spider http://127.0.0.1:8080/health || exit 1
+    CMD ["wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
