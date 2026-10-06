@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, Clock, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { Calendar, ChevronDown, Clock, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import client from '../api/client';
 import { useToastStore } from '../context/ToastStore';
 import { apiErrorMessage } from '../lib/apiError';
@@ -12,6 +12,7 @@ import {
   Label,
   Modal,
   PageHeader,
+  Select,
   Spinner,
   Textarea,
 } from '../components/ui';
@@ -24,7 +25,26 @@ interface Workshop {
   image_path: string | null;
   event_date: string;
   event_time: string | null;
+  track?: Track | null;
+  location?: string | null;
+  speaker?: string | null;
+  attendees?: number | null;
+  outcome?: { en?: string; ar?: string } | null;
+  recap?: { en?: string; ar?: string } | null;
+  gallery?: string[];
+  registration_url?: string | null;
 }
+
+type Track = 'technical' | 'career' | 'industry' | 'business';
+
+const TRACKS: { value: Track; label: string }[] = [
+  { value: 'technical', label: 'Technical' },
+  { value: 'career', label: 'Career' },
+  { value: 'industry', label: 'Industry' },
+  { value: 'business', label: 'Business' },
+];
+
+const MAX_GALLERY = 12;
 
 interface WorkshopForm {
   title_en: string;
@@ -36,6 +56,16 @@ interface WorkshopForm {
   event_date: string;
   event_time: string;
   image_path: string;
+  track: Track | '';
+  location: string;
+  speaker: string;
+  attendees: string;
+  outcome_en: string;
+  outcome_ar: string;
+  recap_en: string;
+  recap_ar: string;
+  registration_url: string;
+  gallery: string[];
 }
 
 const EMPTY_FORM: WorkshopForm = {
@@ -48,6 +78,16 @@ const EMPTY_FORM: WorkshopForm = {
   event_date: '',
   event_time: '',
   image_path: '',
+  track: '',
+  location: '',
+  speaker: '',
+  attendees: '',
+  outcome_en: '',
+  outcome_ar: '',
+  recap_en: '',
+  recap_ar: '',
+  registration_url: '',
+  gallery: [],
 };
 
 const toForm = (w: Workshop): WorkshopForm => ({
@@ -60,7 +100,24 @@ const toForm = (w: Workshop): WorkshopForm => ({
   event_date: w.event_date,
   event_time: w.event_time || '',
   image_path: w.image_path || '',
+  track: w.track || '',
+  location: w.location || '',
+  speaker: w.speaker || '',
+  attendees: w.attendees == null ? '' : String(w.attendees),
+  outcome_en: w.outcome?.en || '',
+  outcome_ar: w.outcome?.ar || '',
+  recap_en: w.recap?.en || '',
+  recap_ar: w.recap?.ar || '',
+  registration_url: w.registration_url || '',
+  gallery: w.gallery || [],
 });
+
+// A bilingual map is sent only when at least one language has text; the
+// backend stores an absent/empty map as NULL.
+const bilingual = (en: string, ar: string) =>
+  en.trim() || ar.trim() ? { en: en.trim(), ar: ar.trim() } : {};
+
+const isHttpUrl = (v: string) => /^https?:\/\/\S+$/i.test(v);
 
 const WorkshopsAdmin: React.FC = () => {
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
@@ -69,6 +126,8 @@ const WorkshopsAdmin: React.FC = () => {
   const [form, setForm] = useState<WorkshopForm>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isGalleryUploading, setIsGalleryUploading] = useState(false);
+  const [showAfter, setShowAfter] = useState(false);
   const [toDelete, setToDelete] = useState<Workshop | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const { addToast } = useToastStore();
@@ -86,11 +145,13 @@ const WorkshopsAdmin: React.FC = () => {
 
   const openCreate = () => {
     setForm(EMPTY_FORM);
+    setShowAfter(false);
     setEditing('new');
   };
 
   const openEdit = (w: Workshop) => {
     setForm(toForm(w));
+    setShowAfter(Boolean(w.recap || w.outcome || w.attendees != null || (w.gallery?.length ?? 0) > 0));
     setEditing(w);
   };
 
@@ -113,6 +174,36 @@ const WorkshopsAdmin: React.FC = () => {
     }
   };
 
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    const room = MAX_GALLERY - form.gallery.length;
+    if (room <= 0) {
+      addToast('error', `A gallery holds at most ${MAX_GALLERY} images`);
+      return;
+    }
+    if (files.length > room) addToast('error', `Only ${room} more image(s) fit; extra files were skipped`);
+
+    setIsGalleryUploading(true);
+    const uploaded: string[] = [];
+    try {
+      for (const file of files.slice(0, room)) {
+        const formData = new FormData();
+        formData.append('image', file);
+        const res = await client.post<{ file_path: string }>('/api/v1/admin/workshops/image', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        uploaded.push(res.data.file_path);
+      }
+    } catch (err) {
+      addToast('error', apiErrorMessage(err, 'Failed to upload image'));
+    } finally {
+      if (uploaded.length > 0) setForm(f => ({ ...f, gallery: [...f.gallery, ...uploaded] }));
+      setIsGalleryUploading(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!form.title_en.trim() || !form.title_ar.trim()) {
       addToast('error', 'Title is required in both English and Arabic');
@@ -127,6 +218,15 @@ const WorkshopsAdmin: React.FC = () => {
       return;
     }
 
+    if (form.registration_url.trim() && !isHttpUrl(form.registration_url.trim())) {
+      addToast('error', 'Registration link must start with http:// or https://');
+      return;
+    }
+    if (form.attendees.trim() && !(Number.isInteger(Number(form.attendees)) && Number(form.attendees) >= 0)) {
+      addToast('error', 'Attendees must be a whole number, 0 or more');
+      return;
+    }
+
     const payload = {
       title: { en: form.title_en.trim(), ar: form.title_ar.trim() },
       description: { en: form.description_en.trim(), ar: form.description_ar.trim() },
@@ -137,6 +237,14 @@ const WorkshopsAdmin: React.FC = () => {
       event_date: form.event_date,
       event_time: form.event_time || null,
       image_path: form.image_path || null,
+      track: form.track || null,
+      location: form.location.trim() || null,
+      speaker: form.speaker.trim() || null,
+      attendees: form.attendees.trim() ? Number(form.attendees) : null,
+      outcome: bilingual(form.outcome_en, form.outcome_ar),
+      recap: bilingual(form.recap_en, form.recap_ar),
+      gallery: form.gallery,
+      registration_url: form.registration_url.trim() || null,
     };
 
     setIsSaving(true);
@@ -225,19 +333,30 @@ const WorkshopsAdmin: React.FC = () => {
                     >
                       {isPast ? 'Past' : 'Upcoming'}
                     </span>
+                    {w.track && (
+                      <span className="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border border-border text-muted">
+                        {w.track}
+                      </span>
+                    )}
                   </div>
                   <h3 className="font-semibold text-text mb-1">{w.title.en}</h3>
                   <p className="text-xs text-muted mb-1" dir="rtl">
                     {w.title.ar}
                   </p>
                   <p className="text-sm text-muted line-clamp-2 mb-3">{w.description.en}</p>
-                  <div className="flex items-center gap-3 text-xs text-muted mb-4">
+                  <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-xs text-muted mb-4">
                     <span className="inline-flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5" /> {w.event_date}
                     </span>
                     {w.event_time && (
                       <span className="inline-flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" /> {w.event_time}
+                      </span>
+                    )}
+                    {w.location && (
+                      <span className="inline-flex items-center gap-1 min-w-0">
+                        <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">{w.location}</span>
                       </span>
                     )}
                   </div>
@@ -377,6 +496,165 @@ const WorkshopsAdmin: React.FC = () => {
                   className="!py-2 !px-3"
                 />
               </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="track">Track (optional)</Label>
+                <Select
+                  id="track"
+                  value={form.track}
+                  onChange={e => setForm(f => ({ ...f, track: e.target.value as Track | '' }))}
+                >
+                  <option value="">None</option>
+                  {TRACKS.map(t => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="location">Location (optional)</Label>
+                <Input
+                  id="location"
+                  value={form.location}
+                  onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                  className="!py-2 !px-3"
+                />
+              </div>
+              <div>
+                <Label htmlFor="speaker">Speaker / host (optional)</Label>
+                <Input
+                  id="speaker"
+                  value={form.speaker}
+                  onChange={e => setForm(f => ({ ...f, speaker: e.target.value }))}
+                  className="!py-2 !px-3"
+                />
+              </div>
+              <div>
+                <Label htmlFor="registration-url">Registration link (optional)</Label>
+                <Input
+                  id="registration-url"
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://"
+                  value={form.registration_url}
+                  onChange={e => setForm(f => ({ ...f, registration_url: e.target.value }))}
+                  className="!py-2 !px-3"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border">
+              <button
+                type="button"
+                onClick={() => setShowAfter(v => !v)}
+                aria-expanded={showAfter}
+                aria-controls="after-event"
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-text text-left"
+              >
+                After the event (shown on Our Work)
+                <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${showAfter ? 'rotate-180' : ''}`} />
+              </button>
+              {showAfter && (
+                <div id="after-event" className="space-y-4 px-4 pb-4 border-t border-border pt-4">
+                  <div>
+                    <Label htmlFor="attendees">Attendees</Label>
+                    <Input
+                      id="attendees"
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={form.attendees}
+                      onChange={e => setForm(f => ({ ...f, attendees: e.target.value }))}
+                      className="!py-2 !px-3 sm:max-w-[12rem]"
+                    />
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="outcome-en">Outcome headline (English)</Label>
+                      <Input
+                        id="outcome-en"
+                        placeholder="+34% average quiz score"
+                        value={form.outcome_en}
+                        onChange={e => setForm(f => ({ ...f, outcome_en: e.target.value }))}
+                        className="!py-2 !px-3"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="outcome-ar">Outcome headline (Arabic)</Label>
+                      <Input
+                        id="outcome-ar"
+                        dir="rtl"
+                        value={form.outcome_ar}
+                        onChange={e => setForm(f => ({ ...f, outcome_ar: e.target.value }))}
+                        className="!py-2 !px-3"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="recap-en">Recap (English)</Label>
+                      <Textarea
+                        id="recap-en"
+                        rows={4}
+                        value={form.recap_en}
+                        onChange={e => setForm(f => ({ ...f, recap_en: e.target.value }))}
+                        className="!py-2 !px-3 resize-none"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="recap-ar">Recap (Arabic)</Label>
+                      <Textarea
+                        id="recap-ar"
+                        dir="rtl"
+                        rows={4}
+                        value={form.recap_ar}
+                        onChange={e => setForm(f => ({ ...f, recap_ar: e.target.value }))}
+                        className="!py-2 !px-3 resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label>
+                      Photo gallery ({form.gallery.length}/{MAX_GALLERY})
+                    </Label>
+                    {form.gallery.length > 0 && (
+                      <ul className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-3">
+                        {form.gallery.map((path, i) => (
+                          <li key={path} className="relative aspect-square rounded-lg overflow-hidden border border-border">
+                            <img src={path} alt={`Gallery image ${i + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              aria-label={`Remove gallery image ${i + 1}`}
+                              onClick={() => setForm(f => ({ ...f, gallery: f.gallery.filter(g => g !== path) }))}
+                              className="absolute top-1 right-1 inline-flex items-center justify-center w-7 h-7 rounded-full bg-black/70 text-white hover:bg-danger"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <label className="relative block">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleGalleryUpload}
+                        disabled={isGalleryUploading || form.gallery.length >= MAX_GALLERY}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                      />
+                      <span className="w-full flex justify-center items-center gap-2 py-2 rounded-lg border border-border bg-hover-overlay-strong text-text text-sm font-medium pointer-events-none">
+                        <Upload className="w-4 h-4" />
+                        {isGalleryUploading ? 'Uploading…' : 'Add gallery photos'}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

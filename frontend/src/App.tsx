@@ -12,6 +12,10 @@ import MainLayout from './components/layout/MainLayout';
 import HomePage from './pages/HomePage';
 import HomepageEditor from './pages/HomepageEditor';
 import WorkshopsAdmin from './pages/WorkshopsAdmin';
+import TeamAdmin from './pages/TeamAdmin';
+import TeamPage from './pages/TeamPage';
+import OurWorkPage from './pages/OurWorkPage';
+import WorkshopDetailPage from './pages/WorkshopDetailPage';
 import ContactMessagesAdmin from './pages/ContactMessagesAdmin';
 import FormPreview from './pages/FormPreview';
 import QuizJoinHandler from './pages/QuizJoinHandler';
@@ -28,6 +32,9 @@ function App() {
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<HomePage />} />
+        <Route path="/our-work" element={<OurWorkPage />} />
+        <Route path="/team" element={<TeamPage />} />
+        <Route path="/workshops/:id" element={<WorkshopDetailPage />} />
         <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/admin/dashboard" />} />
         <Route path="/preview/form/:id" element={<FormPreview />} />
         <Route path="/quiz/:id" element={<QuizJoinHandler />} />
@@ -42,6 +49,7 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="homepage" element={<HomepageEditor />} />
           <Route path="workshops" element={<WorkshopsAdmin />} />
+          <Route path="team" element={<TeamAdmin />} />
           <Route path="messages" element={<ContactMessagesAdmin />} />
           <Route path="forms" element={<FormsPage />} />
           <Route path="forms/new" element={<FormBuilder />} />

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Calendar, Clock, Gamepad2, Mail, X } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { ArrowRight, Calendar, Clock, Gamepad2, Mail, Menu, X } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
 import client from '../api/client';
 import { Button, Spinner } from '../components/ui';
 import LanguageSwitcher from '../components/LanguageSwitcher';
@@ -8,6 +8,13 @@ import { setupScrollJourney } from '../lib/scrollJourney';
 import { useLanguageStore } from '../context/LanguageStore';
 import { translations } from '../lib/translations';
 import { localized } from '../lib/i18n';
+import { formatDate } from '../lib/formatDate';
+import { siteStrings } from '../lib/siteStrings';
+import type { Impact, PublicWorkshop, TeamMember } from '../api/publicTypes';
+import ImpactStrip from '../components/public/ImpactStrip';
+import LinkedInIcon from '../components/public/LinkedInIcon';
+import { Avatar } from '../components/public/TeamCard';
+import WorkshopCard from '../components/public/WorkshopCard';
 import { useToastStore } from '../context/ToastStore';
 import { apiErrorMessage } from '../lib/apiError';
 
@@ -78,13 +85,6 @@ const CONTACT_LINKEDIN = 'https://www.linkedin.com/company/skillture';
 
 const STATION_IDS = ['start', 'discover', 'learn', 'workshops', 'contact'] as const;
 
-// lucide-react dropped brand/logo icons; this is the standard LinkedIn glyph.
-const LinkedInIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-    <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.03-1.85-3.03-1.85 0-2.14 1.44-2.14 2.94v5.66H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.59 0 4.25 2.37 4.25 5.44v6.3zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45z" />
-  </svg>
-);
-
 /** A hairline vertical line that fills as the reader scrolls past it. */
 const Waypoint: React.FC = () => (
   <div data-waypoint className="flex flex-col items-center px-8 pb-11 pt-2">
@@ -103,18 +103,6 @@ const scrollToId = (id: string) => {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
-const formatDate = (isoDate: string, locale: string) => {
-  const d = new Date(`${isoDate}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return isoDate;
-  // -u-nu-latn keeps Western digits in the Arabic locale too (ar-EG defaults
-  // to Eastern Arabic-Indic numerals otherwise), matching the Western digits
-  // already used in the About stats — one numeral convention across the page.
-  return d.toLocaleDateString(locale === 'ar' ? 'ar-EG-u-nu-latn' : 'en-US', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-};
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -127,7 +115,32 @@ const HomePage: React.FC = () => {
   const [workshops, setWorkshops] = useState<Workshop[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [detail, setDetail] = useState<Workshop | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [impact, setImpact] = useState<Impact | null>(null);
+  const [recentWork, setRecentWork] = useState<PublicWorkshop[]>([]);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // The Our Work / Team teasers are optional extras: if any call fails the
+  // section simply stays hidden, the rest of the page is unaffected.
+  useEffect(() => {
+    client.get<Impact>('/api/v1/impact').then(r => setImpact(r.data)).catch(() => undefined);
+    client
+      .get<PublicWorkshop[]>('/api/v1/workshops/past')
+      .then(r => setRecentWork(Array.isArray(r.data) ? r.data.slice(0, 3) : []))
+      .catch(() => undefined);
+    client
+      .get<TeamMember[]>('/api/v1/team')
+      .then(r => setTeam(Array.isArray(r.data) ? r.data : []))
+      .catch(() => undefined);
+  }, []);
 
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' });
   const [isSending, setIsSending] = useState(false);
@@ -151,6 +164,14 @@ const HomePage: React.FC = () => {
       document.documentElement.lang = 'en';
     };
   }, [isRTL, locale]);
+
+  // Arriving from another page via /#contact: the section only exists once
+  // content has rendered, so the jump has to wait for isLoading to clear.
+  useEffect(() => {
+    if (isLoading) return;
+    const id = window.location.hash.slice(1);
+    if (id) document.getElementById(id)?.scrollIntoView({ block: 'start' });
+  }, [isLoading]);
 
   // The reveal/waypoint/rail elements only exist once content has rendered,
   // so this waits for isLoading to clear rather than running on mount. Reruns
@@ -195,6 +216,12 @@ const HomePage: React.FC = () => {
     { key: 'offer', label: T.nav.offer, href: '#learn' },
     { key: 'workshops', label: T.nav.workshops, href: '#workshops' },
     { key: 'contact', label: T.nav.contact, href: '#contact' },
+  ];
+
+  const SS = siteStrings[locale];
+  const PAGE_LINKS = [
+    { to: '/our-work', label: SS.nav.ourWork },
+    { to: '/team', label: SS.nav.team },
   ];
 
   const handleContactSubmit = async (e: React.FormEvent) => {
@@ -252,22 +279,67 @@ const HomePage: React.FC = () => {
       </aside>
 
       <header className="sticky top-0 z-50 flex items-center justify-between gap-4 px-5 sm:px-8 py-4 bg-bg/88 backdrop-blur-md border-b border-border">
-        <a href="#start" className="flex items-center gap-2.5">
+        <a href="#start" className="flex items-center gap-2.5 py-2 -my-2">
           <img src="/logo-icon.png" alt="" className="w-7 h-7 object-contain" />
           <span className="text-lg font-bold tracking-tight text-text">Skillture</span>
         </a>
-        <nav className="flex items-center gap-6 sm:gap-7">
+        <nav className="flex items-center gap-4 lg:gap-7">
           {NAV.map(nl => (
             <a
               key={nl.key}
               href={nl.href}
-              className="hidden sm:inline text-sm font-medium text-text whitespace-nowrap transition-colors duration-200 hover:text-primary"
+              className="hidden lg:inline text-sm font-medium text-text whitespace-nowrap py-3 -my-3 transition-colors duration-200 hover:text-primary"
             >
               {nl.label}
             </a>
           ))}
+          {PAGE_LINKS.map(pl => (
+            <Link
+              key={pl.to}
+              to={pl.to}
+              className="hidden lg:inline text-sm font-medium text-text whitespace-nowrap py-3 -my-3 transition-colors duration-200 hover:text-primary"
+            >
+              {pl.label}
+            </Link>
+          ))}
           <LanguageSwitcher />
+          <button
+            type="button"
+            onClick={() => setMenuOpen(o => !o)}
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+            aria-controls="mobile-nav"
+            className="lg:hidden inline-flex items-center justify-center w-11 h-11 -me-2 rounded-lg text-text hover:text-primary transition-colors"
+          >
+            {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </nav>
+        {menuOpen && (
+          <div
+            id="mobile-nav"
+            className="lg:hidden absolute inset-x-0 top-full bg-bg border-b border-border shadow-lg px-5 py-2"
+          >
+            {NAV.map(nl => (
+              <a
+                key={nl.key}
+                href={nl.href}
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center min-h-12 text-base font-medium text-text hover:text-primary border-b border-border last:border-b-0"
+              >
+                {nl.label}
+              </a>
+            ))}
+            {PAGE_LINKS.map(pl => (
+              <Link
+                key={pl.to}
+                to={pl.to}
+                className="flex items-center min-h-12 text-base font-medium text-text hover:text-primary border-b border-border last:border-b-0"
+              >
+                {pl.label}
+              </Link>
+            ))}
+          </div>
+        )}
       </header>
 
       {/* ── Start ─────────────────────────────────────────────────── */}
@@ -472,6 +544,95 @@ const HomePage: React.FC = () => {
           </div>
         )}
       </section>
+
+      {recentWork.length > 0 && (
+        <>
+          <Waypoint />
+          <section id="our-work" className="max-w-5xl mx-auto px-5 sm:px-8 pb-10">
+            <p data-reveal className="reveal text-xs font-bold tracking-[.14em] uppercase text-primary mb-3 text-center">
+              {SS.home.workKicker}
+            </p>
+            <h2
+              data-reveal
+              className="reveal font-extrabold tracking-tight text-text mb-3 text-center"
+              style={{ fontSize: 'clamp(26px,3.4vw,34px)', transitionDelay: '60ms' }}
+            >
+              {SS.home.workTitle}
+            </h2>
+            <p
+              data-reveal
+              className="reveal text-base leading-relaxed text-muted max-w-xl mx-auto mb-10 text-center text-pretty"
+              style={{ transitionDelay: '100ms' }}
+            >
+              {SS.home.workSubtitle}
+            </p>
+            {impact && (
+              <div data-reveal className="reveal mb-8">
+                <ImpactStrip impact={impact} />
+              </div>
+            )}
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {recentWork.map(w => (
+                <div key={w.id} data-reveal className="reveal">
+                  <WorkshopCard workshop={w} />
+                </div>
+              ))}
+            </div>
+            <div className="mt-8 text-center">
+              <Link
+                to="/our-work"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-6 rounded-lg bg-panel-2 border border-border text-text font-semibold hover:bg-panel-3 hover:border-border-strong transition-colors"
+              >
+                {SS.home.seeAll}
+                <ArrowRight className="w-4 h-4 rtl:rotate-180" />
+              </Link>
+            </div>
+          </section>
+        </>
+      )}
+
+      {team.length > 0 && (
+        <>
+          <Waypoint />
+          <section id="the-team" className="max-w-5xl mx-auto px-5 sm:px-8 pb-10">
+            <p data-reveal className="reveal text-xs font-bold tracking-[.14em] uppercase text-primary mb-3 text-center">
+              {SS.home.teamKicker}
+            </p>
+            <h2
+              data-reveal
+              className="reveal font-extrabold tracking-tight text-text mb-3 text-center"
+              style={{ fontSize: 'clamp(26px,3.4vw,34px)', transitionDelay: '60ms' }}
+            >
+              {SS.home.teamTitle}
+            </h2>
+            <p
+              data-reveal
+              className="reveal text-base leading-relaxed text-muted max-w-xl mx-auto mb-10 text-center text-pretty"
+              style={{ transitionDelay: '100ms' }}
+            >
+              {SS.home.teamSubtitle}
+            </p>
+            <ul data-reveal className="reveal flex flex-wrap justify-center gap-x-6 gap-y-7">
+              {team.slice(0, 6).map(m => (
+                <li key={m.id} className="flex flex-col items-center text-center w-28">
+                  <Avatar member={m} className="w-20 h-20 rounded-full text-2xl" />
+                  <span className="mt-3 text-sm font-semibold text-text leading-tight">{localized(m.name, '', locale)}</span>
+                  <span className="text-xs text-primary mt-0.5 leading-tight">{localized(m.role, '', locale)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-9 text-center">
+              <Link
+                to="/team"
+                className="inline-flex items-center justify-center gap-2 min-h-11 px-6 rounded-lg bg-panel-2 border border-border text-text font-semibold hover:bg-panel-3 hover:border-border-strong transition-colors"
+              >
+                {SS.home.meetTeam}
+                <ArrowRight className="w-4 h-4 rtl:rotate-180" />
+              </Link>
+            </div>
+          </section>
+        </>
+      )}
 
       <Waypoint />
 
