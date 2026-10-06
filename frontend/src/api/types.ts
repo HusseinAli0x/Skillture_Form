@@ -186,3 +186,61 @@ export interface QuizPlayer {
   avatar_id?: number;
   avatar_url?: string;
 }
+
+// ── Live game protocol ─────────────────────────────────
+// Frames pushed over /ws/sessions/:id/{host,join}; see
+// backend/internal/server/ws/hub.go for the message type names.
+
+/** Result of POST /sessions/:id/answer. */
+export interface AnswerResult {
+  is_correct: boolean;
+  score_awarded: number;
+  streak?: number;
+  streak_bonus?: number;
+  total_score?: number;
+  rank?: number;
+  players?: number;
+}
+
+/** question_results frame, and the `results` field of POST /sessions/:id/show_results. */
+export interface QuestionResults {
+  question_id: string;
+  correct_answer: Record<string, unknown>;
+  /** Votes per answer text. */
+  distribution: Record<string, number>;
+  answered: number;
+  players: number;
+  leaderboard: QuizPlayer[];
+}
+
+/** GET /api/v1/server-info */
+export interface ServerInfo {
+  lan_ips: string[];
+}
+
+export interface PlayerJoinedPayload {
+  player_id: string;
+  name: string;
+  avatar_id?: number | null;
+  avatar_url?: string | null;
+}
+
+export interface LobbySnapshotPayload {
+  status: QuizSessionStatus;
+  current_question_id?: string | null;
+  /** The live question, so a reconnecting player lands on it. */
+  question?: PublicQuizQuestion | null;
+  players: string[];
+}
+
+export type GameMessage =
+  | { type: 'player_joined'; payload: PlayerJoinedPayload }
+  | { type: 'game_started'; payload?: unknown }
+  | { type: 'question'; payload: PublicQuizQuestion }
+  | { type: 'answer_result'; payload: { player_id: string } }
+  | { type: 'leaderboard'; payload: QuizPlayer[] | null }
+  | { type: 'show_leaderboard'; payload: QuizPlayer[] | null }
+  | { type: 'question_results'; payload: QuestionResults }
+  | { type: 'game_finished'; payload: QuizPlayer[] | null }
+  | { type: 'lobby_snapshot'; payload: LobbySnapshotPayload }
+  | { type: 'error'; payload: unknown };

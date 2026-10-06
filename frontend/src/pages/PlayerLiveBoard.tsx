@@ -1,255 +1,452 @@
-import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
-import { useParams, useSearchParams } from 'react-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, Check, Send, X } from 'lucide-react';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import client from '../api/client';
 import { apiErrorStatus } from '../lib/apiError';
-import type { PublicQuizQuestion, QuizPlayer } from '../api/types';
+import type {
+  AnswerResult,
+  GameMessage,
+  PublicQuizQuestion,
+  QuestionResults,
+  QuizPlayer,
+} from '../api/types';
 import { playerSocketUrl } from '../api/ws';
-import { optionLabel } from '../lib/i18n';
-import { avatarForPlayer } from '../lib/avatars';
-import { Card } from '../components/ui';
+import { localized } from '../lib/i18n';
+import { Button } from '../components/ui';
+import GameShell, { ConnectionChip } from '../components/game/GameShell';
+import PlayerCard from '../components/game/PlayerCard';
+import AnswerTile from '../components/game/AnswerTile';
+import Countdown from '../components/game/Countdown';
+import Leaderboard from '../components/game/Leaderboard';
+import Podium from '../components/game/Podium';
+import { useNow } from '../components/game/hooks';
+import { useGameSocket } from '../components/game/useGameSocket';
+import { clearRejoin, loadRejoin } from '../components/game/rejoin';
+import {
+  answerFeedback,
+  correctAnswerText,
+  ordinal,
+  parseOptions,
+  sameAnswer,
+  secondsLeft,
+} from '../components/game/gameLogic';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 
-type ViewState = 'waiting' | 'question' | 'answered' | 'result' | 'leaderboard' | 'finished';
-
-/**
- * Answer-tile colours. Deliberately the fixed game palette rather than theme
- * tokens — players identify an answer by its colour on both the host screen
- * and their own device, so these must not move with the brand.
- */
-const ANSWER_COLORS = [
-  'bg-red-500 hover:bg-red-600',
-  'bg-blue-500 hover:bg-blue-600',
-  'bg-yellow-500 hover:bg-yellow-600',
-  'bg-green-500 hover:bg-green-600',
-];
-
-const RECONNECT_MS = 3000;
-const LEADERBOARD_SIZE = 10;
-
-interface Option {
-  id: string;
-  value: string;
-}
+type Phase = 'lobby' | 'between' | 'question' | 'answered' | 'results' | 'finished';
 
 const PlayerLiveBoard: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [searchParams] = useSearchParams();
   const playerId = searchParams.get('playerId');
+  if (!sessionId || !playerId) return <Navigate to="/play" replace />;
+  return <PlayerGame sessionId={sessionId} playerId={playerId} />;
+};
 
-  const [viewState, setViewState] = useState<ViewState>('waiting');
-  const [leaderboard, setLeaderboard] = useState<QuizPlayer[]>([]);
+const PlayerGame: React.FC<{ sessionId: string; playerId: string }> = ({ sessionId, playerId }) => {
+  useDocumentTitle('Skillture Quiz');
+
+  const [phase, setPhase] = useState<Phase>('lobby');
+  const [roster, setRoster] = useState<QuizPlayer[]>([]);
+  const [rosterLoaded, setRosterLoaded] = useState(false);
+  const [board, setBoard] = useState<QuizPlayer[]>([]);
+  const [prevBoard, setPrevBoard] = useState<QuizPlayer[] | undefined>(undefined);
   const [question, setQuestion] = useState<PublicQuizQuestion | null>(null);
-  const [options, setOptions] = useState<Option[]>([]);
-  const [startTime, setStartTime] = useState(0);
-  const [isCorrect, setIsCorrect] = useState(false);
-  const [scoreAwarded, setScoreAwarded] = useState(0);
+  const [startedAt, setStartedAt] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<AnswerResult | null>(null);
+  const [results, setResults] = useState<QuestionResults | null>(null);
+  const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
+  const [rankBefore, setRankBefore] = useState<number | null>(null);
+  const [sendError, setSendError] = useState('');
+  const [shortText, setShortText] = useState('');
+  const [final, setFinal] = useState<QuizPlayer[]>([]);
 
-  useEffect(() => {
-    if (!sessionId || !playerId) return;
+  // Refs the socket handler reads: it must see the current question without being re-created.
+  const questionRef = useRef<PublicQuizQuestion | null>(null);
+  questionRef.current = question;
+  const boardRef = useRef<QuizPlayer[]>([]);
+  boardRef.current = board;
+  const sending = useRef(false);
 
-    let ws: WebSocket | null = null;
-    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  const loadRoster = useCallback(() => {
+    client
+      .get<QuizPlayer[]>(`/api/v1/sessions/${sessionId}/leaderboard`)
+      .then(res => {
+        setRoster(res.data || []);
+        setBoard(prev => (prev.length ? prev : res.data || []));
+        setRosterLoaded(true);
+      })
+      .catch(() => undefined);
+  }, [sessionId]);
 
-    const connect = () => {
-      ws = new WebSocket(playerSocketUrl(sessionId, playerId));
+  useEffect(loadRoster, [loadRoster]);
 
-      ws.onmessage = event => {
-        try {
-          const msg = JSON.parse(event.data);
-          switch (msg.type) {
-            case 'question':
-              setQuestion(msg.payload);
-              setOptions(
-                Object.entries(msg.payload.options ?? {}).map(([id, opt]) => ({
-                  id,
-                  value: optionLabel(opt as never, id),
-                }))
-              );
-              setStartTime(Date.now());
-              setViewState('question');
-              break;
-            case 'show_leaderboard':
-              setLeaderboard(msg.payload);
-              setViewState('leaderboard');
-              break;
-            case 'game_finished':
-              setViewState('finished');
-              break;
-            // 'leaderboard' and 'answer_result' are host-facing; this screen
-            // waits for the explicit 'show_leaderboard' instead.
+  const startQuestion = useCallback((q: PublicQuizQuestion) => {
+    setQuestion(q);
+    setStartedAt(Date.now());
+    setPicked(null);
+    setAnswer(null);
+    setResults(null);
+    setAnsweredIds(new Set());
+    setSendError('');
+    setShortText('');
+    sending.current = false;
+    // Only a real ranking (someone has scored) can be moved from.
+    const rank = boardRef.current.some(p => p.score > 0) ? boardRef.current.findIndex(p => p.id === playerId) + 1 : 0;
+    setRankBefore(rank > 0 ? rank : null);
+    setPhase('question');
+  }, [playerId]);
+
+  const onMessage = useCallback(
+    (msg: GameMessage) => {
+      switch (msg.type) {
+        case 'lobby_snapshot': {
+          const { status, question: live } = msg.payload;
+          if (status === 'finished') {
+            setPhase('finished');
+            loadRoster();
+          } else if (status === 'active') {
+            // Reconnecting mid-game: land on the live question unless we are already on it.
+            if (live && live.id !== questionRef.current?.id) startQuestion(live);
+            else if (!live) setPhase(p => (p === 'lobby' ? 'between' : p));
           }
-        } catch (err) {
-          console.error('Malformed game message', err);
+          break;
         }
-      };
-
-      ws.onclose = () => {
-        reconnectTimeout = setTimeout(connect, RECONNECT_MS);
-      };
-    };
-
-    connect();
-
-    return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (ws) {
-        // Clear onclose first, or tearing down schedules another reconnect.
-        ws.onclose = null;
-        ws.close();
+        case 'player_joined':
+          loadRoster();
+          break;
+        case 'game_started':
+          setPhase(p => (p === 'lobby' ? 'between' : p));
+          break;
+        case 'question':
+          startQuestion(msg.payload);
+          break;
+        case 'answer_result':
+          setAnsweredIds(prev => new Set(prev).add(msg.payload.player_id));
+          break;
+        case 'leaderboard':
+          if (msg.payload) setBoard(msg.payload);
+          break;
+        case 'question_results':
+          setPrevBoard(boardRef.current);
+          setResults(msg.payload);
+          setBoard(msg.payload.leaderboard ?? []);
+          setPhase(p => (p === 'question' || p === 'answered' || p === 'between' ? 'results' : p));
+          break;
+        case 'show_leaderboard':
+          // Normally paired with question_results; this covers a results frame that failed to build.
+          if (msg.payload) setBoard(msg.payload);
+          setPhase(p => (p === 'question' || p === 'answered' ? 'results' : p));
+          break;
+        case 'game_finished':
+          if (msg.payload) setFinal(msg.payload);
+          setPhase('finished');
+          break;
       }
-    };
-  }, [sessionId, playerId]);
+    },
+    [loadRoster, startQuestion]
+  );
 
-  const submitAnswer = async (value: string) => {
-    if (!question || viewState !== 'question') return;
+  const status = useGameSocket(() => playerSocketUrl(sessionId, playerId), onMessage, loadRoster);
 
-    setViewState('answered');
-    const timeTaken = Date.now() - startTime;
-
+  const submit = async (value: string) => {
+    if (!question || phase !== 'question' || sending.current || !value.trim()) return;
+    sending.current = true;
+    setPicked(value);
+    setPhase('answered');
+    setSendError('');
     try {
-      // player_id and question_id are `binding:"required"` on the handler —
-      // omitting them makes every submission 400.
-      const res = await client.post(`/api/v1/sessions/${sessionId}/answer`, {
+      // player_id and question_id are `binding:"required"` on the handler.
+      const res = await client.post<AnswerResult>(`/api/v1/sessions/${sessionId}/answer`, {
         player_id: playerId,
         question_id: question.id,
-        answer: { value },
-        time_taken_ms: timeTaken,
+        answer: { value: value.trim() },
+        time_taken_ms: Date.now() - startedAt,
       });
-
-      setIsCorrect(res.data.is_correct);
-      setScoreAwarded(res.data.score_awarded);
-      setViewState('result');
+      setAnswer(res.data);
     } catch (err) {
-      console.error(err);
-      // 409 is the already-answered guard; the score is not returned, so this
-      // falls back to the result screen without one.
-      setViewState(apiErrorStatus(err) === 409 ? 'result' : 'waiting');
+      const code = apiErrorStatus(err);
+      if (code === 409) {
+        // Already counted (a retry after a flaky connection): the score is not returned.
+        setAnswer(null);
+      } else if (code === 422) {
+        sending.current = false;
+        setPicked(null);
+        setSendError('Too late. That question just closed.');
+        setPhase('between');
+      } else {
+        sending.current = false;
+        setPicked(null);
+        setSendError("Your answer didn't go through. Tap it again.");
+        setPhase('question');
+      }
     }
   };
 
-  const myRank = leaderboard.findIndex(row => row.id === playerId) + 1;
+  const me = useMemo(
+    () => roster.find(p => p.id === playerId) ?? board.find(p => p.id === playerId) ?? null,
+    [roster, board, playerId]
+  );
+  const saved = loadRejoin();
+  const myName = me?.name ?? (saved?.playerId === playerId ? saved.name : '');
+  const myRank = board.findIndex(p => p.id === playerId) + 1;
+  const myScore = board.find(p => p.id === playerId)?.score ?? me?.score ?? 0;
+
+  const options = useMemo(() => parseOptions(question?.options), [question]);
+  const now = useNow(250, phase === 'question');
+  const left = question ? secondsLeft(question.time_limit_sec, startedAt, now) : null;
+  const timeUp = left === 0;
+
+  const right = <ConnectionChip status={status} />;
+
+  // Seat not found: a stale link, or the session was deleted.
+  if (rosterLoaded && !me && phase === 'lobby') {
+    return (
+      <GameShell title="Skillture Quiz" right={right} status={status}>
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-5 text-center">
+          <h1 className="text-3xl font-extrabold">We can't find your seat</h1>
+          <p className="mt-2 text-muted">This link is for a game that has changed or ended. Join again with the PIN.</p>
+          <Link to="/play" onClick={clearRejoin}>
+            <Button className="mt-6 !h-12">Enter a PIN</Button>
+          </Link>
+        </div>
+      </GameShell>
+    );
+  }
+
+  const feedback = answer
+    ? answerFeedback({
+        correct: answer.is_correct,
+        points: answer.score_awarded,
+        streak: answer.streak,
+        streakBonus: answer.streak_bonus,
+      })
+    : null;
+
+  const correct = correctAnswerText(results?.correct_answer);
+  const iWasRight = answer ? answer.is_correct : picked !== null && sameAnswer(picked, correct);
+  const moved = rankBefore && myRank ? rankBefore - myRank : 0;
+  const total = results?.players ?? roster.length;
 
   return (
-    <div className="min-h-screen bg-bg text-text flex flex-col items-center justify-center p-6">
-      {viewState === 'waiting' && (
-        <div className="text-center space-y-6 animate-pulse">
-          <Loader2 className="w-16 h-16 animate-spin text-primary mx-auto" />
-          <h2 className="text-3xl font-bold">Get Ready!</h2>
-          <p className="text-muted text-lg">Waiting for the host to show the next question on screen…</p>
-        </div>
-      )}
-
-      {viewState === 'question' && question && (
-        <div className="w-full max-w-2xl h-full flex flex-col gap-4">
-          <Card className="rounded-3xl p-8 mb-4 text-center">
-            <h2 className="text-2xl font-bold">Look at the screen!</h2>
-            <p className="text-muted mt-2">Select your answer below.</p>
-          </Card>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 w-full">
-            {options.map((opt, idx) => (
-              <button
-                key={opt.id}
-                onClick={() => submitAnswer(opt.value)}
-                className={`w-full aspect-video rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-lg transition-transform active:scale-95 ${
-                  ANSWER_COLORS[idx % ANSWER_COLORS.length]
-                }`}
-              >
-                <span className="px-4 text-center break-words drop-shadow-md">{opt.value}</span>
-              </button>
-            ))}
+    <GameShell
+      title={myName || 'Skillture Quiz'}
+      right={right}
+      status={status}
+      pattern={phase === 'lobby' || phase === 'finished' ? 'soft' : 'faint'}
+    >
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]" aria-live="polite">
+        {phase === 'lobby' && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
+            <PlayerCard id={playerId} name={myName || 'You'} avatarId={me?.avatar_id} avatarUrl={me?.avatar_url} size="lg" strap entering />
+            <div>
+              <h1 className="text-3xl font-extrabold">You're in</h1>
+              <p className="mt-1 text-muted">
+                {roster.length > 1 ? `${roster.length} players are here.` : "You're the first one here."} The host starts the game.
+              </p>
+              <p className="mt-4 inline-flex items-center gap-2 text-sm text-muted">
+                <span aria-hidden="true" className="game-live h-2 w-2 rounded-full bg-primary" />
+                Waiting for the host
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {viewState === 'answered' && (
-        <div className="text-center space-y-6">
-          <Loader2 className="w-16 h-16 animate-spin text-muted mx-auto" />
-          <h2 className="text-3xl font-bold">Answer Submitted!</h2>
-          <p className="text-muted">Waiting for other players…</p>
-        </div>
-      )}
+        {phase === 'between' && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+            <span aria-hidden="true" className="game-live h-3 w-3 rounded-full bg-primary" />
+            <h1 className="text-3xl font-extrabold">Eyes on the big screen</h1>
+            <p className="text-muted">{sendError || 'The next question is on its way.'}</p>
+          </div>
+        )}
 
-      {viewState === 'result' && (
-        <div
-          className={`text-center space-y-6 w-full max-w-md p-12 rounded-3xl shadow-2xl ${
-            isCorrect ? 'bg-green-600' : 'bg-red-600'
-          }`}
-        >
-          {isCorrect ? (
-            <CheckCircle2 className="w-24 h-24 mx-auto text-white drop-shadow-lg" />
-          ) : (
-            <XCircle className="w-24 h-24 mx-auto text-white drop-shadow-lg" />
-          )}
-          <h2 className="text-5xl font-black text-white">{isCorrect ? 'Correct!' : 'Incorrect'}</h2>
-
-          {isCorrect && (
-            <div className="mt-8 bg-black/20 py-4 rounded-xl">
-              <p className="text-white font-bold text-2xl">+{Math.round(scoreAwarded)}</p>
+        {phase === 'question' && question && (
+          <div className="flex flex-1 flex-col gap-4 pt-1">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+              <span>Question {question.position}</span>
+              <span>{question.points} pts</span>
             </div>
-          )}
+            <Countdown left={left} total={question.time_limit_sec} variant="phone" />
+            <h1 className="text-2xl font-bold leading-snug">{localized(question.question)}</h1>
 
-          <p className="text-white/80 mt-6 font-medium">Wait for the leaderboard…</p>
-        </div>
-      )}
+            {timeUp && (
+              <p role="status" className="text-center text-sm font-medium text-warning">
+                Time's up. Waiting for the results.
+              </p>
+            )}
+            {sendError && (
+              <p role="alert" className="text-center text-sm font-medium text-danger">
+                {sendError}
+              </p>
+            )}
 
-      {viewState === 'leaderboard' && (
-        <div className="w-full max-w-md space-y-6">
-          <Card className="rounded-3xl p-6 shadow-2xl">
-            <h2 className="text-3xl font-bold text-center mb-6 text-warning">
-              Top {LEADERBOARD_SIZE} Leaders
-            </h2>
-            <div className="space-y-3">
-              {leaderboard.slice(0, LEADERBOARD_SIZE).map((row, idx) => {
-                const isMe = row.id === playerId;
-                const avatar = avatarForPlayer(row.id, row.avatar_id);
-                return (
-                  <div
-                    key={row.id}
-                    className={`flex justify-between items-center p-4 rounded-xl ${
-                      isMe ? 'bg-primary-border border border-primary' : 'bg-panel-2'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <span className="font-bold text-muted w-6">{idx + 1}</span>
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 border border-border-strong bg-panel-3"
-                        aria-hidden
-                      >
-                        {row.avatar_url ? (
-                          <img src={row.avatar_url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span style={{ color: avatar.color }} className="text-base leading-none">
-                            {avatar.glyph}
-                          </span>
-                        )}
-                      </div>
-                      <span className={`font-bold ${isMe ? 'text-primary' : 'text-text'}`}>
-                        {row.name} {isMe && '(You)'}
-                      </span>
-                    </div>
-                    <span className="font-bold">{row.score}</span>
-                  </div>
-                );
-              })}
-            </div>
+            {options.length > 0 ? (
+              <div className="mt-auto flex flex-col gap-3">
+                {options.map((o, i) => (
+                  <AnswerTile key={o.id} index={i} label={o.label} disabled={timeUp} onClick={() => submit(o.label)} />
+                ))}
+              </div>
+            ) : (
+              <form
+                className="mt-auto flex flex-col gap-3"
+                onSubmit={e => {
+                  e.preventDefault();
+                  submit(shortText);
+                }}
+              >
+                <label htmlFor="short-answer" className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  Your answer
+                </label>
+                <input
+                  id="short-answer"
+                  value={shortText}
+                  onChange={e => setShortText(e.target.value)}
+                  disabled={timeUp}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  enterKeyHint="send"
+                  placeholder="Type it here"
+                  className="h-16 rounded-2xl border-2 border-border bg-bg px-4 font-display text-2xl font-bold text-text outline-none focus:border-primary"
+                  autoFocus
+                />
+                <Button type="submit" size="lg" disabled={timeUp || !shortText.trim()} className="!h-16 !text-lg">
+                  <Send className="h-5 w-5" aria-hidden="true" /> Send answer
+                </Button>
+              </form>
+            )}
+          </div>
+        )}
 
-            {myRank > LEADERBOARD_SIZE && (
-              <div className="mt-6 pt-6 border-t border-border text-center">
-                <p className="text-xl text-muted">
-                  Your Rank: <span className="font-bold text-text">#{myRank}</span>
-                </p>
+        {phase === 'answered' && (
+          <div className="flex flex-1 flex-col justify-center gap-5">
+            {feedback ? (
+              <FeedbackPanel tone={feedback.tone} headline={feedback.headline} detail={feedback.detail} points={answer?.score_awarded ?? 0} streak={answer?.streak ?? 0} />
+            ) : (
+              <div className="game-rise rounded-3xl border border-border bg-panel p-8 text-center">
+                <h1 className="text-3xl font-extrabold">Locked in</h1>
+                <p className="mt-1 text-muted">{answer === null && picked ? 'Your answer is in.' : 'Sending…'}</p>
               </div>
             )}
-          </Card>
-        </div>
-      )}
+            <div className="text-center text-muted">
+              <p className="font-medium text-text">
+                {answeredIds.size > 0 ? `${answeredIds.size} of ${answer?.players ?? total ?? '?'} answered` : 'Waiting for the others'}
+              </p>
+              {answer?.rank ? (
+                <p className="text-sm">
+                  You're {ordinal(answer.rank)} with {answer.total_score ?? myScore} points
+                </p>
+              ) : null}
+            </div>
+            {picked && <p className="text-center text-sm text-muted">You chose: {picked}</p>}
+          </div>
+        )}
 
-      {viewState === 'finished' && (
-        <div className="text-center space-y-6">
-          <h2 className="text-4xl font-black text-primary">Game Over!</h2>
-          <p className="text-text text-xl">Check the main screen to see the final podium.</p>
-        </div>
+        {phase === 'results' && (
+          <div className="flex flex-1 flex-col gap-5 pt-2">
+            {feedback ? (
+              <FeedbackPanel tone={feedback.tone} headline={feedback.headline} detail={feedback.detail} points={answer?.score_awarded ?? 0} streak={answer?.streak ?? 0} />
+            ) : (
+              <FeedbackPanel
+                tone={picked === null ? 'missed' : iWasRight ? 'correct' : 'wrong'}
+                headline={picked === null ? "Time's up" : iWasRight ? 'Correct' : 'Not this time'}
+                detail={picked === null ? 'You did not answer this one.' : 'Your answer was recorded.'}
+                points={0}
+                streak={0}
+              />
+            )}
+
+            {correct && !iWasRight && (
+              <div className="game-rise rounded-2xl border border-primary-border bg-primary-soft px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted">The answer was</p>
+                <p className="font-display text-2xl font-bold text-primary">{correct}</p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between rounded-2xl border border-border bg-panel px-4 py-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted">Your place</p>
+                <p className="font-display text-3xl font-extrabold">{myRank ? ordinal(myRank) : '–'}</p>
+              </div>
+              {moved !== 0 && (
+                <span className={`inline-flex items-center gap-1 text-sm font-bold ${moved > 0 ? 'text-primary' : 'text-muted'}`}>
+                  {moved > 0 ? <ArrowUp className="h-4 w-4" aria-hidden="true" /> : <ArrowDown className="h-4 w-4" aria-hidden="true" />}
+                  {moved > 0 ? `Up ${moved}` : `Down ${-moved}`}
+                </span>
+              )}
+              <p className="text-end">
+                <span className="block font-display text-3xl font-extrabold tabular-nums">{myScore}</span>
+                <span className="text-xs uppercase tracking-widest text-muted">points</span>
+              </p>
+            </div>
+
+            {board.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">Top of the room</p>
+                <Leaderboard rows={board} previous={prevBoard} variant="phone" meId={playerId} limit={3} />
+              </div>
+            )}
+
+            <p className="mt-auto pt-2 text-center text-sm text-muted">Waiting for the host to move on…</p>
+          </div>
+        )}
+
+        {phase === 'finished' && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 py-4 text-center">
+            <div>
+              <h1 className="text-4xl font-extrabold">Game over</h1>
+              {myRank > 0 ? (
+                <p className="mt-1 text-lg text-muted">
+                  You finished <span className="font-bold text-primary">{ordinal(myRank)}</span> with {myScore} points.
+                </p>
+              ) : (
+                <p className="mt-1 text-muted">Thanks for playing.</p>
+              )}
+            </div>
+            <Podium rows={(final.length ? final : board).slice(0, 3)} meId={playerId} size="phone" />
+            <Link to="/play" onClick={clearRejoin} className="w-full">
+              <Button size="lg" block className="!h-14">
+                Join another game
+              </Button>
+            </Link>
+          </div>
+        )}
+      </main>
+    </GameShell>
+  );
+};
+
+const FeedbackPanel: React.FC<{
+  tone: 'correct' | 'wrong' | 'missed';
+  headline: string;
+  detail: string;
+  points: number;
+  streak: number;
+}> = ({ tone, headline, detail, points, streak }) => {
+  const good = tone === 'correct';
+  return (
+    <div
+      className={`${tone === 'wrong' ? 'game-shake' : 'game-pop'} rounded-3xl border-2 p-7 text-center ${
+        good
+          ? 'border-primary bg-primary text-ink'
+          : tone === 'wrong'
+            ? 'border-danger-border bg-danger-soft text-text'
+            : 'border-border bg-panel text-text'
+      }`}
+    >
+      <span
+        className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${
+          good ? 'bg-ink text-primary' : tone === 'wrong' ? 'bg-danger text-ink' : 'bg-panel-3 text-muted'
+        }`}
+      >
+        {good ? <Check className="h-9 w-9" strokeWidth={3.5} aria-hidden="true" /> : <X className="h-9 w-9" strokeWidth={3.5} aria-hidden="true" />}
+      </span>
+      <h1 className="mt-3 text-4xl font-extrabold">{headline}</h1>
+      {good && points > 0 && <p className="mt-1 font-display text-3xl font-extrabold tabular-nums">+{points}</p>}
+      <p className={`mt-1 text-sm ${good ? 'text-ink/80' : 'text-muted'}`}>{detail}</p>
+      {good && streak >= 2 && (
+        <p className="mt-3 inline-block rounded-full bg-ink px-3 py-1 text-xs font-bold uppercase tracking-widest text-primary">
+          Streak x{streak}
+        </p>
       )}
     </div>
   );

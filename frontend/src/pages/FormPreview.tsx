@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
-import { AlertCircle, CheckCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import client from '../api/client';
 import { apiErrorMessage } from '../lib/apiError';
 import { FieldType, FormStatus } from '../api/types';
 import type { Form, FormField } from '../api/types';
 import { localized } from '../lib/i18n';
 import { Button, Card, Spinner } from '../components/ui';
+import { Frieze, Logo, Pattern } from '../components/brand';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 import FieldInput from '../components/forms/FieldInput';
 
 const isBlank = (value: unknown) =>
@@ -46,6 +48,8 @@ const FormPreview: React.FC = () => {
   // submission, but without this the page renders as a live form and only
   // surfaces the problem after the respondent has filled it in.
   const isAcceptingResponses = form != null && form.status === FormStatus.Published;
+
+  useDocumentTitle(form ? localized(form.title, 'Form') : 'Form');
 
   useEffect(() => {
     client
@@ -113,6 +117,9 @@ const FormPreview: React.FC = () => {
     }
   };
 
+  const required = fields.filter(f => f.required).length;
+  const answeredRequired = fields.filter(f => f.required && !isBlank(formData[f.id])).length;
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center">
@@ -123,22 +130,44 @@ const FormPreview: React.FC = () => {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center p-4">
-        <Card className="p-8 max-w-md w-full text-center shadow-2xl">
-          <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-text mb-2">Thank You!</h2>
-          <p className="text-muted">Your response has been submitted successfully.</p>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-bg p-4">
+        <Pattern className="text-white opacity-[0.04]" />
+        <Card className="relative w-full max-w-md p-8 text-center shadow-2xl">
+          <Logo variant="icon" decorative className="mx-auto mb-4 h-12 text-primary" />
+          <h1 className="mb-2 text-3xl font-bold text-text">Thank you</h1>
+          <p className="text-muted">Your response has been submitted. You can close this page.</p>
+          <Frieze className="mt-6 text-border-strong" />
+          <button
+            type="button"
+            onClick={() => {
+              setFormData({});
+              setSubmitted(false);
+            }}
+            className="mt-2 text-sm text-primary underline-offset-4 hover:underline"
+          >
+            Submit another response
+          </button>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-bg py-12 px-4 font-sans text-text">
-      <div className="max-w-2xl mx-auto">
-        <Card className="rounded-t-xl border-t-[6px] border-t-primary p-8 mb-4 shadow-xl">
-          <h1 className="text-3xl font-bold text-text mb-2">{localized(form?.title, 'Form')}</h1>
+    <div className="relative min-h-screen overflow-hidden bg-bg px-4 py-8 font-sans text-text sm:py-12">
+      <Pattern className="text-white opacity-[0.035]" />
+      <div className="relative mx-auto max-w-2xl">
+        <div className="mb-5 flex items-center gap-3">
+          <Logo variant="icon" decorative className="h-8 text-primary" />
+          <span className="font-display text-lg font-bold tracking-wide">Skillture</span>
+        </div>
+        <Card className="mb-4 rounded-t-xl border-t-[6px] border-t-primary p-6 shadow-xl sm:p-8">
+          <h1 className="mb-2 text-3xl font-bold text-text">{localized(form?.title, 'Form')}</h1>
           {form?.description && <p className="text-muted">{localized(form.description)}</p>}
+          {required > 0 && (
+            <p className="mt-4 text-xs text-muted">
+              <span className="text-danger">*</span> marks a required question. {answeredRequired} of {required} answered.
+            </p>
+          )}
         </Card>
 
         {error && (
@@ -168,7 +197,7 @@ const FormPreview: React.FC = () => {
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-text">
                     {localized(field.label, 'Question')}
-                    {field.required && <span className="text-danger ml-1">*</span>}
+                    {field.required && <span className="ms-1 text-danger" aria-hidden="true">*</span>}
                   </span>
                   {fieldError && (
                     <span
@@ -191,9 +220,9 @@ const FormPreview: React.FC = () => {
             );
           })}
 
-          <div className="pt-4 flex justify-between items-center">
+          <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-4 border-t border-border bg-bg/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:pt-4 sm:backdrop-blur-none">
             <p className="text-xs text-muted">Never submit passwords through forms.</p>
-            <Button type="submit" loading={isSubmitting} disabled={fields.length === 0 || !isAcceptingResponses}>
+            <Button type="submit" size="lg" loading={isSubmitting} disabled={fields.length === 0 || !isAcceptingResponses}>
               {isSubmitting ? 'Submitting…' : 'Submit'}
             </Button>
           </div>
