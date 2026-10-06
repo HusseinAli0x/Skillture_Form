@@ -1,0 +1,127 @@
+name: CI/CD Pipeline
+
+# Trigger the workflow on push or pull request to main/master branches
+on:
+  push:
+    branches: [ main, master, AIdev ]
+  pull_request:
+    branches: [ main, master, AIdev ]
+
+jobs:
+  # ---- Stage 1a: Backend (Go) ----
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+    - name: Checkout application code
+      uses: actions/checkout@v4
+
+    - name: Set up Go environment
+      uses: actions/setup-go@v5
+      with:
+        # Read from backend/go.mod so this can never drift. Pinning '1.22' here
+        # failed with "go.mod requires go >= 1.25.4".
+        go-version-file: backend/go.mod
+        cache-dependency-path: backend/go.sum
+
+    - name: Install project dependencies
+      run: go mod download
+
+    # `go fmt` rewrites files and always exits 0, so it is useless as a gate.
+    # gofmt -l prints offending files; a non-empty list fails the step.
+    - name: Check code formatting
+      run: |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "The following files are not gofmt'd:"
+          echo "$unformatted"
+          exit 1
+        fi
+
+    - name: Vet
+      run: go vet ./...
+
+    - name: Run unit tests
+      # Repository integration tests skip themselves unless TEST_DATABASE_URL
+      # points at a live Postgres.
+      run: go test -race ./...
+
+    - name: Verify application compiles successfully
+      run: go build -v -o main ./cmd/api/main.go
+
+  # ---- Stage 1b: Frontend (Vite/React) ----
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+    - name: Checkout application code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        # Matches the node:22-alpine build stage in the root Dockerfile.
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Lint
+      run: npm run lint
+
+    # The tree is at zero advisories. `xlsx` sat here for months as a known
+    # high with no published fix and nothing failed because of it; this is what
+    # makes the next one visible.
+    - name: Audit dependencies
+      run: npm audit --audit-level=high
+
+    - name: Run unit tests
+      run: npm test
+
+    # `npm run build` is `tsc -b && vite build`. A bare `tsc --noEmit` checks
+    # nothing here: the root tsconfig.json holds only project references and
+    # `"files": []`, so it always exits 0.
+    - name: Type-check and build
+      run: npm run build
+
+  # ---- Stage 2: Continuous Delivery (Build & Push Docker Image) ----
+  # One image holds the SPA, the API and Caddy — see the root Dockerfile.
+  docker-build-and-push:
+    needs: [ backend, frontend ]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout application code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx for advanced caching features
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry (GHCR)
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build Docker image and push to GHCR
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        push: true
+        # Tag with the commit SHA as well as latest so a bad release can be
+        # rolled back to a specific build.
+        tags: |
+          ghcr.io/${{ github.repository }}:latest
+          ghcr.io/${{ github.repository }}:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
