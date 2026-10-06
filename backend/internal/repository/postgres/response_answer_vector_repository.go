@@ -124,7 +124,6 @@ func (r *ResponseAnswerVectorRepository) List(ctx context.Context, filter interf
 	if filter.ModelName != nil {
 		query += fmt.Sprintf(" AND model_name=$%d", argPos)
 		args = append(args, *filter.ModelName)
-		argPos++
 	}
 
 	rows, err := r.base.Query(ctx, query, args...)

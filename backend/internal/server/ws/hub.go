@@ -89,7 +89,7 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		_ = c.conn.Close() // already closing; the error carries nothing actionable
 	}()
 
 	for {
@@ -124,7 +124,7 @@ func (c *Client) writePump() {
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		_ = c.conn.Close() // already closing; the error carries nothing actionable
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)

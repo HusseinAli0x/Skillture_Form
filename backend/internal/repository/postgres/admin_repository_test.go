@@ -26,12 +26,17 @@ func TestAdminRepository_CRUD(t *testing.T) {
 	// Test CRUD operations
 	// =========================
 
+	// The migrations seed a bootstrap admin, so the table is not empty on a
+	// fresh database. Count relative to what is already there.
+	before, err := repo.List(context.Background())
+	require.NoError(t, err)
+
 	// ===== Create =====
 	admin := &entities.Admin{
 		Username:       "admin1",
 		HashedPassword: "hashed_pass",
 	}
-	err := repo.Create(context.Background(), admin)
+	err = repo.Create(context.Background(), admin)
 	require.NoError(t, err)
 	require.NotEqual(t, uuid.Nil, admin.ID)
 
@@ -59,7 +64,7 @@ func TestAdminRepository_CRUD(t *testing.T) {
 	// ===== List =====
 	list, err := repo.List(context.Background())
 	require.NoError(t, err)
-	require.Len(t, list, 1)
+	require.Len(t, list, len(before)+1)
 
 	// ===== Delete =====
 	err = repo.Delete(context.Background(), admin.ID)

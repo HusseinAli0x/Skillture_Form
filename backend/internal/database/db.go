@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"sync/atomic"
 	"time"
 
@@ -63,8 +64,8 @@ func New(cfg config.DatabaseConfig) (*DB, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
-	poolCfg.MaxConns = int32(cfg.MaxOpenConns)
-	poolCfg.MinConns = int32(cfg.MinConns)
+	poolCfg.MaxConns = clampInt32(cfg.MaxOpenConns)
+	poolCfg.MinConns = clampInt32(cfg.MinConns)
 	poolCfg.MaxConnLifetime = cfg.MaxConnLifetime
 	poolCfg.MaxConnIdleTime = cfg.MaxConnIdleTime
 	poolCfg.HealthCheckPeriod = cfg.HealthCheckPeriod
@@ -78,8 +79,8 @@ func New(cfg config.DatabaseConfig) (*DB, error) {
 		"idle_in_transaction_session_timeout": "60000",
 	}
 
-	poolCfg.BeforeAcquire = func(ctx context.Context, conn *pgx.Conn) bool {
-		return setTenantContext(ctx, conn)
+	poolCfg.PrepareConn = func(ctx context.Context, conn *pgx.Conn) (bool, error) {
+		return setTenantContext(ctx, conn), nil
 	}
 
 	poolCfg.AfterRelease = func(conn *pgx.Conn) bool {
@@ -278,7 +279,9 @@ func (db *DB) BatchExec(ctx context.Context, queries []BulkQuery) error {
 	}
 
 	br := db.pool.SendBatch(ctx, batch)
-	defer br.Close()
+	// Each statement's error is returned from br.Exec below; Close only repeats
+	// the first of them, so there is nothing further to report here.
+	defer func() { _ = br.Close() }()
 
 	for i := 0; i < len(queries); i++ {
 		if _, err := br.Exec(); err != nil {
@@ -400,4 +403,16 @@ func isRetryable(err error) bool {
 		}
 	}
 	return false
+}
+
+// clampInt32 converts a configured pool size to the int32 pgx wants without
+// overflowing on an absurd value.
+func clampInt32(n int) int32 {
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if n < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(n)
 }

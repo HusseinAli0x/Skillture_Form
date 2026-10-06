@@ -45,7 +45,7 @@ func saveImageUpload(c *gin.Context, uploadCfg config.UploadConfig) {
 	}
 
 	uploadDir := "uploads"
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadDir, 0o750); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
 		return
 	}

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"skillture/backend/internal/domain/entities"
@@ -111,7 +112,7 @@ func (r *quizQuestionRepository) GetByID(ctx context.Context, id uuid.UUID) (*en
 	`
 
 	qq, err := scanQuizQuestion(r.QueryRow(ctx, query, id))
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"skillture/backend/internal/domain/entities"
@@ -90,7 +91,7 @@ func (r *quizSessionRepository) GetByID(ctx context.Context, id uuid.UUID) (*ent
 	query := `SELECT ` + quizSessionColumns + ` FROM quiz_sessions WHERE id = $1`
 
 	s, err := scanQuizSession(r.QueryRow(ctx, query, id))
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -105,7 +106,7 @@ func (r *quizSessionRepository) GetByPIN(ctx context.Context, pin string) (*enti
 	query := `SELECT ` + quizSessionColumns + ` FROM quiz_sessions WHERE pin = $1`
 
 	s, err := scanQuizSession(r.QueryRow(ctx, query, pin))
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

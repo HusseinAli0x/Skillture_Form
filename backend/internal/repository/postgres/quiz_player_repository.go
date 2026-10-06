@@ -82,7 +82,7 @@ func (r *quizPlayerRepository) GetByID(ctx context.Context, id uuid.UUID) (*enti
 	`
 
 	p, err := scanQuizPlayer(r.QueryRow(ctx, query, id))
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 
@@ -205,12 +206,12 @@ func (h *QuizWSHandler) SubmitAnswer(c *gin.Context) {
 		TimeTakenMs: req.TimeTakenMs,
 	})
 	if err != nil {
-		switch err {
-		case domainErrors.ErrAlreadyAnswered:
+		switch {
+		case errors.Is(err, domainErrors.ErrAlreadyAnswered):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-		case domainErrors.ErrPlayerNotInSession:
+		case errors.Is(err, domainErrors.ErrPlayerNotInSession):
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
-		case domainErrors.ErrSessionNotActive, domainErrors.ErrQuestionNotCurrent:
+		case errors.Is(err, domainErrors.ErrSessionNotActive), errors.Is(err, domainErrors.ErrQuestionNotCurrent):
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

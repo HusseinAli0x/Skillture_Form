@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -86,8 +87,8 @@ func (r *BaseRepository) WithTx(ctx context.Context, fn func(txRepo *BaseReposit
 		// until the connection is reaped.
 		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.timeout)
 		defer cancel()
-		if rbErr := tx.Rollback(rollbackCtx); rbErr != nil && rbErr != pgx.ErrTxClosed {
-			return fmt.Errorf("%w (rollback failed: %v)", err, rbErr)
+		if rbErr := tx.Rollback(rollbackCtx); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
+			return fmt.Errorf("%w (rollback failed: %w)", err, rbErr)
 		}
 		return err
 	}

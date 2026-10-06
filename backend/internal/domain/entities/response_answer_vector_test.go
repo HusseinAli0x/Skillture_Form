@@ -1,6 +1,7 @@
 package entities_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -60,7 +61,7 @@ func TestResponseAnswerVector_IsValid(t *testing.T) {
 		Embedding: []float32{0.1, 0.2},
 		ModelName: enums.ModelTextEmbedding3Large,
 	}
-	if err := missingID.IsValid(); err != entities.ErrMissingResponseAnswerID {
+	if err := missingID.IsValid(); !errors.Is(err, entities.ErrMissingResponseAnswerID) {
 		t.Errorf("expected ErrMissingResponseAnswerID, got %v", err)
 	}
 
@@ -70,7 +71,7 @@ func TestResponseAnswerVector_IsValid(t *testing.T) {
 		ResponseAnswerID: uuid.New(),
 		ModelName:        enums.ModelTextEmbedding3Large,
 	}
-	if err := noEmbedding.IsValid(); err != entities.ErrMissingEmbedding {
+	if err := noEmbedding.IsValid(); !errors.Is(err, entities.ErrMissingEmbedding) {
 		t.Errorf("expected ErrMissingEmbedding, got %v", err)
 	}
 
@@ -81,7 +82,7 @@ func TestResponseAnswerVector_IsValid(t *testing.T) {
 		Embedding:        []float32{0.1, 0.2},
 		ModelName:        "invalid_model_name",
 	}
-	if err := invalidModel.IsValid(); err != entities.ErrInvalidModelName {
+	if err := invalidModel.IsValid(); !errors.Is(err, entities.ErrInvalidModelName) {
 		t.Errorf("expected ErrInvalidModelName, got %v", err)
 	}
 }

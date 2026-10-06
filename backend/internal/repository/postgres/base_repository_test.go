@@ -35,7 +35,7 @@ func TestBaseRepository_CRUD(t *testing.T) {
 	//  Exec (INSERT)
 	// =========================
 	err = baseRepo.Exec(ctx,
-		"INSERT INTO admins (username, hashed_password, created_at) VALUES ($1, $2, NOW())",
+		"INSERT INTO admins (id, username, hashed_password, created_at) VALUES (gen_random_uuid(), $1, $2, NOW())",
 		"base_admin", "pass123",
 	)
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestBaseRepository_CRUD(t *testing.T) {
 	// =========================
 	err = baseRepo.WithTx(ctx, func(txRepo *BaseRepository) error {
 		return txRepo.Exec(ctx,
-			"INSERT INTO admins (username, hashed_password, created_at) VALUES ($1, $2, NOW())",
+			"INSERT INTO admins (id, username, hashed_password, created_at) VALUES (gen_random_uuid(), $1, $2, NOW())",
 			"tx_admin", "tx_pass",
 		)
 	})

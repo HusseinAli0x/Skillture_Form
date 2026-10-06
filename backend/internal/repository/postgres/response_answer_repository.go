@@ -137,7 +137,6 @@ func (r *ResponseAnswerRepository) List(ctx context.Context, filter interfaces.R
 	if filter.FieldID != nil {
 		query += fmt.Sprintf(" AND field_id=$%d", argPos)
 		args = append(args, *filter.FieldID)
-		argPos++
 	}
 
 	rows, err := r.base.Query(ctx, query, args...)

@@ -3,8 +3,11 @@ package postgres
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
 	"time"
+
+	"skillture/backend/internal/database"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
@@ -19,6 +22,13 @@ import (
 // run them, e.g.
 //
 //	TEST_DATABASE_URL='postgres://user:pass@localhost:5432/skillture_test' go test ./...
+//
+// migrateOnce brings the scratch database to the current schema, once per test
+// binary. These tests used to assume the tables already existed, so they passed
+// on a database someone had set up by hand and failed on a fresh one (CI) or
+// whenever another package's tests had not yet run the migrations.
+var migrateOnce sync.Once
+
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
@@ -34,6 +44,10 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	require.NoError(t, pool.Ping(ctx), "TEST_DATABASE_URL is set but unreachable")
+
+	var migrateErr error
+	migrateOnce.Do(func() { migrateErr = database.Migrate(context.Background(), pool) })
+	require.NoError(t, migrateErr, "could not migrate the test database")
 
 	return pool
 }

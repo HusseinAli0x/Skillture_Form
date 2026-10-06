@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -216,7 +217,8 @@ func (h *HomepageHandler) UpdateFacts(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update facts"})
 		return
 	}
-	defer tx.Rollback(c.Request.Context())
+	// Rolling back after a successful Commit is a harmless no-op (ErrTxClosed).
+	defer func() { _ = tx.Rollback(c.Request.Context()) }()
 
 	if _, err := tx.Exec(c.Request.Context(), `DELETE FROM homepage_about_facts`); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update facts"})
@@ -262,7 +264,8 @@ func (h *HomepageHandler) UpdatePillars(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pillars"})
 		return
 	}
-	defer tx.Rollback(c.Request.Context())
+	// Rolling back after a successful Commit is a harmless no-op (ErrTxClosed).
+	defer func() { _ = tx.Rollback(c.Request.Context()) }()
 
 	if _, err := tx.Exec(c.Request.Context(), `DELETE FROM homepage_offer_pillars`); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pillars"})
@@ -325,7 +328,7 @@ func (h *HomepageHandler) UploadImage(c *gin.Context) {
 
 	// Make sure uploads directory exists
 	uploadDir := "uploads"
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadDir, 0o750); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
 		return
 	}
@@ -396,12 +399,12 @@ func verifyImageContent(file *multipart.FileHeader) error {
 	if err != nil {
 		return fmt.Errorf("could not read uploaded file")
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read-only handle; nothing to flush
 
 	// http.DetectContentType only ever looks at the first 512 bytes.
 	head := make([]byte, 512)
 	n, err := io.ReadFull(f, head)
-	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 		return fmt.Errorf("could not read uploaded file")
 	}
 
