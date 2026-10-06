@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"skillture/backend/internal/domain/entities"
@@ -110,8 +111,19 @@ func (u *quizAnswerUseCase) SubmitAnswer(ctx context.Context, input uc.SubmitAns
 	// --- 7. Calculate score ---
 	timeTakenMs := clampTimeTaken(input.TimeTakenMs, question.TimeLimitSec)
 	scoreAwarded := 0
+	streak, streakBonus := 0, 0
 	if isCorrect {
 		scoreAwarded = calculateScore(question.Points, question.TimeLimitSec, timeTakenMs)
+
+		// Streaks: each correct answer in a row adds 10% of that answer's
+		// points, up to +50%. A wrong answer resets it.
+		previous, err := u.answerRepo.List(ctx, repo.QuizPlayerAnswerFilter{PlayerID: &input.PlayerID, SessionID: &input.SessionID})
+		if err != nil {
+			return nil, fmt.Errorf("SubmitAnswer: read streak: %w", err)
+		}
+		streak = correctStreak(previous) + 1
+		streakBonus = streakBonusFor(scoreAwarded, streak)
+		scoreAwarded += streakBonus
 	}
 
 	// --- 8. Persist the answer ---
@@ -137,7 +149,8 @@ func (u *quizAnswerUseCase) SubmitAnswer(ctx context.Context, input uc.SubmitAns
 	// --- 9. Update player cumulative score ---
 	// Incremented in SQL. Computing the new total in Go and writing it back
 	// lost points whenever two answers were scored concurrently.
-	if _, err := u.playerRepo.AddScore(ctx, player.ID, scoreAwarded); err != nil {
+	total, err := u.playerRepo.AddScore(ctx, player.ID, scoreAwarded)
+	if err != nil {
 		return nil, fmt.Errorf("SubmitAnswer: update score: %w", err)
 	}
 
@@ -147,11 +160,105 @@ func (u *quizAnswerUseCase) SubmitAnswer(ctx context.Context, input uc.SubmitAns
 		return nil, fmt.Errorf("SubmitAnswer: leaderboard: %w", err)
 	}
 
+	rank := 0
+	for i, p := range leaderboard {
+		if p.ID == player.ID {
+			rank = i + 1
+			break
+		}
+	}
+
 	return &uc.SubmitAnswerResult{
 		IsCorrect:    isCorrect,
 		ScoreAwarded: scoreAwarded,
+		Streak:       streak,
+		StreakBonus:  streakBonus,
+		TotalScore:   total,
+		Rank:         rank,
 		Leaderboard:  leaderboard,
 	}, nil
+}
+
+// QuestionResults reports the correct answer and the vote split for the
+// session's current question.
+func (u *quizAnswerUseCase) QuestionResults(ctx context.Context, sessionID uuid.UUID) (*uc.QuestionResults, error) {
+	session, err := u.sessionRepo.GetByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return nil, errors.New("session not found")
+	}
+	if session.CurrentQuestionID == nil {
+		return nil, domainErrors.ErrQuestionNotCurrent
+	}
+	question, err := u.questionRepo.GetByID(ctx, *session.CurrentQuestionID)
+	if err != nil {
+		return nil, err
+	}
+	if question == nil {
+		return nil, errors.New("question not found")
+	}
+	answers, err := u.answerRepo.List(ctx, repo.QuizPlayerAnswerFilter{SessionID: &sessionID, QuestionID: session.CurrentQuestionID})
+	if err != nil {
+		return nil, err
+	}
+	players, err := u.playerRepo.ListBySessionID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	distribution := make(map[string]int)
+	for _, a := range answers {
+		distribution[answerKey(a.Answer)]++
+	}
+	return &uc.QuestionResults{
+		QuestionID:    question.ID,
+		CorrectAnswer: question.CorrectAnswer,
+		Distribution:  distribution,
+		Answered:      len(answers),
+		Players:       len(players),
+	}, nil
+}
+
+// correctStreak counts the correct answers at the end of a player's history
+// (oldest first), i.e. the streak they carry into the next question.
+func correctStreak(history []*entities.QuizPlayerAnswer) int {
+	n := 0
+	for i := len(history) - 1; i >= 0 && history[i].IsCorrect; i-- {
+		n++
+	}
+	return n
+}
+
+// streakBonusFor is 10% of the base points per streak step beyond the first,
+// capped at +50%.
+func streakBonusFor(base, streak int) int {
+	steps := streak - 1
+	if steps <= 0 {
+		return 0
+	}
+	if steps > 5 {
+		steps = 5
+	}
+	return base * steps / 10
+}
+
+// answerKey is the string a submitted answer is grouped under in the vote
+// split, whichever key (`value` for choices, `text` for short answers) it used.
+func answerKey(answer map[string]any) string {
+	for _, k := range []string{"value", "text"} {
+		if v, ok := answer[k]; ok {
+			return normaliseAnswer(fmt.Sprintf("%v", v))
+		}
+	}
+	return ""
+}
+
+// normaliseAnswer trims and collapses whitespace so "  Cairo " and "Cairo"
+// compare equal.
+func normaliseAnswer(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // checkAnswer compares the player's submitted answer against the question's
@@ -176,16 +283,16 @@ func checkAnswer(question *entities.QuizQuestion, playerAnswer map[string]any) b
 		return fmt.Sprintf("%v", correct) == fmt.Sprintf("%v", submitted)
 
 	case enums.QuizQuestionTypeShort:
-		// Short answers: case-insensitive, trimmed string match
-		correct, ok := question.CorrectAnswer["text"].(string)
-		if !ok {
+		// The quiz builder stores a short question's answer under "value"
+		// like every other type, while the player screen may send "text".
+		// This used to read only "text" on both sides, so a short answer could
+		// never be marked correct. Accept either key, ignore case and spacing.
+		correct := answerKey(question.CorrectAnswer)
+		submitted := answerKey(playerAnswer)
+		if correct == "" || submitted == "" {
 			return false
 		}
-		submitted, ok := playerAnswer["text"].(string)
-		if !ok {
-			return false
-		}
-		return strings.EqualFold(strings.TrimSpace(correct), strings.TrimSpace(submitted))
+		return strings.EqualFold(correct, submitted)
 	}
 
 	return false

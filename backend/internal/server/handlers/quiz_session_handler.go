@@ -18,6 +18,7 @@ import (
 type QuizSessionHandler struct {
 	sessionUC uc.QuizSessionUseCase
 	playerUC  uc.QuizPlayerUseCase
+	answerUC  uc.QuizAnswerUseCase
 	hub       *ws.Hub
 }
 
@@ -25,11 +26,13 @@ type QuizSessionHandler struct {
 func NewQuizSessionHandler(
 	sessionUC uc.QuizSessionUseCase,
 	playerUC uc.QuizPlayerUseCase,
+	answerUC uc.QuizAnswerUseCase,
 	hub *ws.Hub,
 ) *QuizSessionHandler {
 	return &QuizSessionHandler{
 		sessionUC: sessionUC,
 		playerUC:  playerUC,
+		answerUC:  answerUC,
 		hub:       hub,
 	}
 }
@@ -234,5 +237,24 @@ func (h *QuizSessionHandler) PublishResults(c *gin.Context) {
 		Payload: leaderboard,
 	})
 
-	c.JSON(http.StatusOK, gin.H{"status": "published", "leaderboard": leaderboard})
+	response := gin.H{"status": "published", "leaderboard": leaderboard}
+
+	// The question's right answer and how the room voted. Best-effort: if it
+	// cannot be read (no live question), the leaderboard above still stands.
+	if results, err := h.answerUC.QuestionResults(c.Request.Context(), id); err == nil {
+		payload := gin.H{
+			"question_id":    results.QuestionID,
+			"correct_answer": results.CorrectAnswer,
+			"distribution":   results.Distribution,
+			"answered":       results.Answered,
+			"players":        results.Players,
+			"leaderboard":    leaderboard,
+		}
+		h.hub.Broadcast(id, ws.Message{Type: ws.MsgTypeQuestionResults, Payload: payload})
+		response["results"] = payload
+	} else {
+		log.Printf("PublishResults: question results unavailable for session %s: %v", id, err)
+	}
+
+	c.JSON(http.StatusOK, response)
 }

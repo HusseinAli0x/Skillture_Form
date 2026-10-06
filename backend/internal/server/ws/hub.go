@@ -40,6 +40,9 @@ const (
 	MsgTypeError           = "error"            // sent to a single client on bad input
 	MsgTypeLobbySnapshot   = "lobby_snapshot"   // sent to a newly joined player: current lobby state
 	MsgTypeShowLeaderboard = "show_leaderboard" // sent when host triggers leaderboard display
+	// question_results carries the right answer and the vote split when a
+	// question closes, so each screen can reveal it.
+	MsgTypeQuestionResults = "question_results"
 )
 
 // Message is the envelope for every WebSocket frame sent by the server.

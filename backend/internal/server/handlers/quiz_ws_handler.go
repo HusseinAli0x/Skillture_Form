@@ -3,7 +3,9 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"slices"
+	"strings"
 
 	"skillture/backend/internal/auth"
 	"skillture/backend/internal/config"
@@ -61,7 +63,15 @@ func originChecker(allowed []string) func(*http.Request) bool {
 		if origin == "" {
 			return true
 		}
-		return allowAll || slices.Contains(allowed, origin)
+		if allowAll || slices.Contains(allowed, origin) {
+			return true
+		}
+		// A page served from the same host it connects back to is not
+		// cross-site, whatever address it was opened on (a LAN IP in dev, the
+		// real domain behind Caddy). Rejecting it left every game without
+		// real-time updates unless that exact origin had been listed by hand.
+		u, err := url.Parse(origin)
+		return err == nil && strings.EqualFold(u.Host, r.Host)
 	}
 }
 
@@ -237,6 +247,11 @@ func (h *QuizWSHandler) SubmitAnswer(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"is_correct":    result.IsCorrect,
 		"score_awarded": result.ScoreAwarded,
+		"streak":        result.Streak,
+		"streak_bonus":  result.StreakBonus,
+		"total_score":   result.TotalScore,
+		"rank":          result.Rank,
+		"players":       len(result.Leaderboard),
 	})
 }
 

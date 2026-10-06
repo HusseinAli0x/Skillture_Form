@@ -101,6 +101,21 @@ type QuizAnswerUseCase interface {
 	// updates the player's cumulative total. Returns the awarded score and
 	// the updated leaderboard so the caller can broadcast both.
 	SubmitAnswer(ctx context.Context, input SubmitAnswerInput) (*SubmitAnswerResult, error)
+
+	// QuestionResults summarises the session's current question once it has
+	// closed: the right answer and how many players picked each option. The
+	// host screen draws its bar chart from this.
+	QuestionResults(ctx context.Context, sessionID uuid.UUID) (*QuestionResults, error)
+}
+
+// QuestionResults is what the room sees when a question closes.
+type QuestionResults struct {
+	QuestionID    uuid.UUID
+	CorrectAnswer map[string]any
+	// Distribution maps each submitted answer to how many players chose it.
+	Distribution map[string]int
+	Answered     int
+	Players      int
 }
 
 // SubmitAnswerInput carries all data needed to score a single player answer
@@ -114,7 +129,15 @@ type SubmitAnswerInput struct {
 
 // SubmitAnswerResult is returned after scoring an answer
 type SubmitAnswerResult struct {
-	IsCorrect    bool
+	IsCorrect bool
+	// ScoreAwarded is the final points for this answer, streak bonus included.
 	ScoreAwarded int
-	Leaderboard  []*entities.QuizPlayer
+	// Streak is the number of correct answers in a row, ending with this one
+	// (0 after a wrong answer). StreakBonus is the part of ScoreAwarded it earned.
+	Streak      int
+	StreakBonus int
+	// TotalScore is the player's running total; Rank is their 1-based place.
+	TotalScore  int
+	Rank        int
+	Leaderboard []*entities.QuizPlayer
 }

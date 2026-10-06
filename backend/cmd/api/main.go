@@ -96,7 +96,7 @@ func main() {
 	// 6. Handlers
 	adminHandler := handlers.NewAdminHandler(adminUC, tokens)
 	quizHandler := handlers.NewQuizHandler(quizUC, quizQuestionUC)
-	sessionHandler := handlers.NewQuizSessionHandler(quizSessionUC, quizPlayerUC, hub)
+	sessionHandler := handlers.NewQuizSessionHandler(quizSessionUC, quizPlayerUC, quizAnswerUC, hub)
 	wsHandler := handlers.NewQuizWSHandler(hub, quizPlayerUC, quizAnswerUC, quizSessionUC, tokens, cfg.CORS)
 	formHandler := handlers.NewFormHandler(formUC)
 	formFieldHandler := handlers.NewFormFieldHandler(formFieldUC)
