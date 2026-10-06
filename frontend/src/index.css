@@ -148,3 +148,31 @@
     transition: none !important;
   }
 }
+
+/* Phones and touch devices: meet the 44px minimum touch target, and keep form
+   text at 16px so iOS Safari does not zoom the page on focus. Checkboxes and
+   radios keep their native size; their labels carry the tap area. */
+@media (max-width: 767px), (pointer: coarse) {
+  button,
+  [role="button"],
+  select,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+    min-height: 44px;
+  }
+
+  footer a {
+    display: inline-block;
+    padding-block: 0.75rem;
+  }
+
+  /* Icon-only buttons (they all carry an aria-label) become square 44px targets. */
+  button[aria-label] {
+    min-width: 44px;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

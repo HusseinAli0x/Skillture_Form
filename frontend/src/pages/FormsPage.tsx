@@ -111,12 +111,12 @@ const FormsPage: React.FC = () => {
           />
         ) : (
           <div className="w-full overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
+            <table className="w-full text-left max-md:block">
+              <thead className="max-md:hidden">
                 <tr className="border-b border-border bg-hover-overlay">
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted">Title</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted">Status</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted hidden sm:table-cell">
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted hidden md:table-cell">
                     Created
                   </th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-muted text-right">
@@ -124,17 +124,17 @@ const FormsPage: React.FC = () => {
                   </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="max-md:block">
                 {filtered.map((form, i) => {
                   const title = localized(form.title, 'Untitled Form');
                   return (
                     <tr
                       key={form.id}
-                      className={`group transition-colors hover:bg-hover-overlay ${
+                      className={`group transition-colors hover:bg-hover-overlay max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-x-3 max-md:gap-y-2 max-md:px-4 max-md:py-3 ${
                         i < filtered.length - 1 ? 'border-b border-border' : ''
                       }`}
                     >
-                      <td className="px-5 py-4">
+                      <td className="md:px-5 md:py-4 max-md:w-full">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-primary-subtle border border-primary-border-soft text-primary">
                             <FileText className="w-4 h-4" />
@@ -142,14 +142,14 @@ const FormsPage: React.FC = () => {
                           <span className="text-sm font-medium text-text">{title}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="md:px-5 md:py-4">
                         <StatusDropdown type="form" id={form.id} initialStatus={form.status} />
                       </td>
-                      <td className="px-5 py-4 text-sm text-muted hidden sm:table-cell">
+                      <td className="px-5 py-4 text-sm text-muted hidden md:table-cell">
                         {form.creat_at ? new Date(form.creat_at).toLocaleDateString() : '—'}
                       </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      <td className="md:px-5 md:py-4 max-md:w-full">
+                        <div className="flex items-center justify-end gap-1.5 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 flex-wrap max-md:justify-start transition-opacity">
                           <IconButton
                             label="Share form"
                             tone="info"

@@ -13,6 +13,7 @@ import {
   Home,
   Calendar,
   Mail,
+  Users,
 } from 'lucide-react';
 import { useAuthStore } from '../../context/AuthStore';
 
@@ -30,7 +31,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, isColla
     title={isCollapsed ? label : undefined}
     aria-current={active ? 'page' : undefined}
     className={[
-      'w-full flex items-center py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 border',
+      'w-full flex items-center min-h-11 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 border',
       isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
       active
         ? 'bg-primary-soft text-primary border-primary-border'
@@ -47,17 +48,22 @@ const navItems = [
   { icon: <LayoutDashboard className="w-5 h-5" />, label: 'Dashboard', path: '/admin/dashboard' },
   { icon: <Home className="w-5 h-5" />, label: 'Homepage Editor', path: '/admin/homepage' },
   { icon: <Calendar className="w-5 h-5" />, label: 'Workshops', path: '/admin/workshops' },
+  { icon: <Users className="w-5 h-5" />, label: 'Team', path: '/admin/team' },
   { icon: <FileText className="w-5 h-5" />, label: 'Forms', path: '/admin/forms' },
   { icon: <GamepadIcon className="w-5 h-5" />, label: 'Quiz Game', path: '/admin/quizzes' },
   { icon: <PenTool className="w-5 h-5" />, label: 'Quiz Builder', path: '/admin/builder' },
   { icon: <Mail className="w-5 h-5" />, label: 'Messages', path: '/admin/messages' },
 ];
 
+const isDesktopViewport = () => window.matchMedia('(min-width: 768px)').matches;
+
 const MainLayout: React.FC = () => {
   const { isAuthenticated, admin, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Desktop starts expanded; on phones the sidebar is an off-canvas drawer
+  // that must start closed or it covers the page on load.
+  const [isSidebarOpen, setIsSidebarOpen] = useState(isDesktopViewport);
 
   // A UX affordance only — the real boundary is RequireAdmin on the server.
   if (!isAuthenticated) return <Navigate to="/login" replace />;
@@ -70,7 +76,7 @@ const MainLayout: React.FC = () => {
   const initials = admin?.username?.substring(0, 2).toUpperCase() || 'AD';
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg">
+    <div className="flex h-dvh overflow-hidden bg-bg">
       <aside
         className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border bg-bg transition-all duration-300 ease-in-out md:relative ${
           isSidebarOpen ? 'w-60 translate-x-0' : 'w-20 -translate-x-full md:translate-x-0'
@@ -92,7 +98,7 @@ const MainLayout: React.FC = () => {
             <button
               onClick={() => setIsSidebarOpen(false)}
               aria-label="Collapse sidebar"
-              className="hidden md:flex p-1 rounded-md text-muted hover:text-text hover:bg-hover-overlay-strong transition-colors"
+              className="hidden md:flex p-2 rounded-md text-muted hover:text-text hover:bg-hover-overlay-strong transition-colors"
             >
               <PanelLeftClose className="w-4 h-4" />
             </button>
@@ -123,7 +129,10 @@ const MainLayout: React.FC = () => {
               icon={item.icon}
               label={item.label}
               active={location.pathname.startsWith(item.path)}
-              onClick={() => navigate(item.path)}
+              onClick={() => {
+                navigate(item.path);
+                if (!isDesktopViewport()) setIsSidebarOpen(false);
+              }}
               isCollapsed={!isSidebarOpen}
             />
           ))}
@@ -151,7 +160,7 @@ const MainLayout: React.FC = () => {
           <button
             onClick={handleLogout}
             title={!isSidebarOpen ? 'Sign Out' : undefined}
-            className={`w-full flex items-center py-2 rounded-lg text-sm font-medium transition-colors text-muted hover:text-danger hover:bg-danger-soft ${
+            className={`w-full flex items-center min-h-11 py-2 rounded-lg text-sm font-medium transition-colors text-muted hover:text-danger hover:bg-danger-soft ${
               isSidebarOpen ? 'gap-3 px-3' : 'justify-center'
             }`}
           >
@@ -179,7 +188,7 @@ const MainLayout: React.FC = () => {
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             aria-label="Toggle navigation"
-            className="text-muted hover:text-text transition-colors"
+            className="inline-flex items-center justify-center w-11 h-11 -mr-2 rounded-md text-muted hover:text-text transition-colors"
           >
             <Menu className="w-6 h-6" />
           </button>
