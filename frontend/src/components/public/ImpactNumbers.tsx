@@ -4,8 +4,8 @@ import { useLanguageStore } from '../../context/LanguageStore';
 import { siteStrings } from '../../lib/siteStrings';
 
 /**
- * The headline figures as large plain numerals. Colour comes from the
- * surrounding band, and every number is computed from the workshops actually
+ * The headline figures as large plain numerals in brand turquoise, meant for a
+ * black band (turquoise is a surface colour, not text, on white). Every number is computed from the workshops actually
  * listed — nothing here is typed in by hand.
  */
 const ImpactNumbers: React.FC<{ impact: Impact }> = ({ impact }) => {
@@ -24,8 +24,8 @@ const ImpactNumbers: React.FC<{ impact: Impact }> = ({ impact }) => {
     <dl className="grid grid-cols-1 sm:grid-cols-3 gap-y-8">
       {stats.map((s, i) => (
         <div key={s.label} className={i > 0 ? 'sm:ps-8 sm:border-s border-border' : ''}>
-          <dd className="numeral text-[clamp(3.5rem,9vw,6.5rem)]">{s.value}</dd>
-          <dt className="mt-3 text-sm text-muted">{s.label}</dt>
+          <dd className="numeral text-brand text-[clamp(3.5rem,9vw,6.5rem)]">{s.value}</dd>
+          <dt className="mt-3 text-base text-muted">{s.label}</dt>
         </div>
       ))}
     </dl>

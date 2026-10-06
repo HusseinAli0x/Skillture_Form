@@ -100,11 +100,8 @@ export const translations: Record<Locale, Translations> = {
         'Skillture began in a university lab where nobody could answer a simple question: which skills does a graduate actually have on the day they walk into industry? Transcripts said one thing, hiring interviews said another, and the gap between them was where good people got lost.',
       body2:
         'So we built the measurement layer we wanted for ourselves — a form builder for honest self-assessment in any language, and a live quiz engine that makes progress visible in the room. Today the same tooling runs cohort workshops, university programmes, and industry onboarding.',
-      facts: [
-        { value: '2,400+', label: 'Students assessed across cohort programmes' },
-        { value: '18', label: 'Partner universities and industry teams' },
-        { value: '9', label: 'Languages supported in form and quiz labels' },
-      ],
+      // Statistics are never typed in by hand: figures come from /api/v1/impact.
+      facts: [],
     },
     offer: {
       kicker: 'What We Offer',
@@ -190,11 +187,8 @@ export const translations: Record<Locale, Translations> = {
         'بدأت سكيلتشر في مختبر جامعي لم يستطع أحد فيه الإجابة عن سؤال بسيط: ما هي المهارات التي يمتلكها الخريج فعليًا يوم دخوله سوق العمل؟ السجل الأكاديمي يقول شيئًا، ومقابلات التوظيف تقول شيئًا آخر، وفي تلك الفجوة كان يضيع أشخاص جيدون.',
       body2:
         'لذلك بنينا طبقة القياس التي كنا نتمناها لأنفسنا — أداة لبناء نماذج تقييم ذاتي صادقة بأي لغة، ومحرك اختبارات مباشر يجعل التقدم مرئيًا داخل الغرفة. اليوم تُشغّل نفس الأدوات ورشات الأفواج والبرامج الجامعية وتأهيل الموظفين الجدد.',
-      facts: [
-        { value: '2,400+', label: 'طالب تم تقييمهم عبر برامج الأفواج' },
-        { value: '18', label: 'جامعة وفريق صناعي شريك' },
-        { value: '9', label: 'لغات مدعومة في النماذج والاختبارات' },
-      ],
+      // Statistics are never typed in by hand: figures come from /api/v1/impact.
+      facts: [],
     },
     offer: {
       kicker: 'ماذا نقدم',

@@ -3,6 +3,7 @@ import type { TeamMember } from '../../api/publicTypes';
 import { useLanguageStore } from '../../context/LanguageStore';
 import { localized } from '../../lib/i18n';
 import { siteStrings } from '../../lib/siteStrings';
+import { Pattern } from '../brand';
 
 const initialsOf = (name: string) =>
   name
@@ -17,8 +18,8 @@ const initialsOf = (name: string) =>
 // the same colour; each pair is text-on-fill with strong contrast.
 const FALLBACKS = [
   'bg-brand text-ink',
-  'bg-mark text-ink',
-  'bg-ink text-white',
+  'bg-ink text-brand',
+  'bg-teal text-ink',
   'bg-panel-3 text-ink',
 ];
 const fallbackFor = (id: string) => FALLBACKS[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % FALLBACKS.length];
@@ -38,13 +39,14 @@ const TeamCard: React.FC<{ member: TeamMember }> = ({ member }) => {
         ) : (
           <div
             aria-hidden="true"
-            className={`w-full h-full flex items-center justify-center text-6xl font-semibold ${fallbackFor(member.id)}`}
+            className={`relative w-full h-full flex items-center justify-center overflow-hidden font-display text-6xl font-bold ${fallbackFor(member.id)}`}
           >
-            {initialsOf(name)}
+            <Pattern className="opacity-[0.08]" />
+            <span className="relative">{initialsOf(name)}</span>
           </div>
         )}
       </div>
-      <h3 className="mt-4 text-lg font-semibold leading-tight">{name}</h3>
+      <h3 className="mt-4 text-xl leading-tight">{name}</h3>
       <p className="mt-1 text-sm text-muted">{localized(member.role, '', locale)}</p>
       {bio && <p className="mt-3 text-sm leading-relaxed line-clamp-4 text-pretty">{bio}</p>}
       {member.linkedin_url && (
@@ -53,7 +55,7 @@ const TeamCard: React.FC<{ member: TeamMember }> = ({ member }) => {
           target="_blank"
           rel="noopener noreferrer"
           aria-label={S.team.linkedin(name)}
-          className="mt-3 inline-flex items-center min-h-11 text-sm font-medium underline underline-offset-4 decoration-1 hover:text-primary transition-colors"
+          className="mt-3 inline-flex items-center min-h-11 text-sm font-medium underline underline-offset-4 decoration-1 hover:text-primary transition-colors focus-visible:outline-2 focus-visible:outline-primary"
         >
           LinkedIn
         </a>

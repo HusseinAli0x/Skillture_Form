@@ -35,7 +35,7 @@ const WorkshopRow: React.FC<{ workshop: PublicWorkshop; upcoming?: boolean }> = 
   return (
     <Link
       to={`/workshops/${w.id}`}
-      className="group grid grid-cols-[4.5rem_1fr_auto] md:grid-cols-[6rem_1fr_9rem_9rem_1.5rem] gap-x-5 gap-y-1 items-start py-6 border-t border-border hover:bg-hover-overlay transition-colors"
+      className="group grid grid-cols-[4.5rem_1fr_auto] md:grid-cols-[6rem_1fr_9rem_9rem_1.5rem] gap-x-5 gap-y-1 items-start py-6 border-t border-border hover:bg-hover-overlay transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
     >
       <div>
         <div className="numeral text-4xl md:text-5xl">{day}</div>
@@ -43,7 +43,7 @@ const WorkshopRow: React.FC<{ workshop: PublicWorkshop; upcoming?: boolean }> = 
       </div>
 
       <div className="min-w-0">
-        <h3 className="text-lg md:text-xl font-semibold leading-snug text-pretty group-hover:underline underline-offset-4 decoration-1">
+        <h3 className="text-xl md:text-2xl leading-snug text-pretty group-hover:underline underline-offset-4 decoration-1">
           {localized(w.title, '', locale)}
         </h3>
         {outcome && (
