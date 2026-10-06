@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 32" width="64" height="32" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Ionic column, joined to its neighbours by a maze line. Alpha mask (.brand-frieze). -->
+  <path d="M17 9H47"/>
+  <path d="M21 9c-4 0-6 2.500-6 5.500S17.500 20 21 20s4.500-2 4.500-4-1.500-3-3-3"/>
+  <path d="M43 9c4 0 6 2.500 6 5.500S46.500 20 43 20s-4.500-2-4.500-4 1.500-3 3-3"/>
+  <path d="M26 21V27M32 21V27M38 21V27"/>
+  <path d="M0 27H26M38 27H64"/>
+</svg>

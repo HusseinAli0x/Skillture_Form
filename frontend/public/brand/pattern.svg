@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" fill="none" stroke="#000" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Roman column on a maze path. Alpha mask: colour comes from CSS (.brand-pattern). -->
+  <path d="M80 6V154"/>
+  <path d="M80 34c0-9 7-15 15-15s15 6 15 15-7 14-15 14-10-5-10-10 4-8 8-8"/>
+  <path d="M80 34c0-9-7-15-15-15s-15 6-15 15 7 14 15 14 10-5 10-10-4-8-8-8"/>
+  <path d="M0 104H34V84H56"/>
+  <path d="M160 104H126V84H104"/>
+  <path d="M0 136H20V124"/>
+  <path d="M160 136H140V124"/>
+  <path d="M80 118V130M70 118V130M90 118V130"/>
+</svg>
