@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Tajawal:wght@400;500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /*
@@ -52,6 +53,12 @@
   --color-success-soft: rgba(34, 201, 122, 0.1);
   --color-hover-overlay: rgba(255, 255, 255, 0.02);
   --color-hover-overlay-strong: rgba(255, 255, 255, 0.08);
+
+  /* Public-site colours (see .site below); declared here so Tailwind
+     generates bg-brand / bg-ink / bg-mark. */
+  --color-brand: #0abfbc;
+  --color-ink: #0e1a1b;
+  --color-mark: #ffd84d;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-arabic: "Tajawal", "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -175,4 +182,99 @@
   textarea {
     font-size: 16px;
   }
+}
+
+/* ------------------------------------------------------------------------
+   Public site theme. Applied by adding the `site` class to the page root
+   (PublicShell). It re-points the same design tokens the admin uses, so the
+   shared components keep working, while the admin and the live quiz screens
+   stay dark. Direction and reasons: docs/PUBLIC_SITE_DESIGN.md.
+   ------------------------------------------------------------------------ */
+.site {
+  --color-bg: #f5f7f6;
+  --color-panel: #ffffff;
+  --color-panel-2: #ebefee;
+  --color-panel-3: #e0e6e5;
+  --color-border: #d3dbda;
+  --color-border-strong: #aab6b5;
+  --color-text: #0e1a1b;
+  --color-muted: #4a5a5c;
+  --color-primary: #00747a;
+  --color-primary-hover: #005a5f;
+  --color-primary-subtle: rgba(0, 116, 122, 0.06);
+  --color-primary-soft: rgba(0, 116, 122, 0.09);
+  --color-primary-border: rgba(0, 116, 122, 0.3);
+  --color-hover-overlay: rgba(14, 26, 27, 0.03);
+  --color-hover-overlay-strong: rgba(14, 26, 27, 0.07);
+  --color-brand: #0abfbc;
+  --color-ink: #0e1a1b;
+  --color-mark: #ffd84d;
+
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Readex Pro', ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: 'tnum' 0;
+  letter-spacing: -0.005em;
+}
+
+.site h1,
+.site h2,
+.site h3 {
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  font-weight: 600;
+}
+
+/* Arabic joins letters; tracking breaks the joins. */
+.site[dir='rtl'],
+.site[dir='rtl'] * {
+  letter-spacing: 0;
+}
+
+/* Highlighter-pen mark behind a result, like one drawn on a score sheet. */
+.site .mark {
+  background-image: linear-gradient(transparent 58%, var(--color-mark) 58%, var(--color-mark) 92%, transparent 92%);
+  padding-inline: 0.12em;
+  margin-inline: -0.12em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.site .numeral {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  font-weight: 600;
+}
+
+/* A dark ink band inside the public site (results board, calls to action).
+   Re-points the tokens again so rows and numerals inside it adapt. */
+.site .on-ink {
+  --color-text: #f5f7f6;
+  --color-muted: rgba(245, 247, 246, 0.72);
+  --color-border: rgba(245, 247, 246, 0.2);
+  --color-border-strong: rgba(245, 247, 246, 0.45);
+  --color-primary: #0abfbc;
+  --color-primary-hover: #3fd9d6;
+  background-color: var(--color-ink);
+  color: var(--color-text);
+}
+
+.site .on-ink .mark {
+  /* On dark the marker is a solid label: a partial highlight would leave the
+     top of dark text sitting on the dark band. */
+  background-image: none;
+  background-color: var(--color-mark);
+  color: var(--color-ink);
+  padding: 0.08em 0.4em;
+  margin-inline: 0;
+  border-radius: 3px;
+}
+
+/* Arabic ascenders and diacritics need more vertical room than Latin. */
+.site[dir='rtl'] h1,
+.site[dir='rtl'] h2,
+.site[dir='rtl'] h3 {
+  line-height: 1.3;
 }

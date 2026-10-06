@@ -6,7 +6,7 @@ import type { Locale } from '../context/LanguageStore';
  * translations.ts, whose shape is tied to the Homepage Editor CMS.
  */
 export interface SiteStrings {
-  nav: { ourWork: string; team: string; menu: string };
+  nav: { ourWork: string; team: string; menu: string; joinGame: string };
   tracks: { technical: string; career: string; industry: string; business: string };
   ourWork: {
     kicker: string;
@@ -58,26 +58,26 @@ export interface SiteStrings {
     next: string;
   };
   home: {
-    workKicker: string;
-    workTitle: string;
-    workSubtitle: string;
-    seeAll: string;
-    teamKicker: string;
-    teamTitle: string;
-    teamSubtitle: string;
-    meetTeam: string;
+    pin: { title: string; hint: string; placeholder: string; button: string; label: string };
+    ctaPrimary: string;
+    ctaSecondary: string;
+    method: { title: string; subtitle: string; steps: { label: string; body: string }[] };
+    tracks: { title: string; delivered: (n: number) => string };
+    results: { title: string; seeAll: string };
+    upcoming: { title: string; details: string };
+    team: { title: string; meet: string };
   };
 }
 
 export const siteStrings: Record<Locale, SiteStrings> = {
   en: {
-    nav: { ourWork: 'Our Work', team: 'Team', menu: 'Menu' },
+    nav: { ourWork: 'Our Work', team: 'Team', menu: 'Menu', joinGame: 'Join a game' },
     tracks: { technical: 'Technical', career: 'Career', industry: 'Industry', business: 'Business' },
     ourWork: {
       kicker: 'OUR WORK',
-      title: 'Proof, not promises.',
+      title: 'Results, not claims.',
       subtitle:
-        'Every workshop we run is measured. Here is what we have delivered, who showed up, and what they learned.',
+        'Every workshop is measured before and after. This is what we ran, who came, and what changed.',
       metaTitle: 'Our Work — Skillture',
       impact: {
         held: 'Workshops delivered',
@@ -137,22 +137,36 @@ export const siteStrings: Record<Locale, SiteStrings> = {
       next: 'Next photo',
     },
     home: {
-      workKicker: 'OUR WORK',
-      workTitle: 'Recent workshops, measured',
-      workSubtitle: 'Real cohorts, real results — see what our latest sessions delivered.',
-      seeAll: 'See all our work',
-      teamKicker: 'THE TEAM',
-      teamTitle: 'The people behind the platform',
-      teamSubtitle: 'A student-led team with industry mentors on call.',
-      meetTeam: 'Meet the team',
+      pin: {
+        title: 'Joining a live quiz?',
+        hint: "Enter the PIN on the host's screen.",
+        placeholder: '123456',
+        button: 'Join',
+        label: 'Game PIN',
+      },
+      ctaPrimary: 'See our work',
+      ctaSecondary: 'Meet the team',
+      method: {
+        title: 'Every workshop is measured twice.',
+        subtitle: 'That is how we know what actually changed.',
+        steps: [
+          { label: 'Before', body: 'A short form asks the cohort what they already know, in Arabic or English.' },
+          { label: 'During', body: 'A practitioner runs the session. Students join a live quiz on their phones with a PIN.' },
+          { label: 'After', body: 'The same questions again. The gap between the two results is what we publish.' },
+        ],
+      },
+      tracks: { title: 'What we teach', delivered: n => `${n} delivered` },
+      results: { title: 'What the latest sessions delivered', seeAll: 'See all our work' },
+      upcoming: { title: 'Coming up', details: 'Details' },
+      team: { title: 'The people behind it', meet: 'Meet the team' },
     },
   },
   ar: {
-    nav: { ourWork: 'أعمالنا', team: 'الفريق', menu: 'القائمة' },
+    nav: { ourWork: 'أعمالنا', team: 'الفريق', menu: 'القائمة', joinGame: 'انضم للعبة' },
     tracks: { technical: 'تقني', career: 'مهني', industry: 'الصناعة', business: 'الأعمال' },
     ourWork: {
       kicker: 'أعمالنا',
-      title: 'نتائج لا وعود.',
+      title: 'نتائج، لا ادّعاءات.',
       subtitle: 'كل ورشة ننظّمها تُقاس نتائجها. هذا ما قدّمناه، ومن حضر، وماذا تعلّموا.',
       metaTitle: 'أعمالنا — سكيلتشر',
       impact: {
@@ -213,14 +227,28 @@ export const siteStrings: Record<Locale, SiteStrings> = {
       next: 'الصورة التالية',
     },
     home: {
-      workKicker: 'أعمالنا',
-      workTitle: 'أحدث الورشات بنتائجها',
-      workSubtitle: 'مجموعات حقيقية ونتائج حقيقية — اطّلع على ما حقّقته جلساتنا الأخيرة.',
-      seeAll: 'شاهد كل أعمالنا',
-      teamKicker: 'الفريق',
-      teamTitle: 'الأشخاص خلف المنصّة',
-      teamSubtitle: 'فريق يقوده الطلاب مع مرشدين من الصناعة.',
-      meetTeam: 'تعرّف على الفريق',
+      pin: {
+        title: 'هل تنضم إلى اختبار مباشر؟',
+        hint: 'أدخل الرمز الظاهر على شاشة المقدّم.',
+        placeholder: '123456',
+        button: 'انضمام',
+        label: 'رمز اللعبة',
+      },
+      ctaPrimary: 'شاهد أعمالنا',
+      ctaSecondary: 'تعرّف على الفريق',
+      method: {
+        title: 'كل ورشة تُقاس مرتين.',
+        subtitle: 'بهذه الطريقة نعرف ما الذي تغيّر فعلاً.',
+        steps: [
+          { label: 'قبل', body: 'نموذج قصير يسأل المجموعة عمّا تعرفه مسبقاً، بالعربية أو الإنجليزية.' },
+          { label: 'أثناء', body: 'يقود خبير الجلسة، وينضم الطلاب إلى اختبار مباشر من هواتفهم باستخدام الرمز.' },
+          { label: 'بعد', body: 'الأسئلة نفسها مرة أخرى. الفرق بين النتيجتين هو ما ننشره.' },
+        ],
+      },
+      tracks: { title: 'ما الذي ندرّب عليه', delivered: n => `${n} منفّذة` },
+      results: { title: 'ما حقّقته أحدث جلساتنا', seeAll: 'شاهد كل أعمالنا' },
+      upcoming: { title: 'قريباً', details: 'التفاصيل' },
+      team: { title: 'الأشخاص خلف العمل', meet: 'تعرّف على الفريق' },
     },
   },
 };

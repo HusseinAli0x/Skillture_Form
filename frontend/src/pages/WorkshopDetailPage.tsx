@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ArrowLeft, Calendar, Check, Clock, MapPin, Share2, TrendingUp, User, Users } from 'lucide-react';
+import { ArrowLeft, Check, Share2 } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import client from '../api/client';
 import type { PublicWorkshop } from '../api/publicTypes';
+import { BTN_PRIMARY, H1, WRAP } from '../components/public/layout';
 import Lightbox from '../components/public/Lightbox';
 import PublicShell from '../components/public/PublicShell';
 import TrackBadge from '../components/public/TrackBadge';
@@ -54,10 +55,7 @@ const WorkshopDetailPage: React.FC = () => {
   };
 
   const back = (
-    <Link
-      to="/our-work"
-      className="inline-flex items-center gap-2 min-h-11 text-sm font-medium text-muted hover:text-primary transition-colors"
-    >
+    <Link to="/our-work" className="inline-flex items-center gap-2 min-h-11 text-sm font-medium hover:text-primary transition-colors">
       <ArrowLeft className="w-4 h-4 rtl:rotate-180" />
       {S.back}
     </Link>
@@ -76,8 +74,8 @@ const WorkshopDetailPage: React.FC = () => {
   if (state !== 'ready' || !workshop) {
     return (
       <PublicShell>
-        <div className="max-w-xl mx-auto px-5 py-24 text-center">
-          <h1 className="text-2xl font-bold text-text mb-2">{S.notFoundTitle}</h1>
+        <div className={`${WRAP} py-24`}>
+          <h1 className="text-3xl font-semibold mb-2">{S.notFoundTitle}</h1>
           <p className="text-muted mb-6">{S.notFoundBody}</p>
           {back}
         </div>
@@ -91,142 +89,117 @@ const WorkshopDetailPage: React.FC = () => {
   const recap = localized(w.recap, '', locale);
   const extra = localized(w.extra_info, '', locale);
 
-  const meta = [
-    { icon: Calendar, label: S.when, value: [formatDate(w.event_date, locale), w.event_time].filter(Boolean).join(' · ') },
-    w.location && { icon: MapPin, label: S.where, value: w.location },
-    w.speaker && { icon: User, label: S.speaker, value: w.speaker },
-    w.attendees != null && { icon: Users, label: S.attendees, value: w.attendees.toLocaleString('en-US') },
-  ].filter((m): m is { icon: typeof Clock; label: string; value: string } => Boolean(m));
+  const facts: { label: string; value: string }[] = [
+    { label: S.when, value: [formatDate(w.event_date, locale), w.event_time].filter(Boolean).join(' · ') },
+    ...(w.location ? [{ label: S.where, value: w.location }] : []),
+    ...(w.speaker ? [{ label: S.speaker, value: w.speaker }] : []),
+    ...(w.attendees != null ? [{ label: S.attendees, value: w.attendees.toLocaleString('en-US') }] : []),
+  ];
 
   return (
     <PublicShell>
-      <article className="max-w-3xl mx-auto px-5 sm:px-8 pt-6 pb-20">
+      <article className={`${WRAP} pt-6 pb-20`}>
         {back}
 
+        <header className="mt-6 max-w-4xl">
+          <div className="flex items-center gap-3 text-sm">
+            <span className="font-medium">{past ? S.completed : S.upcoming}</span>
+            <TrackBadge track={w.track} />
+          </div>
+          <h1 className={`${H1} mt-4`}>{title}</h1>
+        </header>
+
         {w.image_path && (
-          <div className="mt-3 aspect-video rounded-2xl overflow-hidden bg-panel-2 border border-border">
+          <div className="mt-10 aspect-[16/8] overflow-hidden rounded-md bg-panel-2">
             <img src={w.image_path} alt="" className="w-full h-full object-cover" />
           </div>
         )}
 
-        <div className="mt-7 flex items-center gap-3 flex-wrap">
-          <span
-            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wide uppercase border ${
-              past ? 'bg-panel-2 text-muted border-border' : 'bg-success-soft text-success border-success/30'
-            }`}
-          >
-            {past ? S.completed : S.upcoming}
-          </span>
-          <TrackBadge track={w.track} />
+        <div className="mt-12 grid lg:grid-cols-[18rem_1fr] gap-x-16 gap-y-10">
+          <dl className="self-start border-t border-ink">
+            {facts.map(f => (
+              <div key={f.label} className="py-4 border-b border-border">
+                <dt className="text-sm text-muted">{f.label}</dt>
+                <dd className="mt-1 font-medium break-words">{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <div className="max-w-2xl">
+            {outcome && (
+              <section aria-labelledby="ws-outcome" className="mb-12">
+                <h2 id="ws-outcome" className="text-sm text-muted mb-3">
+                  {S.outcome}
+                </h2>
+                <p className="text-[clamp(1.5rem,3.4vw,2.25rem)] font-semibold leading-snug text-pretty">
+                  <span className="mark">{outcome}</span>
+                </p>
+              </section>
+            )}
+
+            <section aria-labelledby="ws-about">
+              <h2 id="ws-about" className="text-sm text-muted mb-3">
+                {S.about}
+              </h2>
+              <p className="text-lg leading-relaxed whitespace-pre-wrap text-pretty">{localized(w.description, '', locale)}</p>
+              {extra && <p className="mt-5 text-muted leading-relaxed whitespace-pre-wrap text-pretty">{extra}</p>}
+            </section>
+
+            {recap && (
+              <section aria-labelledby="ws-recap" className="mt-12">
+                <h2 id="ws-recap" className="text-sm text-muted mb-3">
+                  {S.recap}
+                </h2>
+                <p className="text-lg leading-relaxed whitespace-pre-wrap text-pretty">{recap}</p>
+              </section>
+            )}
+
+            <div className="mt-12 flex flex-wrap items-center gap-3">
+              {!past && w.registration_url && (
+                <a href={w.registration_url} target="_blank" rel="noopener noreferrer" className={BTN_PRIMARY}>
+                  {S.register}
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={share}
+                className="inline-flex items-center justify-center gap-2 min-h-12 px-5 rounded-md border border-border-strong font-semibold hover:border-ink transition-colors cursor-pointer"
+              >
+                {copied ? <Check className="w-4 h-4 text-primary" /> : <Share2 className="w-4 h-4" />}
+                {copied ? S.copied : S.share}
+              </button>
+              <span role="status" className="sr-only">
+                {copied ? S.copied : ''}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <h1
-          className="mt-4 font-extrabold tracking-tight text-text leading-tight text-pretty"
-          style={{ fontSize: 'clamp(28px,4.6vw,40px)' }}
-        >
-          {title}
-        </h1>
-
-        <dl className="mt-6 grid grid-cols-1 min-[480px]:grid-cols-2 gap-3">
-          {meta.map(m => (
-            <div key={m.label} className="flex items-start gap-3 bg-panel border border-border rounded-xl px-4 py-3">
-              <m.icon className="w-4 h-4 mt-1 text-primary flex-shrink-0" />
-              <div className="min-w-0">
-                <dt className="text-xs text-muted">{m.label}</dt>
-                <dd className="text-sm font-semibold text-text break-words">{m.value}</dd>
-              </div>
-            </div>
-          ))}
-        </dl>
-
-        {outcome && (
-          <aside className="mt-8 flex items-start gap-3 rounded-2xl border border-primary-border bg-primary-soft px-5 py-5">
-            <TrendingUp className="w-6 h-6 text-primary flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-bold tracking-wider uppercase text-primary mb-1">{S.outcome}</p>
-              <p className="text-lg font-bold text-text text-pretty">{outcome}</p>
-            </div>
-          </aside>
-        )}
-
-        <section className="mt-9" aria-labelledby="ws-about">
-          <h2 id="ws-about" className="text-lg font-bold text-text mb-3">
-            {S.about}
-          </h2>
-          <p className="leading-relaxed text-text/90 whitespace-pre-wrap text-pretty">
-            {localized(w.description, '', locale)}
-          </p>
-          {extra && <p className="mt-4 pt-4 border-t border-border leading-relaxed text-muted whitespace-pre-wrap text-pretty">{extra}</p>}
-        </section>
-
-        {recap && (
-          <section className="mt-9" aria-labelledby="ws-recap">
-            <h2 id="ws-recap" className="text-lg font-bold text-text mb-3">
-              {S.recap}
-            </h2>
-            <p className="leading-relaxed text-text/90 whitespace-pre-wrap text-pretty">{recap}</p>
-          </section>
-        )}
-
         {w.gallery.length > 0 && (
-          <section className="mt-9" aria-labelledby="ws-gallery">
-            <h2 id="ws-gallery" className="text-lg font-bold text-text mb-3">
+          <section className="mt-16 border-t border-ink pt-5" aria-labelledby="ws-gallery">
+            <h2 id="ws-gallery" className="text-xl font-semibold mb-6">
               {S.gallery}
             </h2>
-            <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <ul className="columns-2 md:columns-3 gap-3">
               {w.gallery.map((src, i) => (
-                <li key={src}>
+                <li key={src} className="mb-3 break-inside-avoid">
                   <button
                     type="button"
                     onClick={() => setLightbox(i)}
                     aria-label={S.photo(i + 1, w.gallery.length)}
-                    className="block w-full aspect-square rounded-xl overflow-hidden bg-panel-2 border border-border hover:border-primary-border transition-colors cursor-pointer"
+                    className="block w-full overflow-hidden rounded-md bg-panel-2 cursor-pointer"
                   >
-                    <img
-                      src={src}
-                      alt=""
-                      loading="lazy"
-                      className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                    />
+                    <img src={src} alt="" loading="lazy" className="w-full h-auto block transition-opacity hover:opacity-90" />
                   </button>
                 </li>
               ))}
             </ul>
           </section>
         )}
-
-        <div className="mt-10 flex flex-wrap items-center gap-3">
-          {!past && w.registration_url && (
-            <a
-              href={w.registration_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center min-h-12 px-7 rounded-lg bg-primary text-bg font-bold hover:bg-primary-hover transition-colors"
-            >
-              {S.register}
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={share}
-            className="inline-flex items-center justify-center gap-2 min-h-12 px-5 rounded-lg border border-border bg-panel text-text font-semibold hover:border-primary-border hover:text-primary transition-colors cursor-pointer"
-          >
-            {copied ? <Check className="w-4 h-4 text-primary" /> : <Share2 className="w-4 h-4" />}
-            {copied ? S.copied : S.share}
-          </button>
-          <span role="status" className="sr-only">
-            {copied ? S.copied : ''}
-          </span>
-        </div>
       </article>
 
       {lightbox !== null && (
-        <Lightbox
-          images={w.gallery}
-          index={lightbox}
-          onIndexChange={setLightbox}
-          onClose={() => setLightbox(null)}
-        />
+        <Lightbox images={w.gallery} index={lightbox} onIndexChange={setLightbox} onClose={() => setLightbox(null)} />
       )}
     </PublicShell>
   );
