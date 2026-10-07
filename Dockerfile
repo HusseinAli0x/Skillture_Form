@@ -21,7 +21,7 @@ COPY frontend/ .
 RUN npm run build
 
 # --- Stage 2: Build the API ---
-FROM golang:1.25.14-alpine AS backend
+FROM golang:1.27.1-alpine AS backend
 WORKDIR /src
 # Copy dependency files first so the module download layer is cached.
 COPY backend/go.mod backend/go.sum ./
