@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"skillture/backend/internal/auth"
 	"skillture/backend/internal/usecase/admin"
@@ -20,6 +21,12 @@ type AdminHandler struct {
 // NewAdminHandler creates a new AdminHandler instance
 func NewAdminHandler(adminUC *admin.AdminUseCase, tokens *auth.TokenIssuer) *AdminHandler {
 	return &AdminHandler{adminUC: adminUC, tokens: tokens}
+}
+
+func sanitizeForLog(input string) string {
+	s := strings.ReplaceAll(input, "\n", "")
+	s = strings.ReplaceAll(s, "\r", "")
+	return s
 }
 
 // Health is a simple endpoint to check server status
@@ -103,7 +110,7 @@ func (h *AdminHandler) LoginAdmin(c *gin.Context) {
 
 	admin, err := h.adminUC.Authenticate(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
-		log.Printf("Login failed for user %s: %v", req.Username, err)
+		log.Printf("Login failed for user %s: %v", sanitizeForLog(req.Username), err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
