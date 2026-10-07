@@ -38,6 +38,12 @@ other and the container exits, so the restart policy restarts both together. The
 loopback and trusts only `127.0.0.1` for `X-Forwarded-For`, so client IPs cannot be spoofed.
 Postgres stays a separate service so its data outlives image rebuilds.
 
+**Domain and TLS.** Caddy's site address is `SITE_ADDRESS` (default `:8080`, plain HTTP, used for
+local runs and CI). In production `docker-compose.prod.yml` sets it to `skilltrue.club, www.skilltrue.club`:
+Caddy then listens on 80/443, gets its own certificate, redirects `www.` to the bare domain and sends
+HSTS. When the domain sits behind Cloudflare's proxy, Caddy takes the client IP from `CF-Connecting-IP`
+only for peers inside Cloudflare's ranges. See [DEPLOY.md](DEPLOY.md).
+
 **Ports.** The app is published on `5175`, Postgres on `5433`. The API is not published; in the
 container it listens on `127.0.0.1:8081`. `5173` is
 the Vite dev-server default and only applies to `npm run dev`.

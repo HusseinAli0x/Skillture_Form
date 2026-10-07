@@ -1,0 +1,35 @@
+# Production overlay: serve the app on its public domain with automatic HTTPS.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Caddy inside the app container obtains and renews the Let's Encrypt
+# certificate for SITE_ADDRESS itself. Requirements:
+#   - DNS for the domain (and www) points at this server — see docs/DEPLOY.md
+#   - ports 80, 443 and 443/udp are reachable from the internet
+#   - backend/.env has ENV=production — see backend/.env.example
+#
+# Override the domain without editing this file:
+#   SITE_ADDRESS="example.com, www.example.com" docker compose -f ... up -d
+
+services:
+  app:
+    # `!override` replaces the base file's "5175:8080" instead of adding to it.
+    # Port 8080 stays internal: it only serves the container healthcheck.
+    ports: !override
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      - SITE_ADDRESS=${SITE_ADDRESS:-skilltrue.club, www.skilltrue.club}
+    volumes:
+      # Certificates and the ACME account. Losing this volume means re-issuing
+      # and, with repeated restarts, hitting Let's Encrypt rate limits.
+      - caddy_data:/data
+    # Caddy runs as an unprivileged user inside the container and must bind
+    # 80/443. Docker's default already allows this; stated here so it does not
+    # depend on the daemon's configuration.
+    sysctls:
+      - net.ipv4.ip_unprivileged_port_start=0
+
+volumes:
+  caddy_data:

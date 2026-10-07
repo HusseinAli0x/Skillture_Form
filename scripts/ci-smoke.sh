@@ -167,7 +167,21 @@ check "delete the workshop" test "$(curl -s -o /dev/null -w '%{http_code}' -X DE
 check "deleted workshop is gone" test "$(code "$BASE/api/v1/workshops/$WS")" = 404
 check "delete the team member" test "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$BASE/api/v1/admin/team/$MEMBER" -H "Authorization: Bearer $TOKEN")" = 200
 
-# --- 8. container hygiene ---------------------------------------------------
+# --- 8. production edge behaviour -------------------------------------------
+# The smoke container runs with the default SITE_ADDRESS (plain :8080), so the
+# domain/HTTPS path is never exercised live. These checks cover what can be
+# checked without a public hostname.
+echo "== edge (production Caddy config)"
+check "Caddyfile is valid with a public SITE_ADDRESS" \
+  docker run --rm -e SITE_ADDRESS="example.com, www.example.com" --entrypoint caddy "$IMAGE" \
+    validate --config /etc/caddy/Caddyfile --adapter caddyfile
+check "responses carry HSTS" bash -c "curl -sI '$BASE/' | tr -d '\r' | grep -iq '^strict-transport-security:'"
+check "responses carry X-Content-Type-Options" bash -c "curl -sI '$BASE/' | tr -d '\r' | grep -iq '^x-content-type-options: nosniff'"
+check "www.* redirects permanently to the bare domain, keeping path and query" \
+  bash -c "curl -s -o /dev/null -D - -H 'Host: www.example.com' '$BASE/team?x=1' | tr -d '\r' | grep -iq '^location: http://example.com/team?x=1'"
+check "bare domain is not redirected" test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: example.com' "$BASE/")" = 200
+
+# --- 9. container hygiene ---------------------------------------------------
 echo "== container"
 check "runs as an unprivileged user" test "$(docker exec "$APP" id -u)" != 0
 check "container is healthy per its own HEALTHCHECK" bash -c "for _ in \$(seq 1 30); do [ \"\$(docker inspect -f '{{.State.Health.Status}}' '$APP')\" = healthy ] && exit 0; sleep 2; done; exit 1"

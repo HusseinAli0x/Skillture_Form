@@ -11,9 +11,11 @@ services:
       - path: ./backend/.env
         required: true
     ports:
-      # Published for local psql access. Remove this mapping if the database
-      # does not need to be reachable from the host.
-      - "5433:5432"
+      # Published for local psql access, on loopback only: an unqualified
+      # "5433:5432" listens on every interface, which on a public server puts
+      # the database on the internet. Remove this mapping if the host does not
+      # need it.
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # No init script is mounted. The schema lives in

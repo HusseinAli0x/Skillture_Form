@@ -55,19 +55,31 @@ COPY --from=frontend /src/dist /srv
 # ---- Caddy config ----
 # Serves the SPA bundle and reverse-proxies the API on one origin.
 #
-# The site address is a bare port, so Caddy does not attempt automatic HTTPS.
-# For a real deployment, replace ":8080" with a domain (e.g.
-# "forms.example.com"), publish 80/443, and persist /data so the certificate
-# survives restarts.
+# The site address comes from SITE_ADDRESS and defaults to a bare port, so
+# Caddy does not attempt automatic HTTPS (local dev, CI, the smoke test). For a
+# real deployment set SITE_ADDRESS to the public hostname(s), e.g.
+# "skilltrue.club, www.skilltrue.club": Caddy then obtains and renews a Let's
+# Encrypt certificate itself, listens on 80/443, and redirects www.* to the
+# bare domain. Publish 80, 443 and 443/udp and persist /data so the certificate
+# survives restarts — docker-compose.prod.yml does all of this.
 #
 # Only the admin *API* paths go to the backend. /admin/dashboard, /admin/forms
 # etc. are client-side routes and must fall through to the SPA.
 #
-# Caddy sets X-Forwarded-For to the real client IP and discards any
-# X-Forwarded-For the client sent, so it cannot be spoofed. The API listens on
-# loopback only and trusts 127.0.0.1 as its proxy. WebSocket upgrades on /ws
-# are proxied transparently with no idle timeout; the API's 54s ping keeps
-# them alive.
+# Client IP. Behind Cloudflare's proxy every request arrives from a Cloudflare
+# edge address, which would make the API's rate limiting and login lockout treat
+# all visitors as one client. Caddy therefore trusts CF-Connecting-IP, but only
+# when the TCP peer is inside Cloudflare's published ranges (the
+# trusted_proxies list below, from https://www.cloudflare.com/ips/ — refresh it
+# if Cloudflare adds ranges). A direct connection cannot spoof the header. The
+# resolved address is passed to the API as X-Forwarded-For, and the API trusts
+# only loopback (this Caddy) as its proxy, so it cannot be spoofed either.
+# WebSocket upgrades on /ws are proxied transparently with no idle timeout; the
+# API's 54s ping keeps them alive.
+#
+# The loopback-only site at the bottom serves the same app over plain HTTP so
+# the container HEALTHCHECK works whatever SITE_ADDRESS is. Port 8080 is not
+# published in production.
 #
 # Vite emits content-hashed filenames under /assets, so they never change in
 # place and are cached for a year. Everything else (index.html, the SPA
@@ -75,15 +87,30 @@ COPY --from=frontend /src/dist /srv
 COPY <<"EOF" /etc/caddy/Caddyfile
 {
 	admin off
+
+	servers {
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
 }
 
-:8080 {
+(app) {
 	encode zstd gzip
+
+	header {
+		# Browsers ignore HSTS over plain HTTP, so this only takes effect once
+		# the site is served over HTTPS. No includeSubDomains / preload: those
+		# are hard to undo.
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+	}
 
 	@backend path /health /api/* /uploads/* /ws /ws/* /admin/login /admin/me /admin/create /admin/list /admin/delete/*
 
 	handle @backend {
-		reverse_proxy 127.0.0.1:8081
+		reverse_proxy 127.0.0.1:8081 {
+			header_up X-Forwarded-For {client_ip}
+		}
 	}
 
 	handle {
@@ -96,6 +123,18 @@ COPY <<"EOF" /etc/caddy/Caddyfile
 		try_files {path} /index.html
 		file_server
 	}
+}
+
+{$SITE_ADDRESS::8080} {
+	# www.example.com -> example.com (keeps path and query).
+	@www expression {http.request.host}.startsWith('www.')
+	redir @www {scheme}://{labels.1}.{labels.0}{uri} permanent
+
+	import app
+}
+
+http://127.0.0.1:8080 {
+	import app
 }
 EOF
 

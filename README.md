@@ -56,6 +56,13 @@ browser only ever talks to one origin. `docker-compose.yml` runs that image next
    - Admin dashboard: <http://localhost:5175/admin/dashboard>
    - Backend API: <http://localhost:5175/api/v1> (the API port itself is not published)
 
+### Going live on a domain (skilltrue.club)
+
+`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build` serves the app on
+`https://skilltrue.club` (and redirects `www.`), with Caddy issuing and renewing the Let's Encrypt
+certificate itself. DNS in Cloudflare, `backend/.env` production values, the Cloudflare SSL mode, and
+replacing the default admin password are covered step by step in [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
 > **Schema changes:** the backend applies its own migrations on boot from
 > `backend/internal/database/migrations/`, which are embedded in the binary. Add a new
 > `NNNN_description.up.sql` and restart — `docker compose up --build -d` is enough, and
