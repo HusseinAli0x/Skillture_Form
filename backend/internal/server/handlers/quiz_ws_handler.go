@@ -3,7 +3,9 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"slices"
+	"strings"
 
 	"skillture/backend/internal/auth"
 	"skillture/backend/internal/config"
@@ -61,7 +63,15 @@ func originChecker(allowed []string) func(*http.Request) bool {
 		if origin == "" {
 			return true
 		}
-		return allowAll || slices.Contains(allowed, origin)
+		if allowAll || slices.Contains(allowed, origin) {
+			return true
+		}
+		// A page served from the same host it connects back to is not
+		// cross-site, whatever address it was opened on (a LAN IP in dev, the
+		// real domain behind Caddy). Rejecting it left every game without
+		// real-time updates unless that exact origin had been listed by hand.
+		u, err := url.Parse(origin)
+		return err == nil && strings.EqualFold(u.Host, r.Host)
 	}
 }
 
@@ -219,24 +229,35 @@ func (h *QuizWSHandler) SubmitAnswer(c *gin.Context) {
 		return
 	}
 
-	// Tell the room an answer landed. The host uses this to increment its
-	// counter; player_id lets it de-duplicate rather than counting blind.
-	h.hub.Broadcast(sessionID, ws.Message{
-		Type:    ws.MsgTypeAnswerResult,
-		Payload: gin.H{"player_id": playerID},
-	})
+	// A repeat submission changes nothing, so it tells the room nothing.
+	if !result.AlreadyAnswered {
+		// Tell the room an answer landed. The host uses this to increment its
+		// counter; player_id lets it de-duplicate rather than counting blind.
+		h.hub.Broadcast(sessionID, ws.Message{
+			Type:    ws.MsgTypeAnswerResult,
+			Payload: gin.H{"player_id": playerID},
+		})
 
-	// The usecase already read the fresh leaderboard to build this result;
-	// broadcasting it here means the host does not need a follow-up request.
-	h.hub.Broadcast(sessionID, ws.Message{
-		Type:    ws.MsgTypeLeaderboard,
-		Payload: result.Leaderboard,
-	})
+		// The usecase already read the fresh leaderboard to build this result;
+		// broadcasting it here means the host does not need a follow-up request.
+		h.hub.Broadcast(sessionID, ws.Message{
+			Type:    ws.MsgTypeLeaderboard,
+			Payload: result.Leaderboard,
+		})
+	}
 
 	// Return scoring result to the answering player via REST
 	c.JSON(http.StatusOK, gin.H{
 		"is_correct":    result.IsCorrect,
 		"score_awarded": result.ScoreAwarded,
+		"streak":        result.Streak,
+		"streak_bonus":  result.StreakBonus,
+		"total_score":   result.TotalScore,
+		"rank":          result.Rank,
+		"players":       len(result.Leaderboard),
+		// True when this repeated an earlier submission (a retry or a double
+		// tap); the figures above are the original result.
+		"already_answered": result.AlreadyAnswered,
 	})
 }
 

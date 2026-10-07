@@ -10,7 +10,9 @@
 #
 #   scripts/ci-smoke.sh [image]      (default image: skillture:ci)
 #
-# Needs: docker, curl, python3. Everything it creates is removed on exit.
+# Needs: docker, curl, python3, and Node 22+ for the live-game check (skipped
+# locally if absent; set REQUIRE_GAME_SMOKE=1 to make that a failure, as CI does).
+# Everything it creates is removed on exit.
 set -euo pipefail
 
 IMAGE="${1:-skillture:ci}"
@@ -140,13 +142,32 @@ check "image upload is accepted" test -n "$UP"
 check "uploaded image is served back with an image type" bash -c "curl -sI '$BASE$UP' | tr -d '\r' | grep -iq 'content-type: image/'"
 check "a non-image upload is refused" test "$(printf 'not an image' > /tmp/smoke.txt; curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/admin/team/image" -H "Authorization: Bearer $TOKEN" -F 'image=@/tmp/smoke.txt;filename=x.png;type=image/png')" = 400
 
-# --- 6. cleanup of what we created, and delete semantics --------------------
+# --- 6. the live game, through the same proxy players use -------------------
+# Plays a whole game (host + two players over WebSockets). This is where a
+# WebSocket the proxy or the origin check refuses would show up: everything
+# else can be green while no game can actually start.
+echo "== live game (WebSocket)"
+node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+if [ "$node_major" -ge 22 ]; then
+  if node "$(dirname "$0")/game-smoke.mjs" "$BASE" > /tmp/game-smoke.out 2>&1; then
+    ok "a full game plays end to end ($(grep -c 'ok' /tmp/game-smoke.out) checks)"
+  else
+    bad "a full game plays end to end"
+    cat /tmp/game-smoke.out
+  fi
+elif [ -n "${REQUIRE_GAME_SMOKE:-}" ]; then
+  bad "game smoke needs Node 22+ (found: $node_major)"
+else
+  echo "  skipped: needs Node 22+ (found: $node_major)"
+fi
+
+# --- 7. cleanup of what we created, and delete semantics --------------------
 echo "== delete"
 check "delete the workshop" test "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$BASE/api/v1/admin/workshops/$WS" -H "Authorization: Bearer $TOKEN")" = 200
 check "deleted workshop is gone" test "$(code "$BASE/api/v1/workshops/$WS")" = 404
 check "delete the team member" test "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$BASE/api/v1/admin/team/$MEMBER" -H "Authorization: Bearer $TOKEN")" = 200
 
-# --- 7. container hygiene ---------------------------------------------------
+# --- 8. container hygiene ---------------------------------------------------
 echo "== container"
 check "runs as an unprivileged user" test "$(docker exec "$APP" id -u)" != 0
 check "container is healthy per its own HEALTHCHECK" bash -c "for _ in \$(seq 1 30); do [ \"\$(docker inspect -f '{{.State.Health.Status}}' '$APP')\" = healthy ] && exit 0; sleep 2; done; exit 1"

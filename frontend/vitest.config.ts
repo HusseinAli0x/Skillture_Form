@@ -21,7 +21,18 @@ export default defineConfig({
       include: ['src/lib/**', 'src/components/forms/**', 'src/components/quiz/**'],
       // Static copy and a type-only re-export: nothing to execute, so counting
       // them only dilutes the figure.
-      exclude: ['src/lib/siteStrings.ts', 'src/lib/translations.ts', 'src/**/*.test.{ts,tsx}'],
+      exclude: [
+        'src/lib/siteStrings.ts',
+        'src/lib/translations.ts',
+        'src/lib/game/strings.ts',
+        'src/lib/game/hostStrings.ts',
+        'src/lib/game/playerStrings.ts',
+        // Pure browser effects (synthesised audio, a canvas animation): there
+        // is no logic to assert on, only output a person hears or sees.
+        'src/lib/game/sound.ts',
+        'src/lib/game/confetti.ts',
+        'src/**/*.test.{ts,tsx}',
+      ],
       // Floors for CI (`npm run test:coverage`), not targets: raise them as
       // coverage grows, never lower them to turn a red build green.
       thresholds: {

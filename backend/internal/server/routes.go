@@ -75,6 +75,7 @@ func SetupRoutes(
 		api.GET("/workshops/past", workshopHandler.ListPast)
 		api.GET("/workshops/:id", workshopHandler.GetByID)
 		api.GET("/impact", workshopHandler.Impact)
+		api.GET("/server-info", handlers.ServerInfo)
 		api.GET("/team", teamHandler.List)
 		api.POST("/contact", contactHandler.Submit)
 

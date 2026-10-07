@@ -350,7 +350,14 @@ jobs:
           vuln-type: os,library
           exit-code: '1'
 
+      # The live-game check uses Node's built-in WebSocket (Node 22+).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Smoke test the running image
+        env:
+          REQUIRE_GAME_SMOKE: '1'
         run: scripts/ci-smoke.sh skillture:ci
 
   # ---------------------------------------------------------------------------
