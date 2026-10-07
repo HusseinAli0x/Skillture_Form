@@ -1,48 +1,36 @@
-# Git
-.git
-.gitignore
+# The build context is the whole repository; only frontend/ and backend/
+# are needed.
 
-# IDE
+# VCS / editor / tooling
+.git
+.github
+.claude
 .idea/
 .vscode/
-*.swp
-*.swo
-
-# Build artifacts
-build/
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Node modules (rebuilt in Docker)
-web/node_modules
-
-# Logo source files
-Skillture/
-
-# Test & debug files
-*.test
-*.out
-*.log
-*.txt
-coverage.*
-*.coverprofile
-profile.cov
-TestEndpoints.json
-
-# Environment (passed at runtime)
-.env
-
-# Docker
-docker-compose.yml
-
-# Go workspace
-go.work
-go.work.sum
-
-# Documentation artifacts
 docs/
+*.md
+*.zip
 
-# Gemini
-.gemini/
+# Secrets — never ship into an image layer
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Frontend: 238 MB of local deps and stale build output — the image
+# reinstalls from the lockfile and builds its own
+frontend/node_modules
+frontend/dist
+
+# Backend: build artifacts (~44 MB each, bust the layer cache on every build)
+backend/main
+backend/tmp_build
+**/*.exe
+**/*.test
+**/*.out
+
+# Backend runtime data (mounted as a volume by docker-compose)
+backend/uploads/
+
+Dockerfile
+.dockerignore
+docker-compose.yml

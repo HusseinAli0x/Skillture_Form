@@ -1,0 +1,75 @@
+services:
+  # --- Database Service (PostgreSQL) ---
+  postgres_db:
+    image: pgvector/pgvector:pg16
+    container_name: skillture_postgres
+    # Credentials come from backend/.env, which is gitignored. They used to be
+    # hardcoded as hussein/hussein in this committed file. POSTGRES_USER /
+    # POSTGRES_PASSWORD / POSTGRES_DB must match DB_USER / DB_PASSWORD /
+    # DB_NAME in the same file — see backend/.env.example.
+    env_file:
+      - path: ./backend/.env
+        required: true
+    ports:
+      # Published for local psql access. Remove this mapping if the database
+      # does not need to be reachable from the host.
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # No init script is mounted. The schema lives in
+      # backend/internal/database/migrations/, is embedded in the backend
+      # binary, and is applied on boot. Init scripts only ever ran on an empty
+      # data volume, so every schema change used to mean `down -v`.
+    networks:
+      - skillture_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- Application (SPA + Go API + Caddy, one image) ---
+  # Built from the root Dockerfile. Caddy serves the SPA and proxies to the API
+  # over loopback inside the container; the API itself is not published.
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skillture_app
+    ports:
+      - "5175:8080"
+    env_file:
+      - path: ./backend/.env
+        required: true
+    environment:
+      # Inside the compose network the database is reachable by service name on
+      # its container port, overriding whatever .env says for host-side use.
+      - DB_HOST=postgres_db
+      - DB_PORT=5432
+      # These are baked into the image, but env_file would override them with
+      # the host-side values from .env. The API must stay on loopback behind
+      # Caddy, and Caddy (127.0.0.1) is its only trusted proxy.
+      - SERVER_HOST=127.0.0.1
+      - SERVER_PORT=8081
+      - TRUSTED_PROXIES=127.0.0.1,::1
+    volumes:
+      # Must match WORKDIR in the Dockerfile — the API resolves "./uploads"
+      # relative to its working directory.
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - skillture_network
+    restart: unless-stopped
+    # The healthcheck is defined in the Dockerfile: /health through Caddy, so it
+    # fails if either process is down.
+
+# --- Networks & Volumes Definitions ---
+networks:
+  skillture_network:
+    driver: bridge
+
+volumes:
+  postgres_data:

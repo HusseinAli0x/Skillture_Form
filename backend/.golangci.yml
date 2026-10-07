@@ -1,0 +1,42 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+issues:
+  # Never hide repeats: a quiet linter is a lying linter.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  # standard = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - bodyclose     # unclosed HTTP response bodies leak connections
+    - errorlint     # == on errors instead of errors.Is/As breaks wrapped errors
+    - gosec         # security smells: weak crypto, path traversal, SQL built from strings
+    - misspell
+    - nolintlint    # a //nolint must name the linter and say why
+    - unconvert
+    - copyloopvar
+  settings:
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    gosec:
+      excludes:
+        - G104  # unhandled errors: errcheck already covers this with better context
+
+  exclusions:
+    rules:
+      # Test fixtures use throwaway passwords; G101 (hardcoded credentials)
+      # flags every one of them and nothing in production code.
+      - path: _test\.go
+        linters:
+          - gosec
+        text: "G101"
+
+formatters:
+  enable:
+    - gofmt
