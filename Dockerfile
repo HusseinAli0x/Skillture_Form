@@ -37,7 +37,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o main ./cmd/a
 FROM caddy:2.11-alpine AS caddy
 
 # --- Stage 4: Runtime ---
-FROM alpine:3.21
+FROM alpine:3.24
 
 # ca-certificates is required for the outbound TLS call to the Gemini API.
 # Without it every request fails with:
