@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowRight, Edit2, Plus, Share2 } from 'lucide-react';
 import StatusDropdown, { type StatusValue } from '../StatusDropdown';
-import { Card, CardHeader, IconButton, Button } from '../ui';
+import { Card, CardHeader, IconButton, Button, SkeletonRows } from '../ui';
 
 export interface RecentItem {
   id: string;
@@ -24,6 +24,8 @@ interface Props {
   onEdit: (id: string) => void;
   onShare: (id: string) => void;
 }
+
+const SHOWN = 4;
 
 /**
  * "Recent forms" / "Recent quizzes" list. The two panels were duplicated
@@ -48,16 +50,17 @@ const RecentPanel: React.FC<Props> = ({
       title={heading}
       action={
         <button
+          type="button"
           onClick={onViewAll}
-          className="text-xs font-medium flex items-center gap-1 text-primary hover:text-primary-hover transition-colors"
+          className="text-xs font-medium inline-flex items-center gap-1 px-1 min-h-8 rounded text-primary hover:text-primary-hover transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          View all <ArrowRight className="w-3 h-3" />
+          View all <ArrowRight className="w-3 h-3 rtl:rotate-180" />
         </button>
       }
     />
 
     {isLoading ? (
-      <p className="px-5 py-8 text-center text-sm text-muted">Loading…</p>
+      <SkeletonRows rows={3} label={`Loading ${heading.toLowerCase()}`} />
     ) : items.length === 0 ? (
       <div className="px-5 py-8 text-center">
         <p className="text-sm mb-3 text-muted">{emptyLabel}</p>
@@ -66,23 +69,22 @@ const RecentPanel: React.FC<Props> = ({
         </Button>
       </div>
     ) : (
-      items.slice(0, 4).map((item, i) => (
+      items.slice(0, SHOWN).map((item, i) => (
         <div
           key={item.id}
           className={`flex items-center gap-3 px-5 py-3 transition-colors hover:bg-hover-overlay ${
-            i < Math.min(items.length, 4) - 1 ? 'border-b border-border' : ''
+            i < Math.min(items.length, SHOWN) - 1 ? 'border-b border-border' : ''
           }`}
         >
           <button
+            type="button"
             onClick={() => onOpen(item.id)}
-            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+            className="flex items-center gap-3 flex-1 min-w-0 text-start rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-primary-subtle border border-primary-border-soft text-primary">
               {icon}
             </span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-sm font-medium truncate text-text">{item.title}</span>
-            </span>
+            <span className="block text-sm font-medium truncate text-text">{item.title}</span>
           </button>
 
           <div className="flex items-center gap-1">

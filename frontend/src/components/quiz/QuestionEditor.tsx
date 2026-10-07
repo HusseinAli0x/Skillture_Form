@@ -1,8 +1,16 @@
-import React from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { ArrowDown, ArrowUp, Check, Copy, Plus, Trash2 } from 'lucide-react';
 import type { QuizQuestionType } from '../../api/types';
-import { IconButton, Input, Label, Select } from '../ui';
-import { MAX_OPTIONS, QUESTION_TYPE_LABELS, type QuestionState } from './questionState';
+import { IconButton, Input, Label } from '../ui';
+import { Shape } from '../game/AnswerTile';
+import { answerStyle } from '../game/gameLogic';
+import {
+  MAX_OPTIONS,
+  QUESTION_TYPE_LABELS,
+  type IssueField,
+  type QuestionIssue,
+  type QuestionState,
+} from './questionState';
 import { newId } from '../../lib/id';
 
 /** Number inputs hand back '' while being cleared, which parseInt turns into NaN. */
@@ -11,6 +19,8 @@ const toNumber = (raw: string, fallback: number) => {
   return Number.isNaN(parsed) ? fallback : parsed;
 };
 
+const TIME_PRESETS = [10, 15, 20, 30, 60];
+
 interface Props {
   question: QuestionState;
   index: number;
@@ -18,20 +28,50 @@ interface Props {
   onChange: (patch: Partial<QuestionState>) => void;
   onRemove: () => void;
   onMove: (direction: 'up' | 'down') => void;
+  onDuplicate?: () => void;
+  /** Problems to show next to the offending part. Pass them once the author has tried to save. */
+  issues?: QuestionIssue[];
+  /** Put the cursor in the question text on mount (a question that was just added). */
+  autoFocus?: boolean;
 }
 
 /**
  * Editor for a single quiz question. Extracted from FormQuizBuilder, which was
  * a 522-line file holding page chrome, save orchestration and this editor.
+ *
+ * Answer rows wear the same colour and shape as the tiles players tap, so the
+ * author sees what the room will see. Enter in an answer adds the next one.
  */
-const QuestionEditor: React.FC<Props> = ({ question, index, total, onChange, onRemove, onMove }) => {
+const QuestionEditor: React.FC<Props> = ({
+  question,
+  index,
+  total,
+  onChange,
+  onRemove,
+  onMove,
+  onDuplicate,
+  issues = [],
+  autoFocus = false,
+}) => {
   const isCorrect = (optionId: string) => question.correctOptionId === optionId;
+  const root = useRef<HTMLDivElement>(null);
+  const focusIndex = useRef<number | null>(null);
 
   // Ids are scoped to the question so several editors on the page do not
   // collide, and so each Label actually names its control — without htmlFor
   // the visible text is decoration and the field is unnamed to a screen
   // reader.
   const fieldId = (name: string) => `q-${question.id}-${name}`;
+
+  const issue = (field: IssueField) => issues.find(i => i.field === field)?.message;
+  const problem = (field: IssueField) => {
+    const message = issue(field);
+    return message ? (
+      <p role="alert" className="mt-1.5 text-xs font-medium text-danger">
+        {message}
+      </p>
+    ) : null;
+  };
 
   const setOptionValue = (optionId: string, value: string) =>
     onChange({ options: question.options.map(o => (o.id === optionId ? { ...o, value } : o)) });
@@ -44,167 +84,182 @@ const QuestionEditor: React.FC<Props> = ({ question, index, total, onChange, onR
       ...(isCorrect(optionId) ? { correctOptionId: '' } : {}),
     });
 
-  const addOption = () =>
+  const addOption = () => {
+    focusIndex.current = question.options.length;
     onChange({
       options: [...question.options, { id: newId(), value: `Option ${question.options.length + 1}` }],
     });
+  };
+
+  // After an answer is added with Enter, the new row's input takes focus.
+  useEffect(() => {
+    if (focusIndex.current === null) return;
+    const el = root.current?.querySelectorAll<HTMLInputElement>('[data-answer-input]')[focusIndex.current];
+    focusIndex.current = null;
+    el?.focus();
+    el?.select();
+  }, [question.options.length]);
+
+  const setType = (type: QuizQuestionType) => {
+    if (type !== question.type) onChange({ type });
+  };
 
   return (
-    <div className="rounded-xl border border-border bg-panel overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-hover-overlay">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 p-1">
-            <button
-              onClick={() => onMove('up')}
-              disabled={index === 0}
-              aria-label="Move question up"
-              className="p-1.5 rounded-md border border-primary-border bg-primary-soft text-primary transition-colors hover:bg-primary hover:text-bg disabled:opacity-30 disabled:hover:bg-primary-soft disabled:hover:text-primary"
-            >
-              <ArrowUp className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onMove('down')}
-              disabled={index === total - 1}
-              aria-label="Move question down"
-              className="p-1.5 rounded-md border border-primary-border bg-primary-soft text-primary transition-colors hover:bg-primary hover:text-bg disabled:opacity-30 disabled:hover:bg-primary-soft disabled:hover:text-primary"
-            >
-              <ArrowDown className="w-4 h-4" />
-            </button>
-          </div>
-          <span className="text-sm font-medium text-muted">Question {index + 1}</span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-primary-soft text-primary border border-primary-border">
-            {QUESTION_TYPE_LABELS[question.type]}
+    <div
+      ref={root}
+      data-question-id={question.id}
+      className={`rounded-xl border bg-panel ${issues.length ? 'border-danger-border' : 'border-border'}`}
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-hover-overlay px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-primary px-2 font-display text-base font-extrabold text-ink">
+            {index + 1}
           </span>
+          <span className="sr-only">Question {index + 1}</span>
+          <div className="flex items-center gap-1">
+            <IconButton label="Move question up" disabled={index === 0} onClick={() => onMove('up')}>
+              <ArrowUp className="h-4 w-4" />
+            </IconButton>
+            <IconButton label="Move question down" disabled={index === total - 1} onClick={() => onMove('down')}>
+              <ArrowDown className="h-4 w-4" />
+            </IconButton>
+          </div>
         </div>
 
-        <IconButton label="Remove question" tone="danger" disabled={total === 1} onClick={onRemove}>
-          <Trash2 className="w-4 h-4" />
-        </IconButton>
+        <div className="flex items-center gap-1">
+          {onDuplicate && (
+            <IconButton label="Duplicate question" tone="primary" onClick={onDuplicate}>
+              <Copy className="h-4 w-4" />
+            </IconButton>
+          )}
+          <IconButton label="Remove question" tone="danger" disabled={total === 1} onClick={onRemove}>
+            <Trash2 className="h-4 w-4" />
+          </IconButton>
+        </div>
       </div>
 
-      <div className="p-5 space-y-4">
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <Label htmlFor={fieldId('text')} required>
-              Question Text
-            </Label>
-            <Input
-              id={fieldId('text')}
-              value={question.question}
-              onChange={e => onChange({ question: e.target.value })}
-              placeholder="Enter your question..."
-              className="!py-2 !px-3"
-            />
-          </div>
-          <div className="w-44">
-            <Label htmlFor={fieldId('type')}>Type</Label>
-            <div className="relative">
-              <Select
-                id={fieldId('type')}
-                value={question.type}
-                onChange={e => onChange({ type: e.target.value as QuizQuestionType })}
-              >
-                {(Object.keys(QUESTION_TYPE_LABELS) as QuizQuestionType[]).map(t => (
-                  <option key={t} value={t}>
-                    {QUESTION_TYPE_LABELS[t]}
-                  </option>
-                ))}
-              </Select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-muted" />
-            </div>
-          </div>
+      <div className="space-y-5 p-5">
+        <div>
+          <Label htmlFor={fieldId('text')} required>
+            Question Text
+          </Label>
+          <Input
+            id={fieldId('text')}
+            value={question.question}
+            onChange={e => onChange({ question: e.target.value })}
+            placeholder="Enter your question..."
+            invalid={!!issue('text')}
+            autoFocus={autoFocus}
+            className="!px-3 !py-2.5 font-display !text-lg font-semibold"
+          />
+          {problem('text')}
         </div>
 
-        <div className="flex gap-4">
-          <div className="w-32">
-            <Label htmlFor={fieldId('time')}>Time (sec)</Label>
-            <Input
-              id={fieldId('time')}
-              type="number"
-              min={1}
-              value={question.timeLimit}
-              onChange={e => onChange({ timeLimit: toNumber(e.target.value, 15) })}
-              className="!py-2 !px-3"
-            />
-          </div>
-          <div className="w-32">
-            <Label htmlFor={fieldId('points')}>Points</Label>
-            <Input
-              id={fieldId('points')}
-              type="number"
-              min={0}
-              value={question.points}
-              onChange={e => onChange({ points: toNumber(e.target.value, 1000) })}
-              className="!py-2 !px-3"
-            />
-          </div>
+        <div role="radiogroup" aria-label="Question type" className="grid grid-cols-3 gap-1 rounded-xl border border-border bg-bg p-1">
+          {(Object.keys(QUESTION_TYPE_LABELS) as QuizQuestionType[]).map(t => (
+            <button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={question.type === t}
+              onClick={() => setType(t)}
+              className={`rounded-lg px-2 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                question.type === t ? 'bg-primary text-ink' : 'text-muted hover:bg-hover-overlay-strong hover:text-text'
+              }`}
+            >
+              {QUESTION_TYPE_LABELS[t]}
+            </button>
+          ))}
         </div>
 
-        <div className="p-4 rounded-xl border border-border bg-hover-overlay">
+        <div className="rounded-xl border border-border bg-hover-overlay p-4">
           <Label required className="mb-3">
             Answers
           </Label>
 
           {question.type === 'mcq' && (
-            <div className="space-y-3">
-              {question.options.map((opt, optIdx) => (
-                <div key={opt.id} className="flex items-center gap-3">
-                  <button
-                    onClick={() => onChange({ correctOptionId: opt.id })}
-                    role="radio"
-                    aria-checked={isCorrect(opt.id)}
-                    aria-label={`Mark option ${optIdx + 1} correct`}
-                    className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-                      isCorrect(opt.id) ? 'border-primary bg-primary-border' : 'border-border'
-                    }`}
-                  >
-                    {isCorrect(opt.id) && <span className="w-2 h-2 rounded-full bg-primary" />}
-                  </button>
-                  <Input
-                    value={opt.value}
-                    onChange={e => setOptionValue(opt.id, e.target.value)}
-                    placeholder={`Option ${optIdx + 1}`}
-                    aria-label={`Option ${optIdx + 1}`}
-                    className={`flex-1 !py-1.5 !px-3 ${isCorrect(opt.id) ? '!border-primary text-primary' : ''}`}
-                  />
-                  {question.options.length > 2 && (
-                    <IconButton
-                      label={`Remove option ${optIdx + 1}`}
-                      tone="danger"
-                      onClick={() => removeOption(opt.id)}
+            <div className="space-y-2.5">
+              {question.options.map((opt, optIdx) => {
+                const style = answerStyle(optIdx);
+                return (
+                  <div key={opt.id} className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => onChange({ correctOptionId: opt.id })}
+                      role="radio"
+                      aria-checked={isCorrect(opt.id)}
+                      aria-label={`Mark option ${optIdx + 1} correct`}
+                      title="Mark as the correct answer"
+                      className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                        isCorrect(opt.id) ? 'border-white' : 'border-transparent opacity-80 hover:opacity-100'
+                      }`}
+                      style={{ backgroundColor: style.bg, color: '#050909' }}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </IconButton>
-                  )}
-                </div>
-              ))}
+                      {isCorrect(opt.id) ? (
+                        <Check className="h-5 w-5" strokeWidth={3.5} />
+                      ) : (
+                        <Shape shape={style.shape} className="h-4 w-4" />
+                      )}
+                    </button>
+                    <Input
+                      value={opt.value}
+                      data-answer-input=""
+                      onChange={e => setOptionValue(opt.id, e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (question.options.length < MAX_OPTIONS && optIdx === question.options.length - 1) addOption();
+                          else {
+                            root.current?.querySelectorAll<HTMLInputElement>('[data-answer-input]')[optIdx + 1]?.focus();
+                          }
+                        }
+                      }}
+                      placeholder={`Option ${optIdx + 1}`}
+                      aria-label={`Option ${optIdx + 1}`}
+                      className={`flex-1 !px-3 !py-2 ${isCorrect(opt.id) ? '!border-primary' : ''}`}
+                    />
+                    {question.options.length > 2 && (
+                      <IconButton label={`Remove option ${optIdx + 1}`} tone="danger" onClick={() => removeOption(opt.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </IconButton>
+                    )}
+                  </div>
+                );
+              })}
               {question.options.length < MAX_OPTIONS && (
                 <button
+                  type="button"
                   onClick={addOption}
-                  className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary-hover transition-colors"
+                  className="mt-1 flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:text-primary-hover"
                 >
-                  <Plus className="w-4 h-4" /> Add Option
+                  <Plus className="h-4 w-4" /> Add Option
+                  <span className="text-muted">(or press Enter in the last answer)</span>
                 </button>
               )}
+              {problem('options')}
             </div>
           )}
 
           {question.type === 'tf' && (
-            <div className="flex gap-4">
-              {question.options.map(opt => (
-                <button
-                  key={opt.id}
-                  onClick={() => onChange({ correctOptionId: opt.id })}
-                  aria-pressed={isCorrect(opt.id)}
-                  className={`flex-1 py-3 rounded-lg border text-sm font-medium transition-colors ${
-                    isCorrect(opt.id)
-                      ? 'border-primary bg-primary-soft text-primary'
-                      : 'border-border text-muted hover:border-border-strong hover:text-text'
-                  }`}
-                >
-                  {opt.value}
-                </button>
-              ))}
+            <div className="flex gap-3">
+              {question.options.map((opt, i) => {
+                const style = answerStyle(i);
+                return (
+                  <button
+                    type="button"
+                    key={opt.id}
+                    onClick={() => onChange({ correctOptionId: opt.id })}
+                    aria-pressed={isCorrect(opt.id)}
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg border-2 py-3 text-sm font-semibold transition-colors ${
+                      isCorrect(opt.id) ? 'border-white text-ink' : 'border-border text-muted hover:border-border-strong hover:text-text'
+                    }`}
+                    style={isCorrect(opt.id) ? { backgroundColor: style.bg } : undefined}
+                  >
+                    {isCorrect(opt.id) && <Check className="h-4 w-4" strokeWidth={3.5} />}
+                    {opt.value}
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -215,11 +270,59 @@ const QuestionEditor: React.FC<Props> = ({ question, index, total, onChange, onR
                 onChange={e => onChange({ correctOptionId: e.target.value })}
                 placeholder="Type the exact correct answer here..."
                 aria-label="Correct answer"
-                className="!py-2 !px-3"
+                invalid={!!issue('answer')}
+                className="!px-3 !py-2"
               />
-              <p className="text-xs mt-2 text-muted">Answers must match exactly (case-insensitive).</p>
+              <p className="mt-2 text-xs text-muted">Players type their answer. It must match exactly, ignoring capitals and extra spaces.</p>
             </div>
           )}
+          {problem('answer')}
+        </div>
+
+        <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
+          <div>
+            <Label htmlFor={fieldId('time')}>Time (sec)</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id={fieldId('time')}
+                type="number"
+                min={1}
+                value={question.timeLimit}
+                invalid={!!issue('time')}
+                onChange={e => onChange({ timeLimit: toNumber(e.target.value, 15) })}
+                className="!w-24 !px-3 !py-2"
+              />
+              <div className="hidden gap-1 sm:flex" aria-label="Time presets" role="group">
+                {TIME_PRESETS.map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    aria-pressed={question.timeLimit === s}
+                    onClick={() => onChange({ timeLimit: s })}
+                    className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                      question.timeLimit === s ? 'border-primary bg-primary-soft text-primary' : 'border-border text-muted hover:border-border-strong'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {problem('time')}
+          </div>
+          <div>
+            <Label htmlFor={fieldId('points')}>Points</Label>
+            <Input
+              id={fieldId('points')}
+              type="number"
+              min={1}
+              value={question.points}
+              invalid={!!issue('points')}
+              onChange={e => onChange({ points: toNumber(e.target.value, 1000) })}
+              className="!w-28 !px-3 !py-2"
+            />
+            {problem('points')}
+          </div>
         </div>
       </div>
     </div>

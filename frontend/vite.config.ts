@@ -11,6 +11,9 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
+    // Listen on the LAN too: the host lobby's QR code points phones at this
+    // machine's network address, which only works if the dev server accepts it.
+    host: true,
     proxy: {
       '/api': `http://${api}`,
       // /admin is both an API prefix and an SPA route prefix. Browser page

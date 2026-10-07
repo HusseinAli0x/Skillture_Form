@@ -71,6 +71,9 @@ type QuizSessionUseCase interface {
 	GetByPIN(ctx context.Context, pin string) (*entities.QuizSession, error)
 	// GetActiveSessionByQuizID retrieves the current active or lobby session for a given quiz ID
 	GetActiveSessionByQuizID(ctx context.Context, quizID uuid.UUID) (*entities.QuizSession, error)
+	// CurrentQuestion returns the live question of an active session, or nil
+	// when none is live. A reconnecting player is resynced with it.
+	CurrentQuestion(ctx context.Context, session *entities.QuizSession) (*entities.QuizQuestion, error)
 }
 
 // QuizPlayerUseCase handles players joining and their score state

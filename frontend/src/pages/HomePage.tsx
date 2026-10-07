@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { ArrowRight, Mail } from 'lucide-react';
 import client from '../api/client';
 import {
@@ -9,16 +9,17 @@ import {
   type TeamMember,
   type WorkshopTrack,
 } from '../api/publicTypes';
+import { Frieze, Pattern, brandAssets } from '../components/brand';
+import ContactForm from '../components/public/ContactForm';
 import ImpactNumbers from '../components/public/ImpactNumbers';
-import { BTN_INK, BTN_PRIMARY, H1, H2, LINK_UNDERLINE, WRAP } from '../components/public/layout';
+import JoinPinForm from '../components/public/JoinPinForm';
+import { BTN_BRAND, BTN_INK, FOCUS_RING, H1, H2, LINK_UNDERLINE, WRAP } from '../components/public/layout';
 import LinkedInIcon from '../components/public/LinkedInIcon';
 import PublicShell from '../components/public/PublicShell';
 import TeamCard from '../components/public/TeamCard';
 import { WorkshopRows } from '../components/public/WorkshopRow';
 import { Spinner } from '../components/ui';
 import { useLanguageStore } from '../context/LanguageStore';
-import { useToastStore } from '../context/ToastStore';
-import { apiErrorMessage } from '../lib/apiError';
 import { siteStrings } from '../lib/siteStrings';
 import { translations } from '../lib/translations';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
@@ -70,18 +71,13 @@ const DEFAULT_CONTENT: HomepageContent = {
 const CONTACT_EMAIL = 'hello@skillture.com';
 const CONTACT_LINKEDIN = 'https://www.linkedin.com/company/skillture';
 
-const FIELD =
-  'w-full min-h-12 px-4 rounded-md bg-panel border border-border-strong text-base placeholder:text-muted/70 focus:outline-2 focus:outline-primary focus:border-primary';
-
 const HomePage: React.FC = () => {
-  const navigate = useNavigate();
   const { hash } = useLocation();
   const locale = useLanguageStore(s => s.locale);
   const T = translations[locale];
   const S = siteStrings[locale];
   const H = S.home;
   const isRTL = locale === 'ar';
-  const { addToast } = useToastStore();
 
   const [content, setContent] = useState<HomepageContent | null>(null);
   const [upcoming, setUpcoming] = useState<PublicWorkshop[]>([]);
@@ -89,10 +85,6 @@ const HomePage: React.FC = () => {
   const [impact, setImpact] = useState<Impact | null>(null);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  const [pin, setPin] = useState('');
-  const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' });
-  const [isSending, setIsSending] = useState(false);
 
   useDocumentTitle('Skillture');
 
@@ -127,26 +119,6 @@ const HomePage: React.FC = () => {
     ? { title: T.offer.title, subtitle: T.offer.subtitle, pillars: T.offer.pillars.map((p, i) => ({ ...p, id: `p${i}` })) }
     : { title: c.offer_title, subtitle: c.offer_subtitle, pillars: c.offer_pillars };
 
-  const joinGame = (e: React.FormEvent) => {
-    e.preventDefault();
-    navigate(pin ? `/play?pin=${pin}` : '/play');
-  };
-
-  const handleContactSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contactForm.name.trim() || !contactForm.email.trim() || !contactForm.message.trim()) return;
-    setIsSending(true);
-    try {
-      await client.post('/api/v1/contact', contactForm);
-      addToast('success', T.contact.success);
-      setContactForm({ name: '', email: '', message: '' });
-    } catch (err) {
-      addToast('error', apiErrorMessage(err, T.contact.error));
-    } finally {
-      setIsSending(false);
-    }
-  };
-
   // Count of delivered workshops per track. The CMS pillar titles are free
   // text, so match by name, and fall back to position in Arabic (fixed order).
   const deliveredFor = (title: string, index: number): number | null => {
@@ -175,47 +147,79 @@ const HomePage: React.FC = () => {
 
   return (
     <PublicShell>
-      {/* Hero: the statement, and the one thing a student in the room needs. */}
-      <section className={`${WRAP} pt-12 pb-16 sm:pt-20 sm:pb-24 grid lg:grid-cols-[1.4fr_1fr] gap-12 lg:gap-20 items-center`}>
+      {/* Hero: two audiences, two obvious next steps. Left: book a workshop.
+          Right: the poster's pointing hand, with the game-PIN box sitting where
+          the finger points. In Arabic the photo is mirrored so the finger still
+          points at the box. */}
+      <section className={`${WRAP} pt-10 pb-14 sm:pt-16 sm:pb-20 grid lg:grid-cols-[1.05fr_1fr] gap-12 lg:gap-16 items-center`}>
         <div>
           <h1 className={H1}>{hero.title}</h1>
           <p className="mt-6 text-lg text-muted max-w-xl leading-relaxed text-pretty">{hero.subtitle}</p>
-          <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-3">
-            <Link to="/our-work" className={BTN_PRIMARY}>
+          <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3">
+            <Link to="/#contact" className={BTN_INK}>
               {H.ctaPrimary}
-              <ArrowRight className="w-4 h-4 rtl:rotate-180" />
+              <ArrowRight className="w-4 h-4 rtl:rotate-180" aria-hidden="true" />
             </Link>
-            <Link to="/team" className={LINK_UNDERLINE}>
+            <Link to="/our-work" className={LINK_UNDERLINE}>
               {H.ctaSecondary}
             </Link>
           </div>
         </div>
 
-        <form onSubmit={joinGame} className="bg-brand text-ink rounded-xl p-6 sm:p-8">
-          <h2 className="text-xl font-semibold">{H.pin.title}</h2>
-          <p className="mt-1.5 text-base">{H.pin.hint}</p>
-          <label htmlFor="home-pin" className="sr-only">
-            {H.pin.label}
-          </label>
-          <input
-            id="home-pin"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={8}
-            value={pin}
-            onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
-            placeholder={H.pin.placeholder}
-            dir="ltr"
-            className="mt-6 w-full h-16 rounded-lg bg-white text-ink text-center text-3xl numeral tracking-[0.25em] placeholder:text-ink/25 focus:outline-2 focus:outline-ink"
-          />
-          <button type="submit" className={`${BTN_INK} w-full mt-3 cursor-pointer`}>
-            {H.pin.button}
-          </button>
-        </form>
+        <div className="relative">
+          <div className="relative aspect-[4/3] sm:aspect-[3/2] overflow-hidden rounded-2xl bg-teal">
+            <img
+              src={brandAssets.hand}
+              alt=""
+              width={1600}
+              height={1066}
+              fetchPriority="high"
+              className="absolute inset-0 h-full w-full object-cover object-left rtl:-scale-x-100 rtl:object-right"
+            />
+          </div>
+          <JoinPinForm className="relative mt-3 me-4 sm:me-10 shadow-[0_18px_40px_-18px_rgba(5,9,9,0.45)]" />
+        </div>
+      </section>
+
+      {/* For participants: the lanyard ID is the player card. */}
+      <section className="on-ink relative overflow-hidden">
+        <Pattern className="text-white opacity-[0.035]" />
+        <div className={`${WRAP} relative py-16 sm:py-24 grid md:grid-cols-[1.2fr_1fr] gap-12 md:gap-16 items-center`}>
+          <div>
+            <h2 className={`${H2} max-w-xl`}>{H.participants.title}</h2>
+            <p className="mt-4 text-lg text-muted max-w-xl text-pretty">{H.participants.body}</p>
+            <ol className="mt-8 space-y-4 max-w-xl">
+              {H.participants.steps.map((step, i) => (
+                <li key={step} className="flex items-baseline gap-4">
+                  <span className="numeral text-4xl text-brand w-8 shrink-0" aria-hidden="true">
+                    {i + 1}
+                  </span>
+                  <span className="text-lg leading-snug">{step}</span>
+                </li>
+              ))}
+            </ol>
+            <Link to="/play" className={`${BTN_BRAND} mt-9`}>
+              {H.participants.button}
+              <ArrowRight className="w-4 h-4 rtl:rotate-180" aria-hidden="true" />
+            </Link>
+          </div>
+          {/* The source image is a type-specimen slide with the card on its
+              right; the crop keeps only the card and lanyard. */}
+          <div className="relative mx-auto w-full max-w-xs md:max-w-none aspect-[3/4] overflow-hidden rounded-2xl bg-white">
+            <img
+              src={brandAssets.badge}
+              alt={H.participants.badgeAlt}
+              width={1664}
+              height={937}
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover object-[95%_50%]"
+            />
+          </div>
+        </div>
       </section>
 
       {/* Method: how we know a workshop worked. */}
-      <section className="border-t border-border">
+      <section>
         <div className={`${WRAP} py-16 sm:py-24 grid lg:grid-cols-[1fr_2fr] gap-10 lg:gap-20`}>
           <div>
             <h2 className={H2}>{H.method.title}</h2>
@@ -223,8 +227,8 @@ const HomePage: React.FC = () => {
           </div>
           <ol className="grid sm:grid-cols-3 gap-x-8 gap-y-8">
             {H.method.steps.map(step => (
-              <li key={step.label} className="border-t-2 border-ink pt-4">
-                <p className="text-lg font-semibold">{step.label}</p>
+              <li key={step.label} className="border-t-4 border-brand pt-4">
+                <p className="font-display text-2xl font-bold">{step.label}</p>
                 <p className="mt-2 text-muted leading-relaxed text-pretty">{step.body}</p>
               </li>
             ))}
@@ -239,16 +243,16 @@ const HomePage: React.FC = () => {
             <h2 className={H2}>{H.tracks.title}</h2>
             <p className="mt-4 text-lg text-muted text-pretty">{offer.subtitle}</p>
           </div>
-          <ul className="border-b border-border">
+          <ul className="border-b border-border-strong">
             {offer.pillars.map((p, i) => {
               const n = deliveredFor(p.title, i);
               return (
-                <li key={p.id} className="grid grid-cols-[1fr_auto] gap-x-6 py-6 border-t border-border">
+                <li key={p.id} className="grid grid-cols-[1fr_auto] gap-x-6 py-6 border-t border-border-strong">
                   <div>
-                    <h3 className="text-xl font-semibold">{p.title}</h3>
+                    <h3 className="text-2xl">{p.title}</h3>
                     <p className="mt-2 text-muted leading-relaxed max-w-lg text-pretty">{p.description}</p>
                   </div>
-                  {n !== null && <p className="text-sm text-muted pt-1.5 whitespace-nowrap">{H.tracks.delivered(n)}</p>}
+                  {n !== null && <p className="text-sm font-medium text-primary pt-2 whitespace-nowrap">{H.tracks.delivered(n)}</p>}
                 </li>
               );
             })}
@@ -258,8 +262,9 @@ const HomePage: React.FC = () => {
 
       {/* Results board: only real, computed numbers and real workshops. */}
       {impact && impact.workshops_held > 0 && (
-        <section className="on-ink">
-          <div className={`${WRAP} py-16 sm:py-24`}>
+        <section className="on-ink relative overflow-hidden">
+          <Pattern className="text-white opacity-[0.03]" />
+          <div className={`${WRAP} relative py-16 sm:py-24`}>
             <h2 className={`${H2} max-w-2xl`}>{H.results.title}</h2>
             <div className="mt-12">
               <ImpactNumbers impact={impact} />
@@ -267,9 +272,9 @@ const HomePage: React.FC = () => {
             {past.length > 0 && (
               <div className="mt-16">
                 <WorkshopRows workshops={past} />
-                <Link to="/our-work" className="mt-8 inline-flex items-center gap-2 min-h-11 font-semibold underline underline-offset-4 hover:text-primary">
+                <Link to="/our-work" className={`mt-8 inline-flex items-center gap-2 min-h-11 font-semibold underline underline-offset-4 hover:text-primary ${FOCUS_RING}`}>
                   {H.results.seeAll}
-                  <ArrowRight className="w-4 h-4 rtl:rotate-180" />
+                  <ArrowRight className="w-4 h-4 rtl:rotate-180" aria-hidden="true" />
                 </Link>
               </div>
             )}
@@ -286,93 +291,77 @@ const HomePage: React.FC = () => {
         </section>
       )}
 
-      {/* The people, led by the story. */}
-      <section className="bg-panel border-y border-border">
+      {/* The people, led by the story. The pins photograph is the company's
+          real merchandise, shown once. */}
+      <section>
+        <Frieze className="text-ink/25" />
         <div className={`${WRAP} py-16 sm:py-24`}>
-          <div className="grid lg:grid-cols-[1fr_1fr] gap-10 lg:gap-20">
-            <h2 className={H2}>{about.title}</h2>
-            <div className="space-y-5 text-lg leading-relaxed text-pretty">
-              <p>{about.body1}</p>
-              <p className="text-muted">{about.body2}</p>
+          <div className="grid lg:grid-cols-[1.1fr_1fr] gap-10 lg:gap-16 items-center">
+            <div>
+              <h2 className={H2}>{about.title}</h2>
+              <div className="mt-6 space-y-5 text-lg leading-relaxed text-pretty">
+                <p>{about.body1}</p>
+                <p className="text-muted">{about.body2}</p>
+              </div>
             </div>
+            <img
+              src={brandAssets.pins}
+              alt={H.pinsAlt}
+              width={1665}
+              height={937}
+              loading="lazy"
+              className="w-full aspect-[16/10] object-cover rounded-2xl"
+            />
           </div>
 
           {featuredTeam.length > 0 && (
-            <div className="mt-14">
+            <div className="mt-16">
+              <h3 className="text-2xl mb-8">{H.team.title}</h3>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-9">
                 {featuredTeam.map(m => (
                   <TeamCard key={m.id} member={m} />
                 ))}
               </div>
-              <Link to="/team" className="mt-10 inline-flex items-center gap-2 min-h-11 font-semibold underline underline-offset-4 hover:text-primary">
+              <Link to="/team" className={`mt-10 inline-flex items-center gap-2 min-h-11 font-semibold underline underline-offset-4 hover:text-primary ${FOCUS_RING}`}>
                 {H.team.meet}
-                <ArrowRight className="w-4 h-4 rtl:rotate-180" />
+                <ArrowRight className="w-4 h-4 rtl:rotate-180" aria-hidden="true" />
               </Link>
             </div>
           )}
         </div>
       </section>
 
-      {/* Contact */}
-      <section id="contact" className={`${WRAP} py-16 sm:py-24 grid lg:grid-cols-[1fr_1.2fr] gap-12 lg:gap-20`}>
-        <div>
-          <h2 className={H2}>{T.contact.title}</h2>
-          <p className="mt-4 text-lg text-muted max-w-md text-pretty">{T.contact.subtitle}</p>
-          <ul className="mt-8 space-y-1">
-            <li>
-              <a href={`mailto:${CONTACT_EMAIL}`} className="inline-flex items-center gap-3 min-h-11 font-medium hover:text-primary transition-colors">
-                <Mail className="w-5 h-5" />
-                {CONTACT_EMAIL}
-              </a>
-            </li>
-            <li>
-              <a
-                href={CONTACT_LINKEDIN}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 min-h-11 font-medium hover:text-primary transition-colors"
-              >
-                <LinkedInIcon className="w-5 h-5" />
-                {T.contact.linkedinLabel}
-              </a>
-            </li>
-          </ul>
-        </div>
+      {/* Book a workshop / contact: a solid turquoise field, like the poster. */}
+      <section id="contact" className="on-brand relative overflow-hidden scroll-mt-16">
+        <Pattern className="text-ink opacity-[0.045]" />
+        <div className={`${WRAP} relative py-16 sm:py-24 grid lg:grid-cols-[1fr_1.1fr] gap-12 lg:gap-16 items-start`}>
+          <div>
+            <h2 className={H2}>{H.contact.title}</h2>
+            <p className="mt-4 text-lg max-w-md text-pretty">{H.contact.subtitle}</p>
+            <p className="mt-8 text-sm font-medium">{H.contact.emailDirect}</p>
+            <ul className="mt-1 space-y-1">
+              <li>
+                <a href={`mailto:${CONTACT_EMAIL}`} className={`inline-flex items-center gap-3 min-h-11 font-semibold underline underline-offset-4 ${FOCUS_RING}`}>
+                  <Mail className="w-5 h-5" aria-hidden="true" />
+                  <span dir="ltr">{CONTACT_EMAIL}</span>
+                </a>
+              </li>
+              <li>
+                <a
+                  href={CONTACT_LINKEDIN}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-3 min-h-11 font-semibold underline underline-offset-4 ${FOCUS_RING}`}
+                >
+                  <LinkedInIcon className="w-5 h-5" />
+                  {T.contact.linkedinLabel}
+                </a>
+              </li>
+            </ul>
+          </div>
 
-        <form onSubmit={handleContactSubmit} className="space-y-4">
-          <input
-            type="text"
-            required
-            autoComplete="name"
-            value={contactForm.name}
-            onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))}
-            placeholder={T.contact.namePlaceholder}
-            aria-label={T.contact.namePlaceholder}
-            className={FIELD}
-          />
-          <input
-            type="email"
-            required
-            autoComplete="email"
-            value={contactForm.email}
-            onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))}
-            placeholder={T.contact.emailPlaceholder}
-            aria-label={T.contact.emailPlaceholder}
-            className={FIELD}
-          />
-          <textarea
-            required
-            rows={5}
-            value={contactForm.message}
-            onChange={e => setContactForm(f => ({ ...f, message: e.target.value }))}
-            placeholder={T.contact.messagePlaceholder}
-            aria-label={T.contact.messagePlaceholder}
-            className={`${FIELD} py-3 resize-y`}
-          />
-          <button type="submit" disabled={isSending} className={`${BTN_INK} cursor-pointer disabled:opacity-60`}>
-            {isSending ? T.contact.sending : T.contact.send}
-          </button>
-        </form>
+          <ContactForm />
+        </div>
       </section>
     </PublicShell>
   );

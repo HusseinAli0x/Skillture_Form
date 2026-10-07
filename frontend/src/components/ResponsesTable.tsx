@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Download,
   FileText,
+  Inbox,
   Search,
   X,
 } from 'lucide-react';
@@ -15,7 +16,7 @@ import { localized } from '../lib/i18n';
 import { exportToCsv, exportToPdf } from '../lib/exportResponses';
 import type { ExportColumn, ExportRow } from '../lib/exportResponses';
 import { useToastStore } from '../context/ToastStore';
-import { Button, IconButton, Input, LoadingState, Select } from './ui';
+import { Button, Card, EmptyState, ErrorState, IconButton, Input, Select, SkeletonRows } from './ui';
 import ResponsesPdfTemplate from './responses/ResponsesPdfTemplate';
 
 /** Longer than this and the cell truncates, with the full text in a popover. */
@@ -53,6 +54,9 @@ const answerText = (value: unknown): string => {
   return candidate == null ? '' : String(candidate);
 };
 
+const sortButton =
+  'flex items-center gap-1 rounded hover:text-text transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+
 interface Props {
   formId: string;
   fields: FormField[];
@@ -61,6 +65,7 @@ interface Props {
 const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
   const [data, setData] = useState<FormResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const { addToast } = useToastStore();
 
@@ -76,18 +81,19 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
+    setLoadFailed(false);
     try {
       const res = await client.get<FormResponse[]>(`/api/v1/forms/${formId}/responses/detailed`);
-      setData(res.data || []);
+      setData(Array.isArray(res.data) ? res.data : []);
     } catch {
-      addToast('error', 'Failed to load detailed responses');
+      setLoadFailed(true);
     } finally {
       setIsLoading(false);
     }
-  }, [formId, addToast]);
+  }, [formId]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [fetchData]);
 
   useEffect(() => {
@@ -169,6 +175,9 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
     }
   };
 
+  const ariaSort = (column: SortColumn): 'ascending' | 'descending' | 'none' =>
+    sortColumn !== column ? 'none' : sortDirection === 'asc' ? 'ascending' : 'descending';
+
   const sortIcon = (column: SortColumn) =>
     sortColumn !== column ? null : sortDirection === 'asc' ? (
       <ChevronUp className="w-3 h-3" />
@@ -180,6 +189,7 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
   const handleCsv = () => {
     try {
       exportToCsv(sortedRows, columns);
+      addToast('success', `Exported ${sortedRows.length} ${sortedRows.length === 1 ? 'response' : 'responses'} to CSV`);
     } catch {
       addToast('error', 'Failed to generate the spreadsheet');
     }
@@ -201,19 +211,45 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
     }
   };
 
-  if (isLoading) return <LoadingState message="Loading responses…" />;
+  if (isLoading) {
+    return (
+      <Card>
+        <SkeletonRows rows={5} label="Loading responses" />
+      </Card>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <Card>
+        <ErrorState title="Could not load responses" onRetry={fetchData} />
+      </Card>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <Card>
+        <EmptyState
+          icon={<Inbox className="w-7 h-7" />}
+          title="No responses yet"
+          description="Once this form is published and someone submits it, their answers appear here, ready to search and export."
+        />
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-panel p-4 rounded-xl border border-border">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+      <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 bg-panel p-4 rounded-xl border border-border">
+        <div className="flex items-center gap-2 w-full lg:w-auto">
           <Select
             value={searchColumn}
             onChange={e => setSearchColumn(e.target.value)}
             aria-label="Search column"
-            className="!w-auto"
+            className="!w-auto max-w-40"
           >
-            <option value="all">All Columns</option>
+            <option value="all">All columns</option>
             <option value="respondent">Respondent</option>
             {columns.map(column => (
               <option key={column.id} value={column.id}>
@@ -222,11 +258,11 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
             ))}
           </Select>
 
-          <div className="flex-1 sm:w-64">
+          <div className="flex-1 lg:w-64">
             <Input
               icon={<Search className="w-4 h-4" />}
               type="search"
-              placeholder="Search responses..."
+              placeholder="Search responses"
               aria-label="Search responses"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -234,42 +270,62 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={handleCsv} title="Opens in Excel">
-            <FileText className="w-4 h-4" /> CSV
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-muted me-auto lg:me-2" aria-live="polite">
+            {searchQuery.trim()
+              ? `${sortedRows.length} of ${rows.length} responses`
+              : `${rows.length} ${rows.length === 1 ? 'response' : 'responses'}`}
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleCsv}
+            disabled={sortedRows.length === 0}
+            title="Opens in Excel"
+          >
+            <FileText className="w-4 h-4" /> Export CSV
           </Button>
-          <Button variant="secondary" size="sm" onClick={handlePdf} disabled={isExporting}>
-            <Download className="w-4 h-4" /> PDF
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handlePdf}
+            loading={isExporting}
+            disabled={sortedRows.length === 0}
+          >
+            {!isExporting && <Download className="w-4 h-4" />} Export PDF
           </Button>
         </div>
       </div>
 
       <div className="rounded-xl border border-border overflow-hidden bg-panel">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
+          <table className="w-full text-start text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-border bg-bg/40 text-muted">
                 <th
-                  onClick={() => handleSort('respondent')}
-                  className="px-5 py-3 font-semibold sticky left-0 bg-panel z-10 cursor-pointer hover:text-text transition-colors border-r border-border"
+                  scope="col"
+                  aria-sort={ariaSort('respondent')}
+                  className="px-5 py-3 font-semibold sticky start-0 bg-panel z-10 border-e border-border text-start"
                 >
-                  <div className="flex items-center gap-1">Respondent {sortIcon('respondent')}</div>
+                  <button type="button" onClick={() => handleSort('respondent')} className={sortButton}>
+                    Respondent {sortIcon('respondent')}
+                  </button>
                 </th>
-                <th
-                  onClick={() => handleSort('submitted_at')}
-                  className="px-5 py-3 font-semibold cursor-pointer hover:text-text transition-colors"
-                >
-                  <div className="flex items-center gap-1">Submitted At {sortIcon('submitted_at')}</div>
+                <th scope="col" aria-sort={ariaSort('submitted_at')} className="px-5 py-3 font-semibold text-start">
+                  <button type="button" onClick={() => handleSort('submitted_at')} className={sortButton}>
+                    Submitted {sortIcon('submitted_at')}
+                  </button>
                 </th>
                 {columns.map(column => (
                   <th
                     key={column.id}
-                    onClick={() => handleSort(column.id)}
-                    className="px-5 py-3 font-semibold cursor-pointer hover:text-text transition-colors max-w-[200px] truncate"
+                    scope="col"
+                    aria-sort={ariaSort(column.id)}
+                    className="px-5 py-3 font-semibold max-w-[200px] text-start"
                   >
-                    <div className="flex items-center gap-1">
-                      {column.label} {sortIcon(column.id)}
-                    </div>
+                    <button type="button" onClick={() => handleSort(column.id)} className={`${sortButton} max-w-full`}>
+                      <span className="truncate">{column.label}</span> {sortIcon(column.id)}
+                    </button>
                   </th>
                 ))}
               </tr>
@@ -277,23 +333,43 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
             <tbody className="divide-y divide-border">
               {paginatedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + 2} className="px-5 py-10 text-center text-muted">
-                    No matching responses found.
+                  <td colSpan={columns.length + 2} className="px-5 py-12 text-center">
+                    <p className="text-sm font-medium text-text">No responses match your search</p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setSearchColumn('all');
+                      }}
+                    >
+                      Clear search
+                    </Button>
                   </td>
                 </tr>
               ) : (
                 paginatedRows.map(row => (
                   <tr key={row.id} className="group hover:bg-hover-overlay-strong transition-colors">
-                    <td className="px-5 py-3 font-medium text-text sticky left-0 bg-panel group-hover:bg-panel-2 z-10 border-r border-border transition-colors">
+                    <td className="px-5 py-3 font-medium text-text sticky start-0 bg-panel group-hover:bg-panel-2 z-10 border-e border-border transition-colors">
                       {row.respondent}
                     </td>
-                    <td className="px-5 py-3 text-muted">{row.submittedAt.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-muted">
+                      {row.submittedAt.toLocaleString('en-US', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </td>
                     {columns.map(column => {
                       const text = row.values[column.id] || '-';
                       const isLong = text.length > TRUNCATE_AT;
                       return (
                         <td
                           key={column.id}
+                          title={isLong ? 'Click to read the full answer' : undefined}
                           className={`px-5 py-3 text-text/80 max-w-[250px] truncate ${
                             isLong ? 'cursor-pointer hover:text-primary' : ''
                           }`}
@@ -314,9 +390,9 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
           </table>
         </div>
 
-        <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-bg/20">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-t border-border bg-bg/20">
           <div className="flex items-center gap-2">
-            <span className="text-muted text-sm">Rows per page:</span>
+            <span className="text-muted text-sm">Rows per page</span>
             <Select
               value={itemsPerPage}
               onChange={e => {
@@ -370,7 +446,7 @@ const ResponsesTable: React.FC<Props> = ({ formId, fields }) => {
           onClick={e => e.stopPropagation()}
         >
           <div className="flex justify-between items-start mb-2 gap-4">
-            <h4 className="text-xs font-semibold text-muted uppercase tracking-wider">Full Answer</h4>
+            <h4 className="text-xs font-semibold text-muted uppercase tracking-wider">Full answer</h4>
             <IconButton label="Close" onClick={() => setPopover(null)} className="!p-0.5">
               <X className="w-4 h-4" />
             </IconButton>

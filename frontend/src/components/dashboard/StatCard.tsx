@@ -1,44 +1,58 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
+import { Skeleton } from '../ui';
 
 interface Props {
   icon: React.ReactNode;
   label: string;
   value: number | string;
-  /** Accent colour for the icon tile. Defaults to the brand teal. */
+  /** One quiet line under the number, e.g. "3 published". */
+  hint?: string;
+  /** Shows a placeholder instead of the number. */
+  loading?: boolean;
+  /** Accent for the icon. Defaults to the brand turquoise. */
   tone?: 'primary' | 'success';
   onClick?: () => void;
 }
 
 const tones = {
-  primary: 'bg-primary-soft border-primary-border text-primary',
-  success: 'bg-success-soft border-success/30 text-success',
+  primary: 'text-primary',
+  success: 'text-success',
 };
 
-const StatCard: React.FC<Props> = ({ icon, label, value, tone = 'primary', onClick }) => {
-  const Wrapper = onClick ? 'button' : 'div';
-
-  return (
-    <Wrapper
-      onClick={onClick}
-      className={[
-        'rounded-xl border border-border bg-panel p-5 relative overflow-hidden text-left w-full group',
-        'transition-colors duration-200',
-        onClick ? 'cursor-pointer hover:border-border-strong' : '',
-      ].join(' ')}
-    >
-      <div className="flex items-center justify-between mb-4">
+const StatCard: React.FC<Props> = ({ icon, label, value, hint, loading = false, tone = 'primary', onClick }) => {
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium text-muted">{label}</p>
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${tones[tone]}`}>{icon}</div>
-      </div>
-      <p className="text-3xl font-bold text-text">{value}</p>
-      {onClick && (
-        <span className="flex items-center gap-1 mt-3 text-xs font-medium text-muted">
-          View all
-          <ArrowRight className="w-3 h-3 text-primary group-hover:translate-x-1 transition-transform" />
+        <span className={tones[tone]} aria-hidden="true">
+          {icon}
         </span>
+      </div>
+      {loading ? (
+        <Skeleton className="mt-3 h-9 w-16" />
+      ) : (
+        <p className="mt-2 font-display text-4xl font-bold leading-none tabular-nums text-text">{value}</p>
       )}
-    </Wrapper>
+      <div className="mt-3 flex items-center justify-between gap-2 min-h-5 text-xs text-muted">
+        <span>{loading ? <Skeleton className="h-3 w-24" /> : hint}</span>
+        {onClick && (
+          <ArrowRight className="w-3.5 h-3.5 text-primary shrink-0 transition-transform group-hover:translate-x-0.5 rtl:rotate-180" />
+        )}
+      </div>
+    </>
+  );
+
+  const base = 'block rounded-xl border border-border bg-panel p-5 text-start w-full';
+  if (!onClick) return <div className={base}>{body}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${base} group transition-colors hover:border-primary-border focus:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
+    >
+      {body}
+    </button>
   );
 };
 

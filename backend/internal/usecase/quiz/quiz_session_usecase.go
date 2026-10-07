@@ -221,3 +221,12 @@ func (u *quizSessionUseCase) GetActiveSessionByQuizID(ctx context.Context, quizI
 
 	return nil, domainErrors.ErrNotFound
 }
+
+// CurrentQuestion returns the live question of an active session, or nil when
+// the session has none (lobby, between games, finished).
+func (u *quizSessionUseCase) CurrentQuestion(ctx context.Context, session *entities.QuizSession) (*entities.QuizQuestion, error) {
+	if session == nil || !session.IsActive() || session.CurrentQuestionID == nil {
+		return nil, nil
+	}
+	return u.questionRepo.GetByID(ctx, *session.CurrentQuestionID)
+}

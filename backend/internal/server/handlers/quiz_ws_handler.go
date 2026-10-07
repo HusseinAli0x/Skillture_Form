@@ -152,15 +152,18 @@ func (h *QuizWSHandler) ConnectPlayer(c *gin.Context) {
 
 	client := h.hub.RegisterClient(conn, sessionID, playerID, player.Name, ws.RolePlayer)
 
-	// Give the player the current state, in case they joined mid-game.
-	client.Send(ws.Message{
-		Type: ws.MsgTypeLobbySnapshot,
-		Payload: gin.H{
-			"status":              session.Status,
-			"current_question_id": session.CurrentQuestionID,
-			"players":             h.hub.PlayerNames(sessionID),
-		},
-	})
+	// Give the player the current state, in case they joined mid-game or are
+	// reconnecting after a dropped connection. The live question (without its
+	// answer) is included so they land on it rather than waiting for the next.
+	snapshot := gin.H{
+		"status":              session.Status,
+		"current_question_id": session.CurrentQuestionID,
+		"players":             h.hub.PlayerNames(sessionID),
+	}
+	if current, err := h.sessionUC.CurrentQuestion(c.Request.Context(), session); err == nil && current != nil {
+		snapshot["question"] = current.PublicView()
+	}
+	client.Send(ws.Message{Type: ws.MsgTypeLobbySnapshot, Payload: snapshot})
 
 	// Broadcast to the room that a new player joined. The name is included so
 	// the host lobby can render it; previously only the UUID was sent and the

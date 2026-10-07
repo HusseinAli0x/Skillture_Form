@@ -15,14 +15,15 @@ const LanguageSwitcher: React.FC<{ className?: string }> = ({ className = '' }) 
       onClick={toggleLocale}
       aria-label={locale === 'en' ? 'Switch to Arabic' : 'التبديل إلى الإنجليزية'}
       className={[
-        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold cursor-pointer',
-        'border border-border text-text transition-all duration-200',
-        'hover:border-primary-border hover:bg-primary-soft hover:text-primary',
+        'inline-flex items-center justify-center gap-1.5 min-h-10 px-3 rounded-lg text-sm font-semibold cursor-pointer',
+        'border border-border-strong text-text transition-colors duration-200',
+        'hover:border-primary hover:text-primary',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         className,
       ].join(' ')}
     >
-      <Languages className="w-3.5 h-3.5" />
-      {label}
+      <Languages className="hidden sm:block w-4 h-4" aria-hidden="true" />
+      <span lang={locale === 'en' ? 'ar' : 'en'}>{label}</span>
     </button>
   );
 };

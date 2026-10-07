@@ -63,6 +63,8 @@ func TestSetupRoutes(t *testing.T) {
 		"GET /api/v1/impact":              "Our Work: impact numbers",
 		"GET /api/v1/team":                "public Team page",
 		"POST /api/v1/admin/team":         "admin team create",
+		// The shared /quiz/:id link is opened by players with no account.
+		"GET /api/v1/quizzes/:id/active-session": "public active-session lookup",
 	}
 
 	got := make(map[string]bool)

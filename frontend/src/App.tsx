@@ -19,14 +19,11 @@ import WorkshopDetailPage from './pages/WorkshopDetailPage';
 import ContactMessagesAdmin from './pages/ContactMessagesAdmin';
 import FormPreview from './pages/FormPreview';
 import QuizJoinHandler from './pages/QuizJoinHandler';
-import { useAuthStore } from './context/AuthStore';
 import ToastContainer from './components/Toast';
 import HostLiveBoard from './pages/HostLiveBoard';
 import PlayerLiveBoard from './pages/PlayerLiveBoard';
 
 function App() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-
   return (
     <BrowserRouter>
       <Routes>
@@ -35,7 +32,8 @@ function App() {
         <Route path="/our-work" element={<OurWorkPage />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/workshops/:id" element={<WorkshopDetailPage />} />
-        <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/admin/dashboard" />} />
+        {/* Login redirects an already-signed-in admin itself, back to where they were. */}
+        <Route path="/login" element={<Login />} />
         <Route path="/preview/form/:id" element={<FormPreview />} />
         <Route path="/quiz/:id" element={<QuizJoinHandler />} />
         <Route path="/play" element={<PlayerJoin />} />

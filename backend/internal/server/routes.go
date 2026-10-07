@@ -86,6 +86,11 @@ func SetupRoutes(
 
 		// Quiz players: find the session, join it, answer questions.
 		api.GET("/sessions/pin/:pin", sessionHandler.GetByPIN)
+		// The shared /quiz/:id link is opened by players, who have no account:
+		// it must be public or the page can never find the session it waits for.
+		// It reveals only the session (id, pin, status) of a quiz whose id the
+		// caller already holds.
+		api.GET("/quizzes/:id/active-session", sessionHandler.GetActiveSession)
 		api.GET("/sessions/:id", sessionHandler.GetSession)
 		api.GET("/sessions/:id/leaderboard", sessionHandler.GetLeaderboard)
 		api.POST("/sessions/:id/players", wsHandler.JoinSession)
@@ -156,7 +161,6 @@ func SetupRoutes(
 
 			// Session lifecycle
 			quizzes.POST("/:id/sessions", sessionHandler.CreateSession)
-			quizzes.GET("/:id/active-session", sessionHandler.GetActiveSession)
 		}
 
 		// Form CRUD
