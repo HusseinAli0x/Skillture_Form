@@ -12,7 +12,7 @@
 # outside. PostgreSQL is not part of this image — see docker-compose.yml.
 
 # --- Stage 1: Build the SPA ---
-FROM node:22-alpine AS frontend
+FROM node:26-alpine AS frontend
 WORKDIR /src
 COPY frontend/package*.json ./
 # npm ci installs exactly what package-lock.json pins, so the image matches CI.
