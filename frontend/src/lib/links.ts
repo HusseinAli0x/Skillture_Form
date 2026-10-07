@@ -13,3 +13,16 @@ export const quizShareUrl = (quizId: string) => `${window.location.origin}/quiz/
 
 /** Join page with the PIN prefilled — the player only types a nickname. */
 export const gameJoinUrl = (pin: string) => `${window.location.origin}/play?pin=${pin}`;
+
+/**
+ * Where "back to my quizzes" goes from a game screen: the dashboard list for a
+ * signed-in admin, My games for everyone else (the dashboard would send a
+ * visitor to the login page).
+ */
+export const hostHomePath = (): string => {
+  try {
+    return localStorage.getItem('token') ? '/admin/quizzes' : '/create';
+  } catch {
+    return '/create';
+  }
+};

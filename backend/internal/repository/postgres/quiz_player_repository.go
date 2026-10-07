@@ -43,6 +43,7 @@ func scanQuizPlayer(row pgx.Row) (*entities.QuizPlayer, error) {
 		&p.JoinedAt,
 		&p.AvatarID,
 		&p.AvatarURL,
+		&p.SecretHash,
 	)
 	if err != nil {
 		return nil, err
@@ -58,8 +59,8 @@ func (r *quizPlayerRepository) Create(ctx context.Context, player *entities.Quiz
 	}
 
 	const query = `
-		INSERT INTO quiz_players (id, session_id, name, score, joined_at, avatar_id, avatar_url)
-		VALUES ($1, $2, $3, $4, NOW(), $5, $6)
+		INSERT INTO quiz_players (id, session_id, name, score, joined_at, avatar_id, avatar_url, secret_hash)
+		VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7)
 	`
 
 	return r.Exec(ctx, query,
@@ -69,6 +70,7 @@ func (r *quizPlayerRepository) Create(ctx context.Context, player *entities.Quiz
 		player.Score,
 		player.AvatarID,
 		player.AvatarURL,
+		player.SecretHash,
 	)
 }
 
@@ -76,7 +78,7 @@ func (r *quizPlayerRepository) Create(ctx context.Context, player *entities.Quiz
 // Returns nil, nil when no row is found.
 func (r *quizPlayerRepository) GetByID(ctx context.Context, id uuid.UUID) (*entities.QuizPlayer, error) {
 	const query = `
-		SELECT id, session_id, name, score, joined_at, avatar_id, avatar_url
+		SELECT id, session_id, name, score, joined_at, avatar_id, avatar_url, secret_hash
 		FROM quiz_players
 		WHERE id = $1
 	`
@@ -157,4 +159,14 @@ func (r *quizPlayerRepository) ListBySessionID(ctx context.Context, sessionID uu
 	}
 
 	return players, nil
+}
+
+// CountBySessionID returns how many players have joined a session.
+func (r *quizPlayerRepository) CountBySessionID(ctx context.Context, sessionID uuid.UUID) (int, error) {
+	var n int
+	row := r.QueryRow(ctx, `SELECT COUNT(*) FROM quiz_players WHERE session_id = $1`, sessionID)
+	if err := row.Scan(&n); err != nil {
+		return 0, fmt.Errorf("quizPlayerRepository.CountBySessionID: %w", err)
+	}
+	return n, nil
 }

@@ -1,14 +1,12 @@
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
-import { useLanguageStore } from '../../context/LanguageStore';
-import { siteStrings } from '../../lib/siteStrings';
 import { Pattern } from '../brand';
 import { BTN_INK, WRAP } from './layout';
+import { useSiteStrings } from '../../lib/useSiteContent';
 
 /** An error that always offers the way out: a retry button. */
 export const LoadError: React.FC<{ title?: string; message: string; onRetry: () => void }> = ({ title, message, onRetry }) => {
-  const locale = useLanguageStore(s => s.locale);
-  const S = siteStrings[locale];
+  const S = useSiteStrings();
   return (
     <div role="alert" className={`${WRAP} py-16 sm:py-24`}>
       {title && <h2 className="text-2xl sm:text-3xl mb-2">{title}</h2>}
@@ -35,9 +33,8 @@ export const EmptyBlock: React.FC<{ title: string; body: string; action?: React.
 
 /** Placeholder rows shaped like WorkshopRow, so the page does not jump when data lands. */
 export const RowsSkeleton: React.FC<{ rows?: number }> = ({ rows = 3 }) => {
-  const locale = useLanguageStore(s => s.locale);
   return (
-    <div role="status" aria-label={siteStrings[locale].common.loading} className="border-b border-border">
+    <div role="status" aria-label={useSiteStrings().common.loading} className="border-b border-border">
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="grid grid-cols-[4.5rem_1fr] gap-x-5 py-6 border-t border-border motion-safe:animate-pulse">
           <div>
@@ -56,9 +53,8 @@ export const RowsSkeleton: React.FC<{ rows?: number }> = ({ rows = 3 }) => {
 
 /** Placeholder portraits shaped like TeamCard. */
 export const PeopleSkeleton: React.FC<{ count?: number }> = ({ count = 4 }) => {
-  const locale = useLanguageStore(s => s.locale);
   return (
-    <div role="status" aria-label={siteStrings[locale].common.loading} className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-9 motion-safe:animate-pulse">
+    <div role="status" aria-label={useSiteStrings().common.loading} className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-9 motion-safe:animate-pulse">
       {Array.from({ length: count }, (_, i) => (
         <div key={i}>
           <div className="aspect-[4/5] rounded-md bg-panel-3" />

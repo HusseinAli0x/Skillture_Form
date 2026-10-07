@@ -7,6 +7,7 @@
 export type NavIconName =
   | 'dashboard'
   | 'home'
+  | 'site'
   | 'workshops'
   | 'team'
   | 'messages'
@@ -32,6 +33,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Website',
     items: [
       { label: 'Homepage Editor', path: '/admin/homepage', icon: 'home' },
+      { label: 'Site content', path: '/admin/site', icon: 'site' },
       { label: 'Workshops', path: '/admin/workshops', icon: 'workshops' },
       { label: 'Team', path: '/admin/team', icon: 'team' },
       { label: 'Messages', path: '/admin/messages', icon: 'messages' },
@@ -55,6 +57,7 @@ export interface Crumb {
 
 const SECTION_OF: Record<string, string> = {
   homepage: 'Website',
+  site: 'Website',
   workshops: 'Website',
   team: 'Website',
   messages: 'Website',
@@ -66,6 +69,7 @@ const SECTION_OF: Record<string, string> = {
 const SECTION_LABEL: Record<string, string> = {
   dashboard: 'Overview',
   homepage: 'Homepage Editor',
+  site: 'Site content',
   workshops: 'Workshops',
   team: 'Team',
   messages: 'Messages',

@@ -9,6 +9,8 @@ interface Props {
   onClose: () => void;
   /** Optional hint under the title. */
   description?: string;
+  /** Wording for non-English pages. */
+  labels?: { link: string; copy: string; copied: string; close: string };
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * rendered a QR code, so which affordances a user got depended on which page
  * they happened to be on.
  */
-const ShareModal: React.FC<Props> = ({ url, title, onClose, description }) => {
+const ShareModal: React.FC<Props> = ({ url, title, onClose, description, labels }) => {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -41,7 +43,7 @@ const ShareModal: React.FC<Props> = ({ url, title, onClose, description }) => {
   };
 
   return (
-    <Modal title={title} onClose={onClose} maxWidth="max-w-sm">
+    <Modal title={title} onClose={onClose} maxWidth="max-w-sm" closeLabel={labels?.close}>
       <p className="text-sm text-muted mb-6 -mt-2">
         {description ?? 'Scan the QR code or copy the link below.'}
       </p>
@@ -56,13 +58,13 @@ const ShareModal: React.FC<Props> = ({ url, title, onClose, description }) => {
           type="text"
           value={url}
           readOnly
-          aria-label="Share link"
+          aria-label={labels?.link ?? 'Share link'}
           onClick={e => e.currentTarget.select()}
           className="flex-1"
         />
         <Button variant={copied ? 'secondary' : 'subtle'} onClick={handleCopy} className="shrink-0">
           {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? (labels?.copied ?? 'Copied') : (labels?.copy ?? 'Copy')}
         </Button>
       </div>
     </Modal>

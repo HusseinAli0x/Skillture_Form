@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -20,6 +21,8 @@ type QuizSessionHandler struct {
 	playerUC  uc.QuizPlayerUseCase
 	answerUC  uc.QuizAnswerUseCase
 	hub       *ws.Hub
+	access    *QuizAccess
+	tickets   *WSTickets
 }
 
 // NewQuizSessionHandler creates a new QuizSessionHandler.
@@ -28,12 +31,16 @@ func NewQuizSessionHandler(
 	playerUC uc.QuizPlayerUseCase,
 	answerUC uc.QuizAnswerUseCase,
 	hub *ws.Hub,
+	access *QuizAccess,
+	tickets *WSTickets,
 ) *QuizSessionHandler {
 	return &QuizSessionHandler{
 		sessionUC: sessionUC,
 		playerUC:  playerUC,
 		answerUC:  answerUC,
 		hub:       hub,
+		access:    access,
+		tickets:   tickets,
 	}
 }
 
@@ -46,14 +53,16 @@ func (h *QuizSessionHandler) CreateSession(c *gin.Context) {
 		return
 	}
 
-	// The host is whoever holds the access token. quiz_sessions.host_id is a
-	// NOT NULL foreign key to admins(id), so the previous behaviour — trusting
-	// an optional body field and falling back to uuid.Nil — produced an opaque
-	// foreign-key violation reported as a 400 whenever the body was omitted.
-	hostID, ok := auth.AdminIDFromContext(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthenticated"})
+	// Only the quiz's owner (or an admin) may host it. host_id records the
+	// admin when there is one; a visitor's session carries no host_id, and
+	// control stays tied to the quiz's owner key.
+	if _, ok := h.access.Quiz(c, quizID); !ok {
 		return
+	}
+	var hostID *uuid.UUID
+	if principal, _ := auth.PrincipalFromContext(c); principal.IsAdmin() {
+		id := principal.AdminID
+		hostID = &id
 	}
 
 	session, err := h.sessionUC.CreateSession(c.Request.Context(), quizID, hostID)
@@ -118,6 +127,9 @@ func (h *QuizSessionHandler) StartSession(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session id"})
 		return
 	}
+	if _, ok := h.access.Session(c, id); !ok {
+		return
+	}
 	if err := h.sessionUC.StartSession(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -138,6 +150,10 @@ func (h *QuizSessionHandler) AdvanceQuestion(c *gin.Context) {
 	sessionID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session id"})
+		return
+	}
+
+	if _, ok := h.access.Session(c, sessionID); !ok {
 		return
 	}
 
@@ -177,6 +193,9 @@ func (h *QuizSessionHandler) FinishSession(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session id"})
+		return
+	}
+	if _, ok := h.access.Session(c, id); !ok {
 		return
 	}
 	if err := h.sessionUC.FinishSession(c.Request.Context(), id); err != nil {
@@ -225,6 +244,9 @@ func (h *QuizSessionHandler) PublishResults(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session id"})
 		return
 	}
+	if _, ok := h.access.Session(c, id); !ok {
+		return
+	}
 	leaderboard, err := h.playerUC.GetLeaderboard(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -257,4 +279,29 @@ func (h *QuizSessionHandler) PublishResults(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// POST /api/v1/sessions/:id/ws-ticket
+// Returns a one-minute, single-use ticket for the host WebSocket. The socket
+// handshake cannot carry an Authorization header, and putting a long-lived
+// credential in the URL would write it into access logs.
+func (h *QuizSessionHandler) WSTicket(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session id"})
+		return
+	}
+	if _, ok := h.access.Session(c, id); !ok {
+		return
+	}
+	ticket, err := h.tickets.Issue(id)
+	if errors.Is(err, ErrTooManyTickets) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many connection attempts, please wait a minute"})
+		return
+	}
+	if err != nil {
+		respondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ticket": ticket, "expires_in": int(wsTicketTTL.Seconds())})
 }

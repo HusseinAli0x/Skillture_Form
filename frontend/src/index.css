@@ -277,6 +277,18 @@ h3,
   --color-primary-border: rgba(0, 122, 122, 0.3);
   --color-hover-overlay: rgba(5, 9, 9, 0.03);
   --color-hover-overlay-strong: rgba(5, 9, 9, 0.07);
+  /* Status colours for text on white. The app's neon values (#ff4040,
+     #fbbf24...) are 1.6-3.4:1 here; these are 5:1 or better. */
+  --color-danger: #b42318;
+  --color-danger-soft: rgba(180, 35, 24, 0.07);
+  --color-danger-border: rgba(180, 35, 24, 0.32);
+  --color-warning: #8a5300;
+  --color-warning-soft: rgba(138, 83, 0, 0.09);
+  --color-warning-border: rgba(138, 83, 0, 0.3);
+  --color-success: #0b7a4b;
+  --color-success-soft: rgba(11, 122, 75, 0.09);
+  --color-info: #1d5fc4;
+  --color-info-soft: rgba(29, 95, 196, 0.08);
   --color-brand: #00cccc;
   --color-ink: #050909;
   --color-mark: #00cccc;

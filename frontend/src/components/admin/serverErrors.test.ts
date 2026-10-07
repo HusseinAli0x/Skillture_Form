@@ -9,6 +9,7 @@ const FIELDS = {
   gallery: 'gallery',
   attendees: 'attendees',
   track: 'track',
+  capacity: 'capacity',
 };
 
 describe('fieldForServerMessage', () => {
@@ -18,6 +19,12 @@ describe('fieldForServerMessage', () => {
     expect(fieldForServerMessage('registration_url must be an http(s) URL', FIELDS)).toBe('registration_url');
     expect(fieldForServerMessage('attendees cannot be negative', FIELDS)).toBe('attendees');
     expect(fieldForServerMessage('track must be one of: technical, career, industry, business', FIELDS)).toBe('track');
+  });
+
+  it('maps the seat-limit message to the capacity field', () => {
+    expect(
+      fieldForServerMessage('capacity must be between 1 and 100000, or left empty for no limit', FIELDS)
+    ).toBe('capacity');
   });
 
   it('finds the field when it is not the first word', () => {

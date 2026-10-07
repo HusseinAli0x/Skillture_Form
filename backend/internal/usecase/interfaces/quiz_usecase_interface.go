@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
@@ -12,6 +13,8 @@ import (
 // QuizFilter for listing quizzes
 type QuizFilter struct {
 	Status *enums.QuizStatus
+	// OwnerKeyHash limits the list to quizzes created by one visitor.
+	OwnerKeyHash *string
 }
 
 // QuizUseCase handles quiz CRUD business logic
@@ -30,6 +33,11 @@ type QuizUseCase interface {
 	GetByID(ctx context.Context, quizID uuid.UUID) (*entities.Quiz, error)
 	// List returns quizzes matching optional filter
 	List(ctx context.Context, filter QuizFilter) ([]*entities.Quiz, error)
+	// CountByOwner returns how many quizzes a visitor has created, for quotas.
+	CountByOwner(ctx context.Context, ownerKeyHash string) (int, error)
+	// DeleteStaleVisitorQuizzes removes visitor-created quizzes unused since
+	// before cutoff. Admin-created quizzes are never touched.
+	DeleteStaleVisitorQuizzes(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 // QuizQuestionUseCase handles question management within a quiz
@@ -55,8 +63,9 @@ type QuizQuestionUseCase interface {
 // QuizSessionUseCase manages live game session lifecycle
 type QuizSessionUseCase interface {
 	// CreateSession creates a lobby session with a unique PIN for a quiz.
-	// The quiz must be Active.
-	CreateSession(ctx context.Context, quizID, hostID uuid.UUID) (*entities.QuizSession, error)
+	// The quiz must be Active. hostID is the admin hosting it, or nil when a
+	// visitor hosts with a host key; ownership was already checked by the caller.
+	CreateSession(ctx context.Context, quizID uuid.UUID, hostID *uuid.UUID) (*entities.QuizSession, error)
 	// StartSession transitions a lobby session to active.
 	// Broadcasts are handled by the WebSocket hub; this persists the state change.
 	StartSession(ctx context.Context, sessionID uuid.UUID) error
@@ -74,6 +83,9 @@ type QuizSessionUseCase interface {
 	// CurrentQuestion returns the live question of an active session, or nil
 	// when none is live. A reconnecting player is resynced with it.
 	CurrentQuestion(ctx context.Context, session *entities.QuizSession) (*entities.QuizQuestion, error)
+	// FinishStaleSessions closes games created before cutoff that were never
+	// finished, freeing their PINs. Returns how many were closed.
+	FinishStaleSessions(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 // QuizPlayerUseCase handles players joining and their score state

@@ -4,6 +4,7 @@
 // and PlayerLiveBoard, each with its own `ws://localhost:8080` literal and
 // its own (or no) reconnect handling.
 
+import client from './client';
 import type { GameMessage } from './types';
 
 function baseUrl(): string {
@@ -13,21 +14,41 @@ function baseUrl(): string {
   return `${protocol}//${window.location.host}`;
 }
 
+/** Shape of POST /api/v1/sessions/:id/ws-ticket. */
+interface TicketResponse {
+  ticket: string;
+  expires_in: number;
+}
+
+/** The host socket address for an already-issued ticket. */
+export function hostSocketUrlForTicket(sessionId: string, ticket: string): string {
+  return `${baseUrl()}/ws/sessions/${encodeURIComponent(sessionId)}/host?ticket=${encodeURIComponent(ticket)}`;
+}
+
 /**
  * URL for the host socket.
  *
- * The host stream carries the full session state, so the endpoint requires a
- * valid admin token. A browser cannot set an Authorization header on a
- * WebSocket handshake, so the token travels as a query parameter.
+ * The host stream carries the full session state, so only the session's host
+ * (an admin, or the visitor whose host key created it) may open it. A browser
+ * cannot set headers on a WebSocket handshake, so the request proves who it is
+ * by buying a ticket with its normal headers first. A ticket works once and
+ * expires after about a minute, which is why every connection attempt, retries
+ * included, must call this again.
  */
-export function hostSocketUrl(sessionId: string): string {
-  const token = localStorage.getItem('token') ?? '';
-  return `${baseUrl()}/ws/sessions/${sessionId}/host?token=${encodeURIComponent(token)}`;
+export async function hostSocketUrl(sessionId: string): Promise<string> {
+  const res = await client.post<TicketResponse>(`/api/v1/sessions/${encodeURIComponent(sessionId)}/ws-ticket`);
+  const ticket = res.data?.ticket;
+  if (!ticket) throw new Error('The server did not issue a socket ticket.');
+  return hostSocketUrlForTicket(sessionId, ticket);
 }
 
-/** URL for a player socket. Players have no accounts, so no token is involved. */
-export function playerSocketUrl(sessionId: string, playerId: string): string {
-  return `${baseUrl()}/ws/sessions/${sessionId}/join?player_id=${encodeURIComponent(playerId)}`;
+/**
+ * URL for a player socket. Players have no accounts; the secret they were given
+ * when they joined proves the socket is theirs (the player id is public).
+ */
+export function playerSocketUrl(sessionId: string, playerId: string, secret?: string): string {
+  const secretParam = secret ? `&secret=${encodeURIComponent(secret)}` : '';
+  return `${baseUrl()}/ws/sessions/${sessionId}/join?player_id=${encodeURIComponent(playerId)}${secretParam}`;
 }
 
 /** `open` once connected; `reconnecting` while a retry is pending. */
@@ -46,12 +67,12 @@ export interface SocketHandlers {
 /**
  * A WebSocket that reconnects on its own.
  *
- * `getUrl` is called for every attempt so a host token refreshed in the
- * meantime is picked up. Retries stop only on `close()`. A phone coming back
+ * `getUrl` is called for every attempt (it may be async, e.g. to fetch a fresh
+ * single-use host ticket). Retries stop only on `close()`. A phone coming back
  * online or a tab becoming visible again retries immediately rather than
  * waiting out the backoff.
  */
-export function openGameSocket(getUrl: () => string, handlers: SocketHandlers): { close: () => void } {
+export function openGameSocket(getUrl: () => string | Promise<string>, handlers: SocketHandlers): { close: () => void } {
   let ws: WebSocket | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let attempt = 0;
@@ -71,9 +92,28 @@ export function openGameSocket(getUrl: () => string, handlers: SocketHandlers): 
     timer = null;
     setStatus(attempt === 0 ? 'connecting' : 'reconnecting');
 
+    const fail = () => scheduleRetry();
+    let pending: string | Promise<string>;
+    try {
+      pending = getUrl();
+    } catch {
+      fail();
+      return;
+    }
+    if (typeof pending === 'string') attach(pending);
+    else
+      pending.then(
+        url => attach(url),
+        () => fail()
+      );
+  }
+
+  function attach(url: string) {
+    // close() may have run while a ticket was being fetched.
+    if (stopped) return;
     let socket: WebSocket;
     try {
-      socket = new WebSocket(getUrl());
+      socket = new WebSocket(url);
     } catch {
       scheduleRetry();
       return;

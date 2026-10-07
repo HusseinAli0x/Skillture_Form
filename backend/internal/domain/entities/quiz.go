@@ -23,6 +23,13 @@ type Quiz struct {
 	Description map[string]string `db:"description" json:"description,omitempty"`
 	Status      enums.QuizStatus  `db:"status"      json:"status"`
 	CreatedAt   time.Time         `db:"created_at"  json:"created_at"`
+
+	// OwnerKeyHash is the SHA-256 of the host key of the visitor who created
+	// the quiz (see auth.HostKeyHeader); nil for quizzes created by an admin.
+	// It is an access-control secret's hash and is never serialised.
+	OwnerKeyHash *string `db:"owner_key_hash" json:"-"`
+	// ByVisitor tells the admin which quizzes came from the public site.
+	ByVisitor bool `db:"-" json:"by_visitor"`
 }
 
 // TableName returns the PostgreSQL table name

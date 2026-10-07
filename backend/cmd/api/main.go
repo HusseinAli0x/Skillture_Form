@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 
 	"skillture/backend/internal/auth"
 	"skillture/backend/internal/config"
@@ -16,6 +17,7 @@ import (
 	"skillture/backend/internal/usecase/admin"
 	"skillture/backend/internal/usecase/form"
 	form_field_uc "skillture/backend/internal/usecase/form_field"
+	uc "skillture/backend/internal/usecase/interfaces"
 	"skillture/backend/internal/usecase/quiz"
 	"skillture/backend/internal/usecase/response"
 
@@ -95,9 +97,11 @@ func main() {
 
 	// 6. Handlers
 	adminHandler := handlers.NewAdminHandler(adminUC, tokens)
-	quizHandler := handlers.NewQuizHandler(quizUC, quizQuestionUC)
-	sessionHandler := handlers.NewQuizSessionHandler(quizSessionUC, quizPlayerUC, quizAnswerUC, hub)
-	wsHandler := handlers.NewQuizWSHandler(hub, quizPlayerUC, quizAnswerUC, quizSessionUC, tokens, cfg.CORS)
+	quizAccess := handlers.NewQuizAccess(quizUC, quizSessionUC)
+	wsTickets := handlers.NewWSTickets()
+	quizHandler := handlers.NewQuizHandler(quizUC, quizQuestionUC, quizAccess)
+	sessionHandler := handlers.NewQuizSessionHandler(quizSessionUC, quizPlayerUC, quizAnswerUC, hub, quizAccess, wsTickets)
+	wsHandler := handlers.NewQuizWSHandler(hub, quizPlayerUC, quizAnswerUC, quizSessionUC, wsTickets, cfg.CORS)
 	formHandler := handlers.NewFormHandler(formUC)
 	formFieldHandler := handlers.NewFormFieldHandler(formFieldUC)
 	responseHandler := handlers.NewResponseHandler(responseUC)
@@ -106,6 +110,7 @@ func main() {
 	workshopHandler := handlers.NewWorkshopHandler(db.Pool(), cfg.Upload)
 	contactHandler := handlers.NewContactHandler(db.Pool())
 	teamHandler := handlers.NewTeamHandler(db.Pool(), cfg.Upload)
+	siteHandler := handlers.NewSiteHandler(db.Pool(), cfg.Upload)
 
 	// 7. Gin Setup
 	if cfg.Server.IsProduction() {
@@ -128,12 +133,78 @@ func main() {
 	r.Static("/uploads", "./uploads")
 
 	// 8. Wire Routes
-	server.SetupRoutes(r, tokens, adminHandler, quizHandler, sessionHandler, wsHandler, formHandler, formFieldHandler, responseHandler, homepageHandler, geminiHandler, workshopHandler, contactHandler, teamHandler)
+	server.SetupRoutes(r, tokens, adminHandler, quizHandler, sessionHandler, wsHandler, formHandler, formFieldHandler, responseHandler, homepageHandler, geminiHandler, workshopHandler, contactHandler, teamHandler, siteHandler, cfg.Security)
+
+	// 8b. Visitor-created quizzes that were never hosted again are removed so
+	// public hosting cannot grow the database without bound.
+	go sweepStaleVisitorQuizzes(context.Background(), quizUC)
+	// Games whose host walked away never reach "finished" and would hold their
+	// PIN forever; close them after a day.
+	go sweepAbandonedSessions(context.Background(), quizSessionUC)
 
 	// 9. Start server
 	addr := cfg.Server.Address()
 	log.Printf("Starting server on %s", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Server failed: %v", err)
+	}
+}
+
+// staleVisitorQuizAge is how long a visitor's quiz may sit unused before it is
+// removed. Admin-created quizzes are never touched.
+const staleVisitorQuizAge = 180 * 24 * time.Hour
+
+// sweepStaleVisitorQuizzes deletes abandoned visitor quizzes once at startup
+// and then daily, until ctx ends.
+func sweepStaleVisitorQuizzes(ctx context.Context, quizUC uc.QuizUseCase) {
+	run := func() {
+		n, err := quizUC.DeleteStaleVisitorQuizzes(ctx, time.Now().Add(-staleVisitorQuizAge))
+		if err != nil {
+			log.Printf("stale quiz sweep failed: %v", err)
+			return
+		}
+		if n > 0 {
+			log.Printf("stale quiz sweep: removed %d unused visitor quizzes", n)
+		}
+	}
+	run()
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
+}
+
+// abandonedSessionAge is how long a game may stay open before it is closed.
+// A live game lasts minutes to a couple of hours.
+const abandonedSessionAge = 24 * time.Hour
+
+// sweepAbandonedSessions closes games nobody finished, hourly until ctx ends.
+func sweepAbandonedSessions(ctx context.Context, sessionUC uc.QuizSessionUseCase) {
+	run := func() {
+		n, err := sessionUC.FinishStaleSessions(ctx, time.Now().Add(-abandonedSessionAge))
+		if err != nil {
+			log.Printf("abandoned session sweep failed: %v", err)
+			return
+		}
+		if n > 0 {
+			log.Printf("abandoned session sweep: closed %d games that were never finished", n)
+		}
+	}
+	run()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
 	}
 }

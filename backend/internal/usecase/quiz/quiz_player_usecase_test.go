@@ -3,7 +3,9 @@ package quiz
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
@@ -26,15 +28,17 @@ func (f *fakeSessionRepo) GetByPIN(context.Context, string) (*entities.QuizSessi
 func (f *fakeSessionRepo) GetActiveByQuizID(context.Context, uuid.UUID) (*entities.QuizSession, error) {
 	return f.session, nil
 }
-func (f *fakeSessionRepo) Create(context.Context, *entities.QuizSession) error { return nil }
-func (f *fakeSessionRepo) Update(context.Context, *entities.QuizSession) error { return nil }
-func (f *fakeSessionRepo) Delete(context.Context, uuid.UUID) error             { return nil }
+func (f *fakeSessionRepo) FinishStale(context.Context, time.Time) (int64, error) { return 0, nil }
+func (f *fakeSessionRepo) Create(context.Context, *entities.QuizSession) error   { return nil }
+func (f *fakeSessionRepo) Update(context.Context, *entities.QuizSession) error   { return nil }
+func (f *fakeSessionRepo) Delete(context.Context, uuid.UUID) error               { return nil }
 func (f *fakeSessionRepo) List(context.Context, repo.QuizSessionFilter) ([]*entities.QuizSession, error) {
 	return nil, nil
 }
 
 type fakePlayerRepo struct {
 	created *entities.QuizPlayer
+	count   int
 }
 
 func (f *fakePlayerRepo) Create(_ context.Context, p *entities.QuizPlayer) error {
@@ -46,6 +50,9 @@ func (f *fakePlayerRepo) GetByID(context.Context, uuid.UUID) (*entities.QuizPlay
 }
 func (f *fakePlayerRepo) ListBySessionID(context.Context, uuid.UUID) ([]*entities.QuizPlayer, error) {
 	return nil, nil
+}
+func (f *fakePlayerRepo) CountBySessionID(context.Context, uuid.UUID) (int, error) {
+	return f.count, nil
 }
 func (f *fakePlayerRepo) AddScore(context.Context, uuid.UUID, int) (int, error) { return 0, nil }
 func (f *fakePlayerRepo) Delete(context.Context, uuid.UUID) error               { return nil }
@@ -112,5 +119,124 @@ func TestJoinSessionRequiresAName(t *testing.T) {
 
 	if _, err := uc.JoinSession(context.Background(), uuid.New(), "", nil, nil); err == nil {
 		t.Error("an empty nickname was accepted")
+	}
+}
+
+// ---- What a joining player may send --------------------------------------
+//
+// Anyone holding a PIN can call JoinSession, and whatever they send is stored
+// and pushed to every screen in the room.
+
+func lobbyUC(repo *fakePlayerRepo) *quizPlayerUseCase {
+	return NewQuizPlayerUseCase(&fakeSessionRepo{session: session(enums.QuizSessionStatusLobby)}, repo).(*quizPlayerUseCase)
+}
+
+func strp(s string) *string { return &s }
+
+func TestJoinSessionCleansTheName(t *testing.T) {
+	repo := &fakePlayerRepo{}
+	p, err := lobbyUC(repo).JoinSession(context.Background(), uuid.New(), "  Sara   Ali  ", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Name != "Sara Ali" {
+		t.Errorf("name = %q, want whitespace collapsed", p.Name)
+	}
+}
+
+func TestJoinSessionBoundsTheName(t *testing.T) {
+	uc := lobbyUC(&fakePlayerRepo{})
+	ctx := context.Background()
+
+	if _, err := uc.JoinSession(ctx, uuid.New(), strings.Repeat("س", MaxPlayerNameLen), nil, nil); err != nil {
+		t.Errorf("a name of exactly %d Arabic characters should be accepted: %v", MaxPlayerNameLen, err)
+	}
+	for name, bad := range map[string]string{
+		"too long":        strings.Repeat("a", MaxPlayerNameLen+1),
+		"huge":            strings.Repeat("a", 5_000_000),
+		"whitespace only": " \t ",
+		"control char":    "Sara\x00Ali",
+	} {
+		_, err := uc.JoinSession(ctx, uuid.New(), bad, nil, nil)
+		if !errors.Is(err, domainErrors.ErrInvalidInput) {
+			t.Errorf("%s: err = %v, want ErrInvalidInput", name, err)
+		}
+	}
+}
+
+func TestJoinSessionOnlyAcceptsInlineImagesAsAvatars(t *testing.T) {
+	uc := lobbyUC(&fakePlayerRepo{})
+	ctx := context.Background()
+
+	for _, ok := range []string{
+		"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==",
+		"data:image/png;base64,iVBORw0KGgo=",
+		"data:image/webp;base64,UklGRg",
+		"data:image/gif;base64,R0lGODlh",
+	} {
+		if _, err := uc.JoinSession(ctx, uuid.New(), "p", nil, strp(ok)); err != nil {
+			t.Errorf("avatar %q rejected: %v", ok, err)
+		}
+	}
+	for name, bad := range map[string]string{
+		"remote url (tracking pixel)": "https://attacker.example/pixel.gif",
+		"protocol-relative":           "//attacker.example/p.png",
+		"svg (can carry script)":      "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+		"html":                        "data:text/html;base64,PGgxPg==",
+		"not base64":                  "data:image/png;base64,***",
+		"javascript":                  "javascript:alert(1)",
+		"oversized":                   "data:image/jpeg;base64," + strings.Repeat("A", MaxAvatarDataURLLen),
+	} {
+		if _, err := uc.JoinSession(ctx, uuid.New(), "p", nil, strp(bad)); !errors.Is(err, domainErrors.ErrInvalidInput) {
+			t.Errorf("%s: err = %v, want ErrInvalidInput", name, err)
+		}
+	}
+
+	// An empty string means "no avatar", as the client sends it.
+	p, err := uc.JoinSession(ctx, uuid.New(), "p", nil, strp(""))
+	if err != nil || p.AvatarURL != nil {
+		t.Errorf("empty avatar: %v, %v", p, err)
+	}
+}
+
+func TestJoinSessionStopsAtTheRosterLimit(t *testing.T) {
+	repo := &fakePlayerRepo{count: MaxPlayersPerSession}
+	_, err := lobbyUC(repo).JoinSession(context.Background(), uuid.New(), "one too many", nil, nil)
+	if !errors.Is(err, domainErrors.ErrSessionFull) {
+		t.Errorf("err = %v, want ErrSessionFull", err)
+	}
+	if repo.created != nil {
+		t.Error("a player was stored in a full game")
+	}
+
+	repo = &fakePlayerRepo{count: MaxPlayersPerSession - 1}
+	if _, err := lobbyUC(repo).JoinSession(context.Background(), uuid.New(), "last seat", nil, nil); err != nil {
+		t.Errorf("the last seat should be free: %v", err)
+	}
+}
+
+func TestJoinSessionIssuesASecretAndStoresOnlyItsHash(t *testing.T) {
+	repo := &fakePlayerRepo{}
+	p, err := lobbyUC(repo).JoinSession(context.Background(), uuid.New(), "Sara", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Secret == "" {
+		t.Fatal("the joining player must receive a secret")
+	}
+	if repo.created == nil || repo.created.SecretHash == nil {
+		t.Fatal("a hash must be stored")
+	}
+	if *repo.created.SecretHash == p.Secret {
+		t.Fatal("the stored value must not be the secret itself")
+	}
+	if !repo.created.VerifySecret(p.Secret) || repo.created.VerifySecret("someone-else") {
+		t.Fatal("the stored hash must verify exactly the issued secret")
+	}
+
+	// Two players never share a secret.
+	other, _ := lobbyUC(&fakePlayerRepo{}).JoinSession(context.Background(), uuid.New(), "Omar", nil, nil)
+	if other.Secret == p.Secret {
+		t.Fatal("secrets must be unique")
 	}
 }

@@ -30,7 +30,8 @@ func respondError(c *gin.Context, err error) {
 		errors.Is(err, domainErrors.ErrSessionNotActive),
 		errors.Is(err, domainErrors.ErrSessionAlreadyStarted),
 		errors.Is(err, domainErrors.ErrSessionFinished),
-		errors.Is(err, domainErrors.ErrQuestionNotCurrent):
+		errors.Is(err, domainErrors.ErrQuestionNotCurrent),
+		errors.Is(err, domainErrors.ErrSessionFull):
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 
 	case errors.Is(err, domainErrors.ErrDuplicateResponse),

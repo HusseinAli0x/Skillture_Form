@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
@@ -29,4 +30,8 @@ type QuizSessionRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	// List retrieves sessions matching the optional filter.
 	List(ctx context.Context, filter QuizSessionFilter) ([]*entities.QuizSession, error)
+	// FinishStale marks sessions that were created before cutoff and never
+	// finished (a host who closed the tab) as finished, which frees their PIN.
+	// Returns how many were closed.
+	FinishStale(ctx context.Context, cutoff time.Time) (int64, error)
 }

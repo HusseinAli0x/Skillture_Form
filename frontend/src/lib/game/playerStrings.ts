@@ -79,6 +79,12 @@ export interface StoredPlayer {
   name: string;
   avatarId?: number;
   avatarUrl?: string;
+  /**
+   * Proves this browser is that player. The server hands it out once, when the
+   * player joins; the player id alone is visible to everyone in the room, so
+   * answers and the player socket need the secret too. Kept for this tab only.
+   */
+  secret?: string;
 }
 
 const key = (playerId: string) => `skillture-player-${playerId}`;

@@ -7,6 +7,8 @@ import {
   formToPayload,
   hasAfterEventData,
   needsRecap,
+  registeredCompact,
+  registeredLabel,
   splitByPhase,
   validateWorkshopForm,
   workshopToForm,
@@ -49,6 +51,19 @@ describe('validateWorkshopForm', () => {
     expect(validateWorkshopForm({ ...valid, attendees: '2.5' }).attendees).toBeTruthy();
     expect(validateWorkshopForm({ ...valid, attendees: '0' }).attendees).toBeUndefined();
   });
+
+  it('accepts an empty seat limit and whole numbers from 1 to 100000', () => {
+    expect(validateWorkshopForm({ ...valid, capacity: '' }).capacity).toBeUndefined();
+    expect(validateWorkshopForm({ ...valid, capacity: ' 40 ' }).capacity).toBeUndefined();
+    expect(validateWorkshopForm({ ...valid, capacity: '1' }).capacity).toBeUndefined();
+    expect(validateWorkshopForm({ ...valid, capacity: '100000' }).capacity).toBeUndefined();
+  });
+
+  it('rejects a seat limit outside 1..100000 or not a whole number', () => {
+    for (const bad of ['0', '-5', '2.5', '100001', 'abc']) {
+      expect(validateWorkshopForm({ ...valid, capacity: bad }).capacity, bad).toBeTruthy();
+    }
+  });
 });
 
 describe('formToPayload', () => {
@@ -74,12 +89,44 @@ describe('formToPayload', () => {
     expect(payload.attendees).toBeNull();
     expect(payload.registration_url).toBeNull();
     expect(payload.image_path).toBeNull();
+    expect(payload.capacity).toBeNull();
+  });
+
+  it('defaults registration on with no seat limit', () => {
+    const payload = formToPayload({ ...EMPTY_WORKSHOP_FORM });
+    expect(payload.registration_open).toBe(true);
+    expect(payload.capacity).toBeNull();
+  });
+
+  it('round-trips registration_open and capacity', () => {
+    const w = ws({ registration_open: false, capacity: 60, registered: 12 });
+    const form = workshopToForm(w);
+    expect(form.registration_open).toBe(false);
+    expect(form.capacity).toBe('60');
+    const payload = formToPayload(form);
+    expect(payload.registration_open).toBe(false);
+    expect(payload.capacity).toBe(60);
+    expect(formToPayload({ ...form, capacity: '' }).capacity).toBeNull();
+  });
+
+  it('treats a workshop without the new fields as open and unlimited', () => {
+    const form = workshopToForm(ws());
+    expect(form.registration_open).toBe(true);
+    expect(form.capacity).toBe('');
   });
 });
 
 describe('workshopToForm', () => {
   it('trims seconds off a time so the time input accepts it', () => {
     expect(workshopToForm(ws({ event_time: '14:30:00' })).event_time).toBe('14:30');
+  });
+});
+
+describe('duplicateForm keeps registration settings', () => {
+  it('copies the seat limit and the on/off switch', () => {
+    const copy = duplicateForm(ws({ capacity: 25, registration_open: false }));
+    expect(copy.capacity).toBe('25');
+    expect(copy.registration_open).toBe(false);
   });
 });
 
@@ -127,5 +174,15 @@ describe('needsRecap / hasAfterEventData', () => {
   it('detects results in the form', () => {
     expect(hasAfterEventData(EMPTY_WORKSHOP_FORM)).toBe(false);
     expect(hasAfterEventData({ ...EMPTY_WORKSHOP_FORM, attendees: '5' })).toBe(true);
+  });
+});
+
+describe('registration labels', () => {
+  it('shows a plain count with no seat limit and a fraction with one', () => {
+    expect(registeredCompact(12)).toBe('12 registered');
+    expect(registeredCompact(12, null)).toBe('12 registered');
+    expect(registeredCompact(12, 40)).toBe('12 / 40 registered');
+    expect(registeredLabel(0)).toBe('0 registered');
+    expect(registeredLabel(12, 40)).toBe('12 of 40 seats taken');
   });
 });

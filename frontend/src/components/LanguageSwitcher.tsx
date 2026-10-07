@@ -1,13 +1,13 @@
 import React from 'react';
 import { Languages } from 'lucide-react';
 import { useLanguageStore } from '../context/LanguageStore';
-import { translations } from '../lib/translations';
+import { useTranslations } from '../lib/useSiteContent';
 
 /** Toggle between English and Arabic. Public site only — see LanguageStore. */
 const LanguageSwitcher: React.FC<{ className?: string }> = ({ className = '' }) => {
   const locale = useLanguageStore(s => s.locale);
   const toggleLocale = useLanguageStore(s => s.toggleLocale);
-  const label = translations[locale].nav.language;
+  const label = useTranslations().nav.language;
 
   return (
     <button

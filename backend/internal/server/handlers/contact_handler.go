@@ -22,10 +22,13 @@ func NewContactHandler(pool *pgxpool.Pool) *ContactHandler {
 	return &ContactHandler{pool: pool}
 }
 
-// contactEmailRegex mirrors response_usecase.go's permissive sanity check —
-// not a full RFC 5322 validator, just enough to catch an obviously-wrong
-// address before it lands in the database.
-var contactEmailRegex = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
+// contactEmailRegex is a sanity check, not a full RFC 5322 validator: something
+// before an @, a dotted domain after it, no spaces. It also refuses the
+// characters that would change the meaning of a mailto: link the admin clicks
+// (`?`, `&`, `#`, `%`, quotes, `<>`, `;`, `,`, `\`) and control characters, so
+// an address such as `a@b.co?bcc=x@evil.example` cannot pre-fill a compose
+// window. Internationalised addresses (Arabic names, for instance) still pass.
+var contactEmailRegex = regexp.MustCompile(`^[^\s\x00-\x1f@?&#%"<>;,\\]+@[^\s\x00-\x1f@?&#%"<>;,\\]+\.[^\s\x00-\x1f@?&#%"<>;,\\]+$`)
 
 type contactSubmission struct {
 	ID        string    `json:"id"`

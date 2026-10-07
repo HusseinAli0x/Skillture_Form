@@ -24,4 +24,7 @@ type QuizPlayerRepository interface {
 	// ListBySessionID returns all players in a session, ordered by score descending.
 	// This is the leaderboard query used after each question.
 	ListBySessionID(ctx context.Context, sessionID uuid.UUID) ([]*entities.QuizPlayer, error)
+	// CountBySessionID returns how many players have joined a session, without
+	// loading them (their avatars are large).
+	CountBySessionID(ctx context.Context, sessionID uuid.UUID) (int, error)
 }

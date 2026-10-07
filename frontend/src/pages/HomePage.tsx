@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
-import { ArrowRight, Mail } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Mail } from 'lucide-react';
 import client from '../api/client';
 import {
   WORKSHOP_TRACKS,
@@ -9,7 +9,7 @@ import {
   type TeamMember,
   type WorkshopTrack,
 } from '../api/publicTypes';
-import { Frieze, Pattern, brandAssets } from '../components/brand';
+import { Frieze, Pattern } from '../components/brand';
 import ContactForm from '../components/public/ContactForm';
 import ImpactNumbers from '../components/public/ImpactNumbers';
 import JoinPinForm from '../components/public/JoinPinForm';
@@ -20,9 +20,10 @@ import TeamCard from '../components/public/TeamCard';
 import { WorkshopRows } from '../components/public/WorkshopRow';
 import { Spinner } from '../components/ui';
 import { useLanguageStore } from '../context/LanguageStore';
-import { siteStrings } from '../lib/siteStrings';
 import { translations } from '../lib/translations';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { useSiteStrings, useTranslations, useBrandAsset, useSiteSettings } from '../lib/useSiteContent';
+import { SOCIAL_LINKS } from '../lib/siteContent';
 
 interface OfferPillar {
   id: string;
@@ -67,16 +68,16 @@ const DEFAULT_CONTENT: HomepageContent = {
   })),
 };
 
-// Placeholders — replace with the real contact details.
-const CONTACT_EMAIL = 'hello@skillture.com';
-const CONTACT_LINKEDIN = 'https://www.linkedin.com/company/skillture';
-
 const HomePage: React.FC = () => {
   const { hash } = useLocation();
   const locale = useLanguageStore(s => s.locale);
-  const T = translations[locale];
-  const S = siteStrings[locale];
+  const T = useTranslations();
+  const S = useSiteStrings();
   const H = S.home;
+  const settings = useSiteSettings();
+  const handImg = useBrandAsset('hand');
+  const badgeImg = useBrandAsset('badge');
+  const pinsImg = useBrandAsset('pins');
   const isRTL = locale === 'ar';
 
   const [content, setContent] = useState<HomepageContent | null>(null);
@@ -169,7 +170,7 @@ const HomePage: React.FC = () => {
         <div className="relative">
           <div className="relative aspect-[4/3] sm:aspect-[3/2] overflow-hidden rounded-2xl bg-teal">
             <img
-              src={brandAssets.hand}
+              src={handImg}
               alt=""
               width={1600}
               height={1066}
@@ -207,7 +208,7 @@ const HomePage: React.FC = () => {
               right; the crop keeps only the card and lanyard. */}
           <div className="relative mx-auto w-full max-w-xs md:max-w-none aspect-[3/4] overflow-hidden rounded-2xl bg-white">
             <img
-              src={brandAssets.badge}
+              src={badgeImg}
               alt={H.participants.badgeAlt}
               width={1664}
               height={937}
@@ -305,7 +306,7 @@ const HomePage: React.FC = () => {
               </div>
             </div>
             <img
-              src={brandAssets.pins}
+              src={pinsImg}
               alt={H.pinsAlt}
               width={1665}
               height={937}
@@ -340,23 +341,27 @@ const HomePage: React.FC = () => {
             <p className="mt-4 text-lg max-w-md text-pretty">{H.contact.subtitle}</p>
             <p className="mt-8 text-sm font-medium">{H.contact.emailDirect}</p>
             <ul className="mt-1 space-y-1">
-              <li>
-                <a href={`mailto:${CONTACT_EMAIL}`} className={`inline-flex items-center gap-3 min-h-11 font-semibold underline underline-offset-4 ${FOCUS_RING}`}>
-                  <Mail className="w-5 h-5" aria-hidden="true" />
-                  <span dir="ltr">{CONTACT_EMAIL}</span>
-                </a>
-              </li>
-              <li>
-                <a
-                  href={CONTACT_LINKEDIN}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`inline-flex items-center gap-3 min-h-11 font-semibold underline underline-offset-4 ${FOCUS_RING}`}
-                >
-                  <LinkedInIcon className="w-5 h-5" />
-                  {T.contact.linkedinLabel}
-                </a>
-              </li>
+              {settings.contact_email && (
+                <li>
+                  <a href={`mailto:${settings.contact_email}`} className={`inline-flex items-center gap-3 min-h-11 font-semibold underline underline-offset-4 ${FOCUS_RING}`}>
+                    <Mail className="w-5 h-5" aria-hidden="true" />
+                    <span dir="ltr">{settings.contact_email}</span>
+                  </a>
+                </li>
+              )}
+              {SOCIAL_LINKS.filter(l => settings[l.key]).map(l => (
+                <li key={l.key}>
+                  <a
+                    href={settings[l.key]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`inline-flex items-center gap-3 min-h-11 font-semibold underline underline-offset-4 ${FOCUS_RING}`}
+                  >
+                    {l.key === 'linkedin_url' ? <LinkedInIcon className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" aria-hidden="true" />}
+                    {l.key === 'linkedin_url' ? T.contact.linkedinLabel : l.label}
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
 

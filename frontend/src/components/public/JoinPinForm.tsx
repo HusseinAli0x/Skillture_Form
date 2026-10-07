@@ -1,9 +1,8 @@
 import React, { useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { ArrowRight } from 'lucide-react';
-import { useLanguageStore } from '../../context/LanguageStore';
-import { siteStrings } from '../../lib/siteStrings';
 import { BTN_INK } from './layout';
+import { useSiteStrings } from '../../lib/useSiteContent';
 
 const PIN_LENGTH = 6;
 
@@ -14,8 +13,8 @@ const PIN_LENGTH = 6;
  */
 const JoinPinForm: React.FC<{ className?: string }> = ({ className = '' }) => {
   const navigate = useNavigate();
-  const locale = useLanguageStore(s => s.locale);
-  const P = siteStrings[locale].home.pin;
+  const S = useSiteStrings();
+  const P = S.home.pin;
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +65,17 @@ const JoinPinForm: React.FC<{ className?: string }> = ({ className = '' }) => {
         {P.button}
         <ArrowRight className="w-4 h-4 rtl:rotate-180" aria-hidden="true" />
       </button>
+      {/* The other way into a game: running one. */}
+      <p className="mt-4 pt-4 border-t border-ink/25 text-base">
+        {S.host.home.line}{' '}
+        <Link
+          to="/create"
+          className="inline-flex items-center min-h-11 font-semibold underline underline-offset-4 decoration-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          {S.host.home.link}
+          <ArrowRight className="ms-1 w-4 h-4 rtl:rotate-180" aria-hidden="true" />
+        </Link>
+      </p>
     </form>
   );
 };

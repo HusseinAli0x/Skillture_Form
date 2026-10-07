@@ -5,7 +5,7 @@ import FormSection from '../FormSection';
 import GalleryEditor from '../GalleryEditor';
 import ImageUpload, { type Uploader } from '../ImageUpload';
 import type { FieldErrors } from '../serverErrors';
-import { MAX_GALLERY, TRACKS, type Track, type WorkshopForm } from './workshopModel';
+import { MAX_CAPACITY, MAX_GALLERY, TRACKS, type Track, type WorkshopForm } from './workshopModel';
 
 interface Props {
   form: WorkshopForm;
@@ -101,11 +101,70 @@ const WorkshopFormFields: React.FC<Props> = ({ form, errors, patch, upload, onBu
             </Select>
           )}
         </Field>
+      </div>
+    </FormSection>
+
+    <FormSection
+      id="ws-registration"
+      title="Registration"
+      description="Visitors sign up on the workshop page with a name and email. You see who is coming in Registrants on the Workshops list."
+    >
+      <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-bg px-4 py-3">
+        <div className="min-w-0">
+          <p id="ws-reg-open-label" className="text-sm font-medium text-text">
+            Accept registrations on the website
+          </p>
+          <p id="ws-reg-open-hint" className="mt-0.5 text-xs text-muted leading-relaxed">
+            {form.registration_open
+              ? 'The workshop page shows a sign-up form until the event date.'
+              : 'Sign-ups are paused. The workshop page says registration is closed.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={form.registration_open}
+          aria-labelledby="ws-reg-open-label"
+          aria-describedby="ws-reg-open-hint"
+          onClick={() => patch({ registration_open: !form.registration_open })}
+          className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${
+            form.registration_open ? 'bg-primary border-primary' : 'bg-panel-3 border-border-strong'
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className={`inline-block h-4 w-4 rounded-full bg-bg shadow transition-transform motion-reduce:transition-none ${
+              form.registration_open ? 'translate-x-6 rtl:-translate-x-6' : 'translate-x-1 rtl:-translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <Field
+          id="ws-capacity"
+          label="Seat limit (optional)"
+          error={errors.capacity}
+          hint="Leave empty for no limit. Registration closes automatically when the seats are taken, and after the event date."
+        >
+          {c => (
+            <Input
+              {...c}
+              type="number"
+              min={1}
+              max={MAX_CAPACITY}
+              step={1}
+              inputMode="numeric"
+              placeholder="No limit"
+              value={form.capacity}
+              onChange={e => patch({ capacity: e.target.value })}
+            />
+          )}
+        </Field>
         <Field
           id="ws-reg"
-          label="Registration link (optional)"
+          label="External registration link (optional)"
           error={errors.registration_url}
-          hint="Adds a Register button to the workshop page."
+          hint="Adds a button to the workshop page for signing up on another site. It works alongside the form above."
         >
           {c => (
             <Input

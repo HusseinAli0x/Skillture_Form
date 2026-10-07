@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useLanguageStore } from '../../context/LanguageStore';
-import { siteStrings } from '../../lib/siteStrings';
+import { useSiteStrings } from '../../lib/useSiteContent';
 
 interface Props {
   images: string[];
@@ -13,7 +13,7 @@ interface Props {
 /** Full-screen photo viewer: Esc closes, arrow keys and buttons move. */
 const Lightbox: React.FC<Props> = ({ images, index, onIndexChange, onClose }) => {
   const locale = useLanguageStore(s => s.locale);
-  const S = siteStrings[locale].workshop;
+  const S = useSiteStrings().workshop;
   const closeRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const touchX = useRef<number | null>(null);

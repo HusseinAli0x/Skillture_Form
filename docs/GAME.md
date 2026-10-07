@@ -6,8 +6,9 @@ hold it to.
 
 ## Flow
 
-1. **Host** opens *Quiz Game*, presses Host on an active quiz → a lobby with a
-   giant PIN, a QR code and the players as they arrive.
+1. **Host** — anyone, no account — opens *Host a game* (`/create`), builds a
+   quiz and presses Host → a lobby with a giant PIN, a QR code and the players
+   as they arrive. (Admins can do the same from *Quiz Game* in the dashboard.)
 2. **Players** go to `/play` (or scan the QR), type the PIN, pick a name and
    badge (or press the dice for a silly one) and wait.
 3. **One click starts it.** *Start game* starts the session and puts question 1
@@ -45,10 +46,56 @@ Players can join a game already in progress; they wait for the next question.
 | `question_results` | everyone | correct answer, vote split and leaderboard; closes the question |
 | `game_finished` | everyone | final leaderboard |
 
-The host socket needs the admin token (`?token=`); player sockets need a valid
-`player_id` for that session. A browser's `Origin` must be listed in
+The host socket needs a one-time ticket (`?ticket=`, see below). A player socket
+needs the player's `player_id` **and the secret** they were given when they
+joined (`?secret=`). A browser's `Origin` must be listed in
 `CORS_ALLOWED_ORIGINS` **or be the same host the page was served from**, so a
 LAN address in development and the real domain in production just work.
+
+## Who can host
+
+Nobody needs an account to create and host a game. Instead, each browser makes a
+long random **host key** the first time it is used, keeps it in local storage
+(`skillture.hostKey`) and sends it as the `X-Host-Key` header. The server stores
+only its SHA-256 hash, on the quizzes that browser creates (`quizzes.owner_key_hash`).
+
+- A visitor sees, edits, hosts and deletes **only the quizzes made with their
+  own key**. Anything else — another visitor's quiz, an admin's quiz, a session
+  of either — answers `404`, exactly as if it did not exist
+  (`handlers.QuizAccess`, covered by `quiz_access_integration_test.go`).
+- Admins (bearer token) keep full control of every quiz and session; the admin
+  list marks the ones that came from the public site (`by_visitor`).
+- Games therefore live in the browser that made them. Clearing site data loses
+  access to them. Visitor quizzes that were never hosted again are deleted after
+  about six months so public hosting cannot grow the database without bound.
+- Limits keep it from being abused as free storage: 30 games per browser,
+  100 questions per game, and per-IP rate limits on creating games (20/hour),
+  sessions (30/hour) and saving questions (120 per 10 minutes). A classroom
+  behind one address is comfortably inside them.
+
+**The host WebSocket** cannot carry an `Authorization` header, and a URL ends up
+in logs, so it never carries a long-lived secret. The host first calls
+`POST /api/v1/sessions/:id/ws-ticket` (authenticated by header) and connects
+with the returned ticket: single-use, valid for 60 seconds, bound to that
+session. Reconnects ask for a fresh one.
+
+**PINs** are unique only among games that can still be joined (a partial unique
+index, migration `0008`), so finished games do not use up the six-digit space;
+a rare collision is retried.
+
+## Players cannot act for each other
+
+A player id is not secret — the public leaderboard lists every player's id. So the
+id alone proves nothing. Joining returns a random **secret** once (only its SHA-256
+is stored, `quiz_players.secret_hash`); answering (`POST …/answer`) and opening the
+player socket both require it, and it never appears in a leaderboard or broadcast.
+Without it, a student in the room could answer wrongly on everyone else's behalf.
+The browser keeps it in `sessionStorage` for that tab.
+
+What a joining player may send is bounded too, because it is stored and shown on
+every screen: a name of at most 24 characters, an avatar that is a small inline
+`data:image/(png|jpeg|webp|gif)` (never a remote URL, which every viewer's browser
+would fetch), and at most 200 players per game.
 
 ## Things that are easy to get wrong
 
@@ -67,5 +114,6 @@ LAN address in development and the real domain in production just work.
 ## Testing
 
 `node scripts/game-smoke.mjs <base-url>` plays a whole game (host + two players
-over real WebSockets, including the origin rules). CI runs it against the
+over real WebSockets, including the origin and ticket rules) and checks that a
+visitor can host with only a host key while another visitor cannot touch it. CI runs it against the
 production Docker image through Caddy; `make smoke` does the same locally.

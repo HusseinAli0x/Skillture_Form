@@ -8,6 +8,8 @@ interface Props {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** Accessible name of the dialog's close button. */
+  closeLabel?: string;
   /** Styles the confirm button as destructive. */
   destructive?: boolean;
   loading?: boolean;
@@ -28,12 +30,13 @@ const ConfirmDialog: React.FC<Props> = ({
   message,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
+  closeLabel,
   destructive = false,
   loading = false,
   onConfirm,
   onCancel,
 }) => (
-  <Modal title={title} onClose={onCancel}>
+  <Modal title={title} onClose={onCancel} closeLabel={closeLabel}>
     <div className="flex gap-4">
       {destructive && (
         <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-danger-soft border border-danger-border text-danger">

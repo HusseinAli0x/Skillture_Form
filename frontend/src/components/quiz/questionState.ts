@@ -2,6 +2,7 @@ import type { QuizQuestion, QuizQuestionType } from '../../api/types';
 import { localized, toLocalized } from '../../lib/i18n';
 import { newId } from '../../lib/id';
 import { correctAnswerText, parseOptions } from '../game/gameLogic';
+import { hostEn, type HostStrings } from '../../lib/hostSiteStrings';
 
 /**
  * A quiz question while it is being edited. Kept apart from QuestionEditor so
@@ -35,18 +36,25 @@ export const QUESTION_TYPE_LABELS: Record<QuizQuestionType, string> = {
   short: 'Short Answer',
 };
 
-export const trueFalseOptions = (): OptionState[] => [
-  { id: newId(), value: 'True' },
-  { id: newId(), value: 'False' },
+/** The two answers a true / false question carries; the labels are what players see. */
+export const trueFalseOptions = (labels: readonly [string, string] = ['True', 'False']): OptionState[] => [
+  { id: newId(), value: labels[0] },
+  { id: newId(), value: labels[1] },
 ];
 
-export const emptyQuestion = (): QuestionState => ({
+/** The labels a new question starts with. Defaults to English; the public builder passes its own language. */
+export interface QuestionDefaults {
+  options: readonly [string, string];
+  trueFalse: readonly [string, string];
+}
+
+export const emptyQuestion = (defaults?: QuestionDefaults): QuestionState => ({
   id: newId(),
   question: '',
   type: 'mcq',
   options: [
-    { id: newId(), value: 'Option A' },
-    { id: newId(), value: 'Option B' },
+    { id: newId(), value: defaults?.options[0] ?? 'Option A' },
+    { id: newId(), value: defaults?.options[1] ?? 'Option B' },
   ],
   correctOptionId: '',
   timeLimit: 15,
@@ -76,31 +84,31 @@ export interface QuestionIssue {
 }
 
 /** Everything that would make the server reject or players puzzle over this question. */
-export function validateQuestion(q: QuestionState): QuestionIssue[] {
+export function validateQuestion(q: QuestionState, text: HostStrings['issues'] = hostEn.issues): QuestionIssue[] {
   const issues: QuestionIssue[] = [];
-  if (!q.question.trim()) issues.push({ field: 'text', message: 'Write the question players will see.' });
+  if (!q.question.trim()) issues.push({ field: 'text', message: text.text });
 
   if (q.type === 'short') {
-    if (!q.correctOptionId.trim()) issues.push({ field: 'answer', message: 'Type the answer you expect.' });
+    if (!q.correctOptionId.trim()) issues.push({ field: 'answer', message: text.shortAnswer });
   } else {
     if (q.type === 'mcq') {
       const filled = q.options.map(o => o.value.trim());
       if (filled.some(v => !v)) {
-        issues.push({ field: 'options', message: 'Fill in or remove the empty answers.' });
+        issues.push({ field: 'options', message: text.emptyOptions });
       } else if (new Set(filled.map(v => v.toLowerCase())).size !== filled.length) {
-        issues.push({ field: 'options', message: 'Two answers are the same. Players could not tell them apart.' });
+        issues.push({ field: 'options', message: text.duplicateOptions });
       }
     }
     if (!q.options.some(o => o.id === q.correctOptionId)) {
       issues.push({
         field: 'answer',
-        message: q.type === 'tf' ? 'Choose True or False as the right answer.' : 'Mark which answer is correct.',
+        message: q.type === 'tf' ? text.chooseTrueFalse : text.markCorrect,
       });
     }
   }
 
-  if (!(q.timeLimit >= 1)) issues.push({ field: 'time', message: 'Give players at least 1 second.' });
-  if (!(q.points >= 1)) issues.push({ field: 'points', message: 'A question needs at least 1 point.' });
+  if (!(q.timeLimit >= 1)) issues.push({ field: 'time', message: text.time });
+  if (!(q.points >= 1)) issues.push({ field: 'points', message: text.points });
   return issues;
 }
 
@@ -177,7 +185,10 @@ export function summarizeQuiz(questions: QuestionState[]): QuizSummary {
 }
 
 /** "3 min" / "45 sec". */
-export function formatDuration(seconds: number): string {
-  if (seconds < 90) return `${seconds} sec`;
-  return `${Math.round(seconds / 60)} min`;
+export function formatDuration(
+  seconds: number,
+  units: { seconds: (n: number) => string; minutes: (n: number) => string } = hostEn.list
+): string {
+  if (seconds < 90) return units.seconds(seconds);
+  return units.minutes(Math.round(seconds / 60));
 }

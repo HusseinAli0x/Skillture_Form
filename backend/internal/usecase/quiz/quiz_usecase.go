@@ -3,9 +3,11 @@ package quiz
 import (
 	"context"
 	"errors"
+	"time"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
+	domainErrors "skillture/backend/internal/domain/errors"
 	repo "skillture/backend/internal/repository/interfaces"
 	uc "skillture/backend/internal/usecase/interfaces"
 
@@ -112,12 +114,22 @@ func (u *quizUseCase) GetByID(ctx context.Context, quizID uuid.UUID) (*entities.
 		return nil, err
 	}
 	if quiz == nil {
-		return nil, errors.New("quiz not found")
+		return nil, domainErrors.ErrNotFound
 	}
 	return quiz, nil
 }
 
 // List returns quizzes matching the optional filter.
 func (u *quizUseCase) List(ctx context.Context, filter uc.QuizFilter) ([]*entities.Quiz, error) {
-	return u.quizRepo.List(ctx, repo.QuizFilter{Status: filter.Status})
+	return u.quizRepo.List(ctx, repo.QuizFilter{Status: filter.Status, OwnerKeyHash: filter.OwnerKeyHash})
+}
+
+// CountByOwner returns how many quizzes a visitor has created.
+func (u *quizUseCase) CountByOwner(ctx context.Context, ownerKeyHash string) (int, error) {
+	return u.quizRepo.CountByOwner(ctx, ownerKeyHash)
+}
+
+// DeleteStaleVisitorQuizzes removes visitor-created quizzes unused since cutoff.
+func (u *quizUseCase) DeleteStaleVisitorQuizzes(ctx context.Context, cutoff time.Time) (int64, error) {
+	return u.quizRepo.DeleteStaleVisitorQuizzes(ctx, cutoff)
 }

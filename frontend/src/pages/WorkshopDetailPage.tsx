@@ -9,16 +9,18 @@ import Lightbox from '../components/public/Lightbox';
 import { LoadError } from '../components/public/PageState';
 import PublicShell from '../components/public/PublicShell';
 import TrackBadge from '../components/public/TrackBadge';
+import WorkshopRegistration from '../components/public/WorkshopRegistration';
 import { useLanguageStore } from '../context/LanguageStore';
 import { formatDate, isPastDate } from '../lib/formatDate';
 import { localized } from '../lib/i18n';
-import { siteStrings } from '../lib/siteStrings';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { useSiteStrings } from '../lib/useSiteContent';
 
 const WorkshopDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const locale = useLanguageStore(s => s.locale);
-  const S = siteStrings[locale].workshop;
+  const site = useSiteStrings();
+  const S = site.workshop;
 
   const [workshop, setWorkshop] = useState<PublicWorkshop | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
@@ -50,6 +52,15 @@ const WorkshopDetailPage: React.FC = () => {
 
   useEffect(() => load(), [load]);
 
+  // Re-read the workshop in place (no skeleton, no scroll jump) so the seat
+  // count and status follow a registration. A failed refresh keeps what is shown.
+  const refresh = useCallback(() => {
+    client
+      .get<PublicWorkshop>(`/api/v1/workshops/${id}`)
+      .then(res => setWorkshop(res.data))
+      .catch(() => undefined);
+  }, [id]);
+
   const share = async () => {
     const url = window.location.href;
     try {
@@ -75,7 +86,7 @@ const WorkshopDetailPage: React.FC = () => {
   if (state === 'loading') {
     return (
       <PublicShell>
-        <article role="status" aria-label={siteStrings[locale].common.loading} className={`${WRAP} pt-6 pb-24 motion-safe:animate-pulse`}>
+        <article role="status" aria-label={site.common.loading} className={`${WRAP} pt-6 pb-24 motion-safe:animate-pulse`}>
           <div className="h-5 w-32 rounded bg-panel-2" />
           <div className="mt-8 h-14 w-3/4 rounded bg-panel-3" />
           <div className="mt-10 aspect-[16/8] rounded-md bg-panel-2" />
@@ -133,6 +144,11 @@ const WorkshopDetailPage: React.FC = () => {
             <TrackBadge track={w.track} />
           </div>
           <h1 className={`${H1} mt-4`}>{title}</h1>
+          {!past && w.registration_status === 'open' && (
+            <Link to="#register" className={`${BTN_INK} mt-6`}>
+              {S.registration.register}
+            </Link>
+          )}
         </header>
 
         {w.image_path && (
@@ -180,12 +196,10 @@ const WorkshopDetailPage: React.FC = () => {
               </section>
             )}
 
+            {!past && <WorkshopRegistration workshop={w} onChanged={refresh} />}
+
             <div className="mt-12 flex flex-wrap items-center gap-3">
-              {!past && w.registration_url ? (
-                <a href={w.registration_url} target="_blank" rel="noopener noreferrer" className={BTN_INK}>
-                  {S.register}
-                </a>
-              ) : (
+              {past && (
                 <Link to="/#contact" className={BTN_INK}>
                   {S.bookSimilar}
                 </Link>

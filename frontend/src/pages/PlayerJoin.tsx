@@ -9,10 +9,11 @@ import PlayerAvatar from '../components/game/PlayerAvatar';
 import { apiErrorStatus } from '../lib/apiError';
 import { AVATARS, AVATAR_UPLOAD_TYPES, MAX_AVATAR_UPLOAD_MB } from '../lib/avatars';
 import { randomNickname } from '../lib/game/names';
-import { playerExtra, rememberPlayer } from '../lib/game/playerStrings';
+import { playerExtra, recallPlayer, rememberPlayer } from '../lib/game/playerStrings';
 import { play } from '../lib/game/sound';
 import { useGameLocale } from '../lib/game/useGameLocale';
 import { useGameSocket } from '../lib/game/useGameSocket';
+import { useLogoSrc } from '../lib/useSiteContent';
 
 type Step = 'pin' | 'nickname' | 'waiting';
 
@@ -25,6 +26,7 @@ const toWesternDigits = (s: string) =>
   s.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '');
 
 const PlayerJoin: React.FC = () => {
+  const logoSrc = useLogoSrc('icon');
   const { locale, dir, G } = useGameLocale();
   const X = playerExtra[locale];
   const [searchParams] = useSearchParams();
@@ -124,7 +126,12 @@ const PlayerJoin: React.FC = () => {
         avatar_id: customAvatar ? undefined : avatarIndex,
         avatar_url: customAvatar ?? undefined,
       });
-      rememberPlayer(res.data.id, { name, avatarId: customAvatar ? undefined : avatarIndex, avatarUrl: customAvatar ?? undefined });
+      rememberPlayer(res.data.id, {
+        name,
+        avatarId: customAvatar ? undefined : avatarIndex,
+        avatarUrl: customAvatar ?? undefined,
+        secret: res.data.secret,
+      });
       setPlayerId(res.data.id);
       setStep('waiting');
     } catch (err) {
@@ -146,7 +153,7 @@ const PlayerJoin: React.FC = () => {
 
   const status = useGameSocket({
     enabled: step === 'waiting' && !!sessionId && !!playerId,
-    url: () => playerSocketUrl(sessionId, playerId),
+    url: () => playerSocketUrl(sessionId, playerId, recallPlayer(playerId)?.secret),
     onMessage: msg => {
       const payload = msg.payload as { status?: string; players?: string[] } | undefined;
       if (msg.type === 'lobby_snapshot') {
@@ -183,7 +190,7 @@ const PlayerJoin: React.FC = () => {
     <div className="game flex flex-col" dir={dir}>
       <header className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <img src="/logo-icon.png" alt="" className="w-8 h-8 object-contain" />
+          <img src={logoSrc} alt="" className="w-8 h-8 object-contain" />
           <span className="font-semibold text-lg">Skillture</span>
         </div>
         <div className="flex items-center gap-2">

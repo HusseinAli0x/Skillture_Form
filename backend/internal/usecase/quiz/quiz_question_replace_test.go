@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
@@ -32,6 +33,10 @@ func (f *fakeQuizRepo) Update(context.Context, *entities.Quiz) error { return ni
 func (f *fakeQuizRepo) Delete(context.Context, uuid.UUID) error      { return nil }
 func (f *fakeQuizRepo) List(context.Context, repo.QuizFilter) ([]*entities.Quiz, error) {
 	return nil, nil
+}
+func (f *fakeQuizRepo) CountByOwner(context.Context, string) (int, error) { return 0, nil }
+func (f *fakeQuizRepo) DeleteStaleVisitorQuizzes(context.Context, time.Time) (int64, error) {
+	return 0, nil
 }
 
 type fakeQuestionRepo struct {

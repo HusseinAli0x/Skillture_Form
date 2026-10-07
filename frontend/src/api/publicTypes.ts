@@ -6,6 +6,12 @@ export type WorkshopTrack = (typeof WORKSHOP_TRACKS)[number];
 export const TEAM_GROUPS = ['leadership', 'core', 'volunteer', 'alumni'] as const;
 export type TeamGroup = (typeof TEAM_GROUPS)[number];
 
+/**
+ * Where a workshop stands for sign-ups: `ended` once the date has passed,
+ * `closed` when the organiser switched registration off, `full` at capacity.
+ */
+export type RegistrationStatus = 'open' | 'full' | 'closed' | 'ended';
+
 /** A workshop as served by the public API, upcoming or past. */
 export interface PublicWorkshop {
   id: string;
@@ -22,7 +28,15 @@ export interface PublicWorkshop {
   outcome?: Localized;
   recap?: Localized;
   gallery: string[];
+  /** External sign-up link, if the organiser uses another site. */
   registration_url: string | null;
+  registration_open: boolean;
+  /** Seat limit; null means no limit. */
+  capacity: number | null;
+  registered: number;
+  /** Seats remaining; null means no limit. */
+  spots_left: number | null;
+  registration_status: RegistrationStatus;
 }
 
 export interface TeamMember {

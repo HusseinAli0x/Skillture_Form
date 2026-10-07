@@ -4,6 +4,7 @@ import {
   Calendar,
   FileText,
   GamepadIcon,
+  Globe,
   Home,
   LayoutDashboard,
   Mail,
@@ -19,6 +20,7 @@ import { NAV_GROUPS, isActivePath, type NavIconName } from '../../lib/adminNav';
 const ICONS: Record<NavIconName, React.ReactNode> = {
   dashboard: <LayoutDashboard className="w-5 h-5" />,
   home: <Home className="w-5 h-5" />,
+  site: <Globe className="w-5 h-5" />,
   workshops: <Calendar className="w-5 h-5" />,
   team: <Users className="w-5 h-5" />,
   messages: <Mail className="w-5 h-5" />,

@@ -2,8 +2,8 @@ import React, { useRef, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import client from '../../api/client';
 import { useLanguageStore } from '../../context/LanguageStore';
-import { siteStrings } from '../../lib/siteStrings';
 import { BTN_INK, BTN_GHOST } from './layout';
+import { useSiteStrings } from '../../lib/useSiteContent';
 
 type Field = 'name' | 'email' | 'message';
 type Values = Record<Field, string>;
@@ -25,7 +25,7 @@ const INPUT =
  */
 const ContactForm: React.FC<{ className?: string }> = ({ className = '' }) => {
   const locale = useLanguageStore(s => s.locale);
-  const C = siteStrings[locale].home.contact;
+  const C = useSiteStrings().home.contact;
 
   const [values, setValues] = useState<Values>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});

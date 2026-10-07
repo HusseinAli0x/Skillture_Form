@@ -3,15 +3,14 @@ import { Link, useSearchParams } from 'react-router';
 import { ArrowRight } from 'lucide-react';
 import client from '../api/client';
 import { WORKSHOP_TRACKS, type Impact, type PublicWorkshop, type WorkshopTrack } from '../api/publicTypes';
-import { Pattern, brandAssets } from '../components/brand';
+import { Pattern } from '../components/brand';
 import ImpactNumbers from '../components/public/ImpactNumbers';
 import { BTN_INK, FOCUS_RING, H1, H2, WRAP } from '../components/public/layout';
 import { EmptyBlock, LoadError, RowsSkeleton } from '../components/public/PageState';
 import PublicShell from '../components/public/PublicShell';
 import { WorkshopRows } from '../components/public/WorkshopRow';
-import { useLanguageStore } from '../context/LanguageStore';
-import { siteStrings } from '../lib/siteStrings';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { useSiteStrings, useBrandAsset } from '../lib/useSiteContent';
 
 type Filter = 'all' | WorkshopTrack;
 
@@ -24,8 +23,8 @@ const EMPTY_IMPACT: Impact = {
 };
 
 const OurWorkPage: React.FC = () => {
-  const locale = useLanguageStore(s => s.locale);
-  const S = siteStrings[locale];
+  const S = useSiteStrings();
+  const cardsImg = useBrandAsset('cards');
   const W = S.ourWork;
   const [params, setParams] = useSearchParams();
 
@@ -77,7 +76,7 @@ const OurWorkPage: React.FC = () => {
           <p className="mt-6 text-lg text-muted max-w-xl leading-relaxed text-pretty">{W.subtitle}</p>
         </div>
         <img
-          src={brandAssets.cards}
+          src={cardsImg}
           alt={W.cardsAlt}
           width={1664}
           height={937}

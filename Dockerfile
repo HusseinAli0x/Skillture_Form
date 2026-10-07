@@ -103,6 +103,10 @@ COPY <<"EOF" /etc/caddy/Caddyfile
 		# are hard to undo.
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff
+		# The site is never meant to be framed, and a game link must not leak
+		# its path to other sites.
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
 	}
 
 	@backend path /health /api/* /uploads/* /ws /ws/* /admin/login /admin/me /admin/create /admin/list /admin/delete/*

@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"skillture/backend/internal/auth"
 	"skillture/backend/internal/config"
 	domainErrors "skillture/backend/internal/domain/errors"
 	"skillture/backend/internal/server/ws"
@@ -24,7 +23,7 @@ type QuizWSHandler struct {
 	playerUC  uc.QuizPlayerUseCase
 	answerUC  uc.QuizAnswerUseCase
 	sessionUC uc.QuizSessionUseCase
-	tokens    *auth.TokenIssuer
+	tickets   *WSTickets
 	upgrader  websocket.Upgrader
 }
 
@@ -34,7 +33,7 @@ func NewQuizWSHandler(
 	playerUC uc.QuizPlayerUseCase,
 	answerUC uc.QuizAnswerUseCase,
 	sessionUC uc.QuizSessionUseCase,
-	tokens *auth.TokenIssuer,
+	tickets *WSTickets,
 	corsCfg config.CORSConfig,
 ) *QuizWSHandler {
 	return &QuizWSHandler{
@@ -42,7 +41,7 @@ func NewQuizWSHandler(
 		playerUC:  playerUC,
 		answerUC:  answerUC,
 		sessionUC: sessionUC,
-		tokens:    tokens,
+		tickets:   tickets,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -88,9 +87,12 @@ func (h *QuizWSHandler) ConnectHost(c *gin.Context) {
 
 	// The host socket carries every game event, including the host's view of
 	// the session, so it must be authenticated. Browsers cannot set headers on
-	// a WebSocket handshake, so the access token comes in as a query parameter.
-	if _, err := h.tokens.Verify(c.Query("token")); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or missing token"})
+	// a WebSocket handshake, so the caller first asks for a one-minute,
+	// single-use ticket over the authenticated REST API (QuizSessionHandler.
+	// WSTicket) and presents it here. A ticket is worthless once used, so it is
+	// safe for it to appear in access logs, unlike an access token or host key.
+	if !h.tickets.Redeem(c.Query("ticket"), sessionID) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired ticket"})
 		return
 	}
 
@@ -120,9 +122,9 @@ func (h *QuizWSHandler) ConnectPlayer(c *gin.Context) {
 		return
 	}
 
-	// The player ID is client-supplied. Without this check any UUID could be
-	// presented, letting a caller attach to a session they never joined or
-	// impersonate another player.
+	// The player ID is client-supplied (and visible to everyone in the room).
+	// Without these checks any UUID could be presented, letting a caller attach
+	// to a session they never joined or impersonate another player.
 	player, err := h.playerUC.GetPlayer(c.Request.Context(), playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not verify player"})
@@ -130,6 +132,10 @@ func (h *QuizWSHandler) ConnectPlayer(c *gin.Context) {
 	}
 	if player == nil || player.SessionID != sessionID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "player does not belong to this session"})
+		return
+	}
+	if !player.VerifySecret(c.Query("secret")) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "player credentials are invalid"})
 		return
 	}
 
@@ -194,6 +200,9 @@ func (h *QuizWSHandler) SubmitAnswer(c *gin.Context) {
 		QuestionID  string         `json:"question_id"  binding:"required"`
 		Answer      map[string]any `json:"answer"       binding:"required"`
 		TimeTakenMs int            `json:"time_taken_ms"`
+		// Secret proves the caller is that player: the player id is visible to
+		// everyone in the room, the secret only to the player it was given to.
+		Secret string `json:"secret"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -208,6 +217,11 @@ func (h *QuizWSHandler) SubmitAnswer(c *gin.Context) {
 	questionID, err := uuid.Parse(req.QuestionID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid question_id"})
+		return
+	}
+
+	if !h.playerIsCaller(c, playerID, req.Secret) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "player credentials are invalid"})
 		return
 	}
 
@@ -287,12 +301,7 @@ func (h *QuizWSHandler) JoinSession(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// Matches chk_quiz_players_avatar_url_size — reject oversized payloads here
-	// rather than letting the insert fail with an opaque constraint error.
-	if req.AvatarURL != nil && len(*req.AvatarURL) > 7_000_000 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "avatar_url is too large"})
-		return
-	}
+	// Name and avatar are validated and bounded by the use case.
 
 	player, err := h.playerUC.JoinSession(c.Request.Context(), sessionID, req.Name, req.AvatarID, req.AvatarURL)
 	if err != nil {
@@ -305,4 +314,15 @@ func (h *QuizWSHandler) JoinSession(c *gin.Context) {
 
 	// Return the player record — the client uses player.ID to open the WS connection
 	c.JSON(http.StatusCreated, player)
+}
+
+// playerIsCaller reports whether the presented secret belongs to the player.
+// An unknown player passes through (false is only for a wrong secret), so the
+// use case keeps reporting "player not in session" for that case as before.
+func (h *QuizWSHandler) playerIsCaller(c *gin.Context, playerID uuid.UUID, secret string) bool {
+	player, err := h.playerUC.GetPlayer(c.Request.Context(), playerID)
+	if err != nil || player == nil {
+		return true
+	}
+	return player.VerifySecret(secret)
 }

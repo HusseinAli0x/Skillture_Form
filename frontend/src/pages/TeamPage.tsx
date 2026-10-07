@@ -3,18 +3,17 @@ import { Link } from 'react-router';
 import { ArrowRight } from 'lucide-react';
 import client from '../api/client';
 import { TEAM_GROUPS, type TeamMember } from '../api/publicTypes';
-import { Pattern, brandAssets } from '../components/brand';
+import { Pattern } from '../components/brand';
 import { BTN_INK, H1, H2, WRAP } from '../components/public/layout';
 import { EmptyBlock, LoadError, PeopleSkeleton } from '../components/public/PageState';
 import PublicShell from '../components/public/PublicShell';
 import TeamCard from '../components/public/TeamCard';
-import { useLanguageStore } from '../context/LanguageStore';
-import { siteStrings } from '../lib/siteStrings';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
+import { useSiteStrings, useBrandAsset } from '../lib/useSiteContent';
 
 const TeamPage: React.FC = () => {
-  const locale = useLanguageStore(s => s.locale);
-  const S = siteStrings[locale].team;
+  const S = useSiteStrings().team;
+  const stationeryImg = useBrandAsset('stationery');
   const [members, setMembers] = useState<TeamMember[] | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -97,7 +96,7 @@ const TeamPage: React.FC = () => {
             </Link>
           </div>
           <img
-            src={brandAssets.stationery}
+            src={stationeryImg}
             alt={S.stationeryAlt}
             width={1665}
             height={937}

@@ -10,6 +10,7 @@ import { EmptyPanel, FormBanner, ListSkeleton, LoadFailed } from '../components/
 import { fieldForServerMessage, sentence } from '../components/admin/serverErrors';
 import { useRecordEditor } from '../components/admin/useRecordEditor';
 import { useUnsavedGuard } from '../components/admin/useUnsavedGuard';
+import RegistrantsPanel from '../components/admin/workshops/RegistrantsPanel';
 import WorkshopFormFields from '../components/admin/workshops/WorkshopFormFields';
 import { WorkshopGroup, WorkshopToolbar } from '../components/admin/workshops/WorkshopList';
 import {
@@ -46,6 +47,7 @@ const WorkshopsAdmin: React.FC = () => {
   const [filter, setFilter] = useState<WorkshopFilter>(DEFAULT_FILTER);
   const [toDelete, setToDelete] = useState<Workshop | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [registrantsFor, setRegistrantsFor] = useState<Workshop | null>(null);
   const { addToast } = useToastStore();
   const editor = useRecordEditor<WorkshopForm>();
   const { guard } = useUnsavedGuard(editor.isOpen && editor.dirty);
@@ -147,7 +149,19 @@ const WorkshopsAdmin: React.FC = () => {
     addToast('info', 'Copied into a new workshop. Set its date, then save.');
   };
 
-  const handlers = { onEdit: openEdit, onDuplicate: openDuplicate, onDelete: setToDelete };
+  // The registrants panel reports the live count, so the list's "N registered"
+  // stays right after a removal without refetching every workshop.
+  const syncRegistered = useCallback((workshopId: string, count: number) => {
+    setWorkshops(list =>
+      list.map(w => {
+        if (w.id !== workshopId || w.registered === count) return w;
+        const spots = w.capacity ? Math.max(0, w.capacity - count) : null;
+        return { ...w, registered: count, spots_left: spots };
+      })
+    );
+  }, []);
+
+  const handlers = { onEdit: openEdit, onDuplicate: openDuplicate, onDelete: setToDelete, onRegistrants: setRegistrantsFor };
   const errorCount = Object.keys(editor.errors).length;
 
   return (
@@ -255,6 +269,15 @@ const WorkshopsAdmin: React.FC = () => {
         </Drawer>
       )}
       {editor.discardDialog}
+
+      {registrantsFor && (
+        <RegistrantsPanel
+          // Live capacity comes from the list, which refreshes after an edit.
+          workshop={workshops.find(w => w.id === registrantsFor.id) ?? registrantsFor}
+          onClose={() => setRegistrantsFor(null)}
+          onCountChange={syncRegistered}
+        />
+      )}
 
       {toDelete && (
         <ConfirmDialog

@@ -4,9 +4,10 @@ import { Menu, X } from 'lucide-react';
 import LanguageSwitcher from '../LanguageSwitcher';
 import { Frieze, Logo, Pattern } from '../brand';
 import { useLanguageStore } from '../../context/LanguageStore';
-import { translations } from '../../lib/translations';
-import { siteStrings } from '../../lib/siteStrings';
+import { useSiteStore } from '../../context/SiteStore';
+import { SOCIAL_LINKS } from '../../lib/siteContent';
 import { BTN_CORAL, FOCUS_RING, WRAP } from './layout';
+import { useSiteSettings, useSiteStrings, useTranslations } from '../../lib/useSiteContent';
 
 /**
  * Frame for every public page: black header with the full wordmark, a phone
@@ -17,8 +18,10 @@ import { BTN_CORAL, FOCUS_RING, WRAP } from './layout';
  */
 const PublicShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const locale = useLanguageStore(s => s.locale);
-  const T = translations[locale];
-  const S = siteStrings[locale];
+  const T = useTranslations();
+  const S = useSiteStrings();
+  const settings = useSiteSettings();
+  const siteStatus = useSiteStore(s => s.status);
   const isRTL = locale === 'ar';
   const { pathname, hash } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -45,13 +48,21 @@ const PublicShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => window.removeEventListener('keydown', onKey);
   }, [menuOpen]);
 
+  // Hold the first paint briefly for the admin-edited wording and images, so a
+  // visitor never sees the built-in text flash into the edited text. The store
+  // gives up after a couple of seconds and the page renders the defaults.
+  if (siteStatus === 'loading') {
+    return <div className="site min-h-dvh" aria-busy="true" />;
+  }
+
   const links = [
     { to: '/', label: T.nav.home },
     { to: '/our-work', label: S.nav.ourWork },
     { to: '/team', label: S.nav.team },
+    { to: '/create', label: S.host.nav },
     { to: '/#contact', label: T.nav.contact },
   ];
-  const isActive = (to: string) => (to === '/' ? pathname === '/' && !hash : to === '/#contact' ? pathname === '/' && hash === '#contact' : pathname === to);
+  const isActive = (to: string) => (to === '/' ? pathname === '/' && !hash : to === '/#contact' ? pathname === '/' && hash === '#contact' : to === '/create' ? pathname === to || pathname.startsWith('/create/') : pathname === to);
 
   return (
     <div dir={isRTL ? 'rtl' : 'ltr'} className="site min-h-dvh flex flex-col">
@@ -68,13 +79,13 @@ const PublicShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Logo variant="full" className="h-5 sm:h-7" />
           </Link>
 
-          <nav className="flex items-center gap-2 sm:gap-3 md:gap-6" aria-label="Main">
+          <nav className="flex items-center gap-2 sm:gap-3 md:gap-4 lg:gap-6" aria-label="Main">
             {links.map(l => (
               <Link
                 key={l.to}
                 to={l.to}
                 aria-current={isActive(l.to) ? 'page' : undefined}
-                className={`hidden md:inline-flex items-center min-h-11 text-sm font-medium border-b-2 transition-colors hover:text-primary ${FOCUS_RING} ${
+                className={`hidden md:inline-flex items-center min-h-11 text-sm font-medium whitespace-nowrap border-b-2 transition-colors hover:text-primary ${FOCUS_RING} ${
                   isActive(l.to) ? 'border-brand' : 'border-transparent'
                 }`}
               >
@@ -139,6 +150,29 @@ const PublicShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 {S.nav.joinGame}
               </Link>
             </nav>
+            {(settings.contact_email || SOCIAL_LINKS.some(l => settings[l.key])) && (
+              <ul aria-label="Contact" className="flex flex-wrap gap-x-6 text-sm md:col-span-2">
+                {settings.contact_email && (
+                  <li>
+                    <a href={`mailto:${settings.contact_email}`} className="inline-flex items-center min-h-11 text-muted hover:text-text transition-colors">
+                      <span dir="ltr">{settings.contact_email}</span>
+                    </a>
+                  </li>
+                )}
+                {SOCIAL_LINKS.filter(l => settings[l.key]).map(l => (
+                  <li key={l.key}>
+                    <a
+                      href={settings[l.key]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center min-h-11 text-muted hover:text-text transition-colors"
+                    >
+                      {l.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="text-sm text-muted md:col-span-2">
               © {new Date().getFullYear()} Skillture. {T.footer.rights}
             </p>

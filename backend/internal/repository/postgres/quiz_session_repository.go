@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/repository/interfaces"
@@ -103,7 +104,9 @@ func (r *quizSessionRepository) GetByID(ctx context.Context, id uuid.UUID) (*ent
 // GetByPIN retrieves a session by its join PIN.
 // Returns nil, nil when no row is found.
 func (r *quizSessionRepository) GetByPIN(ctx context.Context, pin string) (*entities.QuizSession, error) {
-	query := `SELECT ` + quizSessionColumns + ` FROM quiz_sessions WHERE pin = $1`
+	// PINs are only unique among unfinished games (migration 0008), so a PIN
+	// that belonged to a finished game must not resolve to it.
+	query := `SELECT ` + quizSessionColumns + ` FROM quiz_sessions WHERE pin = $1 AND status <> 'finished'`
 
 	s, err := scanQuizSession(r.QueryRow(ctx, query, pin))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -202,4 +205,20 @@ func (r *quizSessionRepository) List(ctx context.Context, filter interfaces.Quiz
 	}
 
 	return sessions, nil
+}
+
+// FinishStale closes sessions that were created before cutoff and never
+// finished. A PIN is only unique among unfinished games, so an abandoned lobby
+// would otherwise hold its PIN forever.
+func (r *quizSessionRepository) FinishStale(ctx context.Context, cutoff time.Time) (int64, error) {
+	const query = `
+		UPDATE quiz_sessions
+		SET status = 'finished', finished_at = COALESCE(finished_at, NOW())
+		WHERE status <> 'finished' AND created_at < $1
+	`
+	tag, err := r.exec.Exec(ctx, query, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("quizSessionRepository.FinishStale: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }

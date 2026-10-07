@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
+import { useSiteStore } from './context/SiteStore';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import FormQuizBuilder from './pages/FormQuizBuilder';
@@ -11,6 +13,7 @@ import PlayerJoin from './pages/PlayerJoin';
 import MainLayout from './components/layout/MainLayout';
 import HomePage from './pages/HomePage';
 import HomepageEditor from './pages/HomepageEditor';
+import SiteContentAdmin from './pages/SiteContentAdmin';
 import WorkshopsAdmin from './pages/WorkshopsAdmin';
 import TeamAdmin from './pages/TeamAdmin';
 import TeamPage from './pages/TeamPage';
@@ -22,8 +25,14 @@ import QuizJoinHandler from './pages/QuizJoinHandler';
 import ToastContainer from './components/Toast';
 import HostLiveBoard from './pages/HostLiveBoard';
 import PlayerLiveBoard from './pages/PlayerLiveBoard';
+import { GameBuilderPage, MyGamesPage } from './pages/HostPages';
 
 function App() {
+  // Admin-edited wording, images and contact links. Every page reads them.
+  useEffect(() => {
+    void useSiteStore.getState().load();
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
@@ -36,6 +45,10 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/preview/form/:id" element={<FormPreview />} />
         <Route path="/quiz/:id" element={<QuizJoinHandler />} />
+        {/* Anyone can create and host a game; the browser's host key is the identity. */}
+        <Route path="/create" element={<MyGamesPage />} />
+        <Route path="/create/new" element={<GameBuilderPage />} />
+        <Route path="/create/:id" element={<GameBuilderPage />} />
         <Route path="/play" element={<PlayerJoin />} />
         <Route path="/play/:sessionId" element={<PlayerLiveBoard />} />
         <Route path="/host/lobby/:sessionId" element={<GameLobby />} />
@@ -46,6 +59,7 @@ function App() {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="homepage" element={<HomepageEditor />} />
+          <Route path="site" element={<SiteContentAdmin />} />
           <Route path="workshops" element={<WorkshopsAdmin />} />
           <Route path="team" element={<TeamAdmin />} />
           <Route path="messages" element={<ContactMessagesAdmin />} />

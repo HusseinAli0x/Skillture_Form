@@ -87,7 +87,7 @@ status_post() { # status_post <path> <token> <json>
 
 # --- 1. the SPA is served, including client-side routes ---------------------
 echo "== SPA and routing (Caddy)"
-for path in / /our-work /team /play /login /admin/dashboard /workshops/00000000-0000-0000-0000-000000000000; do
+for path in / /our-work /team /create /create/new /play /login /admin/dashboard /workshops/00000000-0000-0000-0000-000000000000; do
   check "GET $path serves the SPA shell" bash -c "[ \"\$(curl -s -o /tmp/smoke.html -w '%{http_code}' '$BASE$path')\" = 200 ] && grep -q 'id=\"root\"' /tmp/smoke.html"
 done
 
@@ -167,7 +167,47 @@ check "delete the workshop" test "$(curl -s -o /dev/null -w '%{http_code}' -X DE
 check "deleted workshop is gone" test "$(code "$BASE/api/v1/workshops/$WS")" = 404
 check "delete the team member" test "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$BASE/api/v1/admin/team/$MEMBER" -H "Authorization: Bearer $TOKEN")" = 200
 
-# --- 8. production edge behaviour -------------------------------------------
+# --- 8. visitor features: workshop registration and editable site content ---
+echo "== workshop registration"
+UPCOMING="$(json_post /api/v1/admin/workshops "$TOKEN" '{"title":{"en":"Registration smoke","ar":"اختبار التسجيل"},"description":{"en":"d","ar":"و"},"event_date":"2099-01-15","capacity":2}' | jget 'd["id"]' 2>/dev/null || true)"
+check "create an upcoming workshop with two seats" test -n "$UPCOMING"
+reg() { curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/workshops/$UPCOMING/register" -H 'Content-Type: application/json' -d "$1"; }
+check "a visitor registers without an account" test "$(reg '{"name":"Sara Ali","email":"Sara@Example.com"}')" = 201
+check "the same email again (any case) -> 409" test "$(reg '{"name":"Again","email":"sara@example.com"}')" = 409
+check "an invalid email -> 400" test "$(reg '{"name":"X","email":"nope"}')" = 400
+check "a missing name -> 400" test "$(reg '{"name":"  ","email":"a@b.co"}')" = 400
+check "the second seat is taken" test "$(reg '{"name":"Omar","email":"omar@example.com"}')" = 201
+check "the third person is turned away (full) -> 409" test "$(reg '{"name":"Late","email":"late@example.com"}')" = 409
+check "a bot filling the honeypot is acknowledged but not stored" test "$(reg '{"name":"Bot","email":"bot@example.com","website":"http://spam.example"}')" = 201
+check "the public workshop shows status and seats, never emails" bash -c "curl -s '$BASE/api/v1/workshops/$UPCOMING' | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d[\"registration_status\"]==\"full\" and d[\"registered\"]==2 and d[\"spots_left\"]==0 and \"@\" not in json.dumps(d)'"
+check "registrants are not public" test "$(code "$BASE/api/v1/admin/workshops/$UPCOMING/registrations")" = 401
+check "admin sees exactly the two registrants" bash -c "curl -s '$BASE/api/v1/admin/workshops/$UPCOMING/registrations' -H 'Authorization: Bearer $TOKEN' | python3 -c 'import json,sys; d=json.load(sys.stdin); assert [r[\"email\"] for r in d]==[\"sara@example.com\",\"omar@example.com\"]'"
+check "the CSV export carries a BOM, the header and the names" bash -c "curl -s '$BASE/api/v1/admin/workshops/$UPCOMING/registrations.csv' -H 'Authorization: Bearer $TOKEN' | python3 -c 'import sys; b=sys.stdin.buffer.read(); assert b.startswith(b\"\\xef\\xbb\\xbf\") and b\"Name,Email\" in b and b\"Sara Ali\" in b'"
+check "deleting a workshop removes its registrations" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X DELETE '$BASE/api/v1/admin/workshops/$UPCOMING' -H 'Authorization: Bearer $TOKEN')\" = 200 ] && [ \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST '$BASE/api/v1/workshops/$UPCOMING/register' -H 'Content-Type: application/json' -d '{\"name\":\"A\",\"email\":\"a@b.co\"}')\" = 404 ]"
+
+echo "== editable site content"
+put_json() { curl -s -o /dev/null -w '%{http_code}' -X PUT "$BASE$1" -H "Authorization: Bearer ${3-$TOKEN}" -H 'Content-Type: application/json' -d "$2"; }
+check "site content is public and has the default contact email" bash -c "curl -s '$BASE/api/v1/site' | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d[\"settings\"][\"contact_email\"]==\"skillture.course@gmail.com\" and set(d)=={\"text\",\"images\",\"settings\"}'"
+check "editing the wording needs an admin" test "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$BASE/api/v1/admin/site/text" -H 'Content-Type: application/json' -d '{"changes":[]}')" = 401
+check "an admin changes a line of wording" test "$(put_json /api/v1/admin/site/text '{"changes":[{"key":"site.home.ctaPrimary","locale":"en","value":"Smoke edit"}]}')" = 200
+check "the change is live for visitors" bash -c "curl -s '$BASE/api/v1/site' | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"text\"][\"en\"][\"site.home.ctaPrimary\"]==\"Smoke edit\"'"
+check "a malformed key is rejected" test "$(put_json /api/v1/admin/site/text '{"changes":[{"key":"a b;drop","locale":"en","value":"x"}]}')" = 400
+check "an empty value resets the line to its default" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X PUT '$BASE/api/v1/admin/site/text' -H 'Authorization: Bearer $TOKEN' -H 'Content-Type: application/json' -d '{\"changes\":[{\"key\":\"site.home.ctaPrimary\",\"locale\":\"en\",\"value\":\"\"}]}')\" = 200 ] && curl -s '$BASE/api/v1/site' | python3 -c 'import json,sys; assert \"site.home.ctaPrimary\" not in json.load(sys.stdin)[\"text\"][\"en\"]'"
+check "a javascript: link is refused" test "$(put_json /api/v1/admin/site/settings '{"settings":{"linkedin_url":"javascript:alert(1)"}}')" = 400
+check "an invalid contact email is refused" test "$(put_json /api/v1/admin/site/settings '{"settings":{"contact_email":"nope"}}')" = 400
+check "an admin can hide a link that has a built-in default" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X PUT '$BASE/api/v1/admin/site/settings' -H 'Authorization: Bearer $TOKEN' -H 'Content-Type: application/json' -d '{\"settings\":{\"linkedin_url\":\"\"}}')\" = 200 ] && curl -s '$BASE/api/v1/site' | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"settings\"][\"linkedin_url\"]==\"\"'"
+check "...and put it back" test "$(put_json /api/v1/admin/site/settings '{"settings":{"linkedin_url":"https://www.linkedin.com/company/skillture"}}')" = 200
+check "an admin sets the contact email" test "$(put_json /api/v1/admin/site/settings '{"settings":{"contact_email":"hello@example.org"}}')" = 200
+check "…and it is live" bash -c "curl -s '$BASE/api/v1/site' | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"settings\"][\"contact_email\"]==\"hello@example.org\"'"
+check "an empty email returns to the default" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X PUT '$BASE/api/v1/admin/site/settings' -H 'Authorization: Bearer $TOKEN' -H 'Content-Type: application/json' -d '{\"settings\":{\"contact_email\":\"\"}}')\" = 200 ] && curl -s '$BASE/api/v1/site' | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"settings\"][\"contact_email\"]==\"skillture.course@gmail.com\"'"
+check "an unknown image slot is rejected" test "$(put_json /api/v1/admin/site/images/nonsense '{"path":"/uploads/x.png"}')" = 404
+check "an image outside /uploads is rejected" test "$(put_json /api/v1/admin/site/images/hand '{"path":"https://evil.example/x.png"}')" = 400
+SITE_IMG="$(curl -s -X POST "$BASE/api/v1/admin/site/image" -H "Authorization: Bearer $TOKEN" -F 'image=@/tmp/smoke.png;type=image/png' | jget 'd["file_path"]' 2>/dev/null || true)"
+check "an admin uploads a site image" test -n "$SITE_IMG"
+check "…assigns it to a slot and visitors get it" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X PUT '$BASE/api/v1/admin/site/images/hand' -H 'Authorization: Bearer $TOKEN' -H 'Content-Type: application/json' -d '{\"path\":\"$SITE_IMG\"}')\" = 200 ] && curl -s '$BASE/api/v1/site' | python3 -c 'import json,sys; assert json.load(sys.stdin)[\"images\"][\"hand\"]==\"$SITE_IMG\"' && [ \"\$(curl -s -o /dev/null -w '%{http_code}' '$BASE$SITE_IMG')\" = 200 ]"
+check "…and can restore the original" bash -c "[ \"\$(curl -s -o /dev/null -w '%{http_code}' -X PUT '$BASE/api/v1/admin/site/images/hand' -H 'Authorization: Bearer $TOKEN' -H 'Content-Type: application/json' -d '{\"path\":null}')\" = 200 ] && curl -s '$BASE/api/v1/site' | python3 -c 'import json,sys; assert \"hand\" not in json.load(sys.stdin)[\"images\"]'"
+
+# --- 9. production edge behaviour -------------------------------------------
 # The smoke container runs with the default SITE_ADDRESS (plain :8080), so the
 # domain/HTTPS path is never exercised live. These checks cover what can be
 # checked without a public hostname.
@@ -176,12 +216,13 @@ check "Caddyfile is valid with a public SITE_ADDRESS" \
   docker run --rm -e SITE_ADDRESS="example.com, www.example.com" --entrypoint caddy "$IMAGE" \
     validate --config /etc/caddy/Caddyfile --adapter caddyfile
 check "responses carry HSTS" bash -c "curl -sI '$BASE/' | tr -d '\r' | grep -iq '^strict-transport-security:'"
+check "responses forbid framing and limit the referrer" bash -c "curl -sI '$BASE/' | tr -d '\r' | grep -iq '^x-frame-options: deny' && curl -sI '$BASE/' | tr -d '\r' | grep -iq '^referrer-policy:'"
 check "responses carry X-Content-Type-Options" bash -c "curl -sI '$BASE/' | tr -d '\r' | grep -iq '^x-content-type-options: nosniff'"
 check "www.* redirects permanently to the bare domain, keeping path and query" \
   bash -c "curl -s -o /dev/null -D - -H 'Host: www.example.com' '$BASE/team?x=1' | tr -d '\r' | grep -iq '^location: http://example.com/team?x=1'"
 check "bare domain is not redirected" test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: example.com' "$BASE/")" = 200
 
-# --- 9. container hygiene ---------------------------------------------------
+# --- 10. container hygiene ---------------------------------------------------
 echo "== container"
 check "runs as an unprivileged user" test "$(docker exec "$APP" id -u)" != 0
 check "container is healthy per its own HEALTHCHECK" bash -c "for _ in \$(seq 1 30); do [ \"\$(docker inspect -f '{{.State.Health.Status}}' '$APP')\" = healthy ] && exit 0; sleep 2; done; exit 1"

@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 import client from '../api/client';
 import type { QuizPlayer, QuizQuestion, QuizSession } from '../api/types';
 import { hostSocketUrl } from '../api/ws';
+import { hostHomePath } from '../lib/links';
 import AnswerBars, { type BarOption } from '../components/game/AnswerBars';
 import AnswerShape from '../components/game/AnswerShape';
 import HostTopBar from '../components/game/HostTopBar';
@@ -432,7 +433,7 @@ const HostLiveBoard: React.FC = () => {
           <button type="button" onClick={() => void load()} className="min-h-12 px-6 rounded-xl bg-primary text-ink font-semibold cursor-pointer">
             {H.retry}
           </button>
-          <button type="button" onClick={() => navigate('/admin/quizzes')} className="min-h-12 px-6 rounded-xl bg-white/10 font-semibold cursor-pointer">
+          <button type="button" onClick={() => navigate(hostHomePath())} className="min-h-12 px-6 rounded-xl bg-white/10 font-semibold cursor-pointer">
             {H.back}
           </button>
         </div>
@@ -632,7 +633,7 @@ const HostLiveBoard: React.FC = () => {
               </section>
             )}
             <div className="flex gap-3 flex-wrap justify-center">
-              <button type="button" onClick={() => navigate('/admin/quizzes')} className="min-h-14 px-8 rounded-2xl bg-white/10 hover:bg-white/20 text-lg font-semibold cursor-pointer transition-colors">
+              <button type="button" onClick={() => navigate(hostHomePath())} className="min-h-14 px-8 rounded-2xl bg-white/10 hover:bg-white/20 text-lg font-semibold cursor-pointer transition-colors">
                 {G.host.backToQuizzes}
               </button>
               <button type="button" onClick={() => void hostAgain()} disabled={busy} className={bigButton}>

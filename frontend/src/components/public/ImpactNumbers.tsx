@@ -1,7 +1,6 @@
 import React from 'react';
 import type { Impact } from '../../api/publicTypes';
-import { useLanguageStore } from '../../context/LanguageStore';
-import { siteStrings } from '../../lib/siteStrings';
+import { useSiteStrings } from '../../lib/useSiteContent';
 
 /**
  * The headline figures as large plain numerals in brand turquoise, meant for a
@@ -9,8 +8,7 @@ import { siteStrings } from '../../lib/siteStrings';
  * listed — nothing here is typed in by hand.
  */
 const ImpactNumbers: React.FC<{ impact: Impact }> = ({ impact }) => {
-  const locale = useLanguageStore(s => s.locale);
-  const L = siteStrings[locale].ourWork.impact;
+  const L = useSiteStrings().ourWork.impact;
   const tracksCovered = Object.values(impact.tracks).filter(n => n > 0).length;
   const fmt = (n: number) => n.toLocaleString('en-US');
 

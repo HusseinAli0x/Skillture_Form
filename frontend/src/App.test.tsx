@@ -32,6 +32,16 @@ describe('App routing', () => {
     ).toBeVisible();
   });
 
+  it('lets anyone open My games at /create without signing in', async () => {
+    window.history.pushState({}, '', '/create');
+    get.mockResolvedValue({ data: [] });
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: /my games/i })).toBeVisible();
+    expect(window.location.pathname).toBe('/create');
+  });
+
   it('renders the login page at /login', async () => {
     window.history.pushState({}, '', '/login');
 

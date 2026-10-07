@@ -238,9 +238,11 @@ flowchart TD
 | `show_leaderboard` | Host publishes results | `[]QuizPlayer` |
 | `game_finished` | Host finishes the session | `[]QuizPlayer` |
 
-The host socket authenticates with `?token=<jwt>`; a browser cannot set an `Authorization`
-header on a WebSocket handshake. Player sockets are unauthenticated but the handler checks
-that `player_id` actually belongs to the session in the URL.
+The host socket authenticates with `?ticket=<one-time ticket>` obtained from
+`POST /api/v1/sessions/:id/ws-ticket`; a browser cannot set an `Authorization` header on a
+WebSocket handshake, and a URL is logged, so the ticket (single use, 60 s, bound to the
+session) is the only thing that ever travels there. Player sockets are unauthenticated but
+the handler checks that `player_id` actually belongs to the session in the URL.
 
 ---
 
@@ -272,6 +274,16 @@ sequenceDiagram
   again.
 - `RequireAdmin` puts the admin's UUID in the gin context. `CreateSession` reads it from
   there rather than trusting a `host_id` in the body.
+- **Visitors can host games without an account.** `RequireAdminOrHost` accepts either an admin
+  token or an `X-Host-Key` header (a random string the browser generates; only its SHA-256 is
+  stored, on `quizzes.owner_key_hash`). It only establishes *who* is calling; every quiz and
+  session handler then asks `QuizAccess` whether that caller owns the quiz, and a stranger gets
+  a 404. See [GAME.md](GAME.md#who-can-host).
+- **Rate limits.** `server.RateLimiter` (in-memory sliding window, per client IP) guards every
+  public route that writes data: failed logins (`MAX_LOGIN_ATTEMPTS` per
+  `LOCKOUT_DURATION_MIN`), contact, workshop registration, PIN lookup, player join, and
+  visitor-created games, sessions and question saves. Admins are exempt from the game limits.
+  The limiter is per process, which is correct for this single-container deployment.
 
 ### Route protection
 
@@ -282,8 +294,10 @@ sequenceDiagram
 | `GET /api/v1/homepage`, `/homepage/images` | — | Public landing page. |
 | `GET /api/v1/forms/:id`, `/forms/:id/fields`, `POST /responses` | — | Respondents open a form by link; they have no accounts. |
 | `GET /sessions/pin/:pin`, `GET /sessions/:id`, `GET /sessions/:id/leaderboard`, `POST /sessions/:id/players`, `POST /sessions/:id/answer` | — | Quiz players have no accounts. |
-| Everything else under `/api/v1` | Required | Form/quiz CRUD, responses, CMS writes, session state machine, AI report. |
-| `GET /ws/sessions/:id/host` | Token in query | Host event stream. |
+| `GET /api/v1/site`, `POST /api/v1/workshops/:id/register`, `POST /api/v1/contact` | — | Public site content; visitors register for a workshop; contact form. The writes are rate limited. |
+| `/api/v1/quizzes/*`, `/api/v1/sessions/:id/{start,advance,finish,show_results,ws-ticket}` | Admin token **or** host key, plus ownership | Anyone can build and host a game; they only reach their own. |
+| Everything else under `/api/v1` | Admin token | Form CRUD, responses, CMS writes (homepage, workshops, team, site content), registrants, AI report. |
+| `GET /ws/sessions/:id/host` | One-time ticket in query | Host event stream. |
 | `GET /ws/sessions/:id/join` | Player-session ownership check | Player event stream. |
 
 ---

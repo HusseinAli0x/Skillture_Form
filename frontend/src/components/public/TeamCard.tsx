@@ -2,8 +2,8 @@ import React from 'react';
 import type { TeamMember } from '../../api/publicTypes';
 import { useLanguageStore } from '../../context/LanguageStore';
 import { localized } from '../../lib/i18n';
-import { siteStrings } from '../../lib/siteStrings';
 import { Pattern } from '../brand';
+import { useSiteStrings } from '../../lib/useSiteContent';
 
 const initialsOf = (name: string) =>
   name
@@ -27,7 +27,7 @@ const fallbackFor = (id: string) => FALLBACKS[[...id].reduce((a, c) => a + c.cha
 /** Portrait first: the photo is the content, the text sits quietly under it. */
 const TeamCard: React.FC<{ member: TeamMember }> = ({ member }) => {
   const locale = useLanguageStore(s => s.locale);
-  const S = siteStrings[locale];
+  const S = useSiteStrings();
   const name = localized(member.name, '', locale);
   const bio = localized(member.bio, '', locale);
 

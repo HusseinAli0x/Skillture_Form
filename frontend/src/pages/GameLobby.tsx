@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router';
 import client from '../api/client';
 import type { QuizPlayer, QuizQuestion, QuizSession } from '../api/types';
 import { hostSocketUrl } from '../api/ws';
+import { hostHomePath } from '../lib/links';
 import HostTopBar from '../components/game/HostTopBar';
 import PlayerBubble from '../components/game/PlayerBubble';
 import { apiErrorMessage } from '../lib/apiError';
@@ -192,7 +193,7 @@ const GameLobby: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/admin/quizzes')}
+            onClick={() => navigate(hostHomePath())}
             className="min-h-12 px-6 rounded-xl bg-white/10 font-semibold cursor-pointer"
           >
             {H.back}

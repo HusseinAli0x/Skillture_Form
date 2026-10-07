@@ -7,7 +7,8 @@ import { loginErrorMessage, safeReturnPath } from '../lib/loginError';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 import type { AuthResponse } from '../api/types';
 import { Button, Input, Label } from '../components/ui';
-import { Logo, Pattern, brandAssets } from '../components/brand';
+import { Logo, Pattern } from '../components/brand';
+import { useBrandAsset } from '../lib/useSiteContent';
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -22,6 +23,7 @@ const Login: React.FC = () => {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
 
   useDocumentTitle('Sign in · Skillture Admin');
+  const posterImg = useBrandAsset('poster');
 
   // Signed in (here or in another tab): go back to the page that sent us, or
   // the dashboard. Doing this here rather than in the route table is what lets
@@ -59,7 +61,7 @@ const Login: React.FC = () => {
       </div>
       <div className="relative hidden lg:block bg-teal">
         <img
-          src={brandAssets.poster}
+          src={posterImg}
           alt="Skillture: workshops that improve you."
           width={1125}
           height={1500}

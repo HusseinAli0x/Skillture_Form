@@ -14,7 +14,11 @@ import (
 	uc "skillture/backend/internal/usecase/interfaces"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// maxPINAttempts bounds the retry loop when a generated PIN is already in use.
+const maxPINAttempts = 10
 
 // quizSessionUseCase is the concrete implementation of QuizSessionUseCase.
 type quizSessionUseCase struct {
@@ -40,7 +44,8 @@ func NewQuizSessionUseCase(
 }
 
 // generatePIN generates a cryptographically random 6-digit numeric PIN.
-// Retries up to 10 times to avoid collisions (handled by UNIQUE index).
+// Collisions are possible and are resolved by the caller: CreateSession retries
+// with a fresh PIN when the unique index on open sessions rejects one.
 func generatePIN() (string, error) {
 	b := make([]byte, 3) // 3 bytes = max 16 million values, trim to 6 digits
 	if _, err := rand.Read(b); err != nil {
@@ -52,7 +57,7 @@ func generatePIN() (string, error) {
 
 // CreateSession creates a new lobby session for an active quiz.
 // Generates a unique 6-digit PIN that players use to join.
-func (u *quizSessionUseCase) CreateSession(ctx context.Context, quizID, hostID uuid.UUID) (*entities.QuizSession, error) {
+func (u *quizSessionUseCase) CreateSession(ctx context.Context, quizID uuid.UUID, hostID *uuid.UUID) (*entities.QuizSession, error) {
 	// Quiz must be active before hosting
 	quiz, err := u.quizRepo.GetByID(ctx, quizID)
 	if err != nil {
@@ -74,24 +79,33 @@ func (u *quizSessionUseCase) CreateSession(ctx context.Context, quizID, hostID u
 		return nil, errors.New("quiz has no questions")
 	}
 
-	pin, err := generatePIN()
-	if err != nil {
-		return nil, err
-	}
+	// Six digits leave room for collisions once many games are open at the
+	// same time, so a rejected PIN is replaced rather than reported.
+	for attempt := 0; attempt < maxPINAttempts; attempt++ {
+		pin, err := generatePIN()
+		if err != nil {
+			return nil, err
+		}
 
-	session := &entities.QuizSession{
-		ID:     uuid.New(),
-		QuizID: quizID,
-		HostID: &hostID,
-		PIN:    pin,
-		Status: enums.QuizSessionStatusLobby,
-	}
+		session := &entities.QuizSession{
+			ID:     uuid.New(),
+			QuizID: quizID,
+			HostID: hostID,
+			PIN:    pin,
+			Status: enums.QuizSessionStatusLobby,
+		}
 
-	if err := u.sessionRepo.Create(ctx, session); err != nil {
+		err = u.sessionRepo.Create(ctx, session)
+		if err == nil {
+			return session, nil
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
+			continue
+		}
 		return nil, fmt.Errorf("CreateSession: %w", err)
 	}
-
-	return session, nil
+	return nil, errors.New("could not allocate a free game PIN, please try again")
 }
 
 // StartSession transitions a lobby session to active.
@@ -177,7 +191,7 @@ func (u *quizSessionUseCase) GetByID(ctx context.Context, sessionID uuid.UUID) (
 		return nil, err
 	}
 	if session == nil {
-		return nil, errors.New("session not found")
+		return nil, domainErrors.ErrNotFound
 	}
 	return session, nil
 }
@@ -229,4 +243,10 @@ func (u *quizSessionUseCase) CurrentQuestion(ctx context.Context, session *entit
 		return nil, nil
 	}
 	return u.questionRepo.GetByID(ctx, *session.CurrentQuestionID)
+}
+
+// FinishStaleSessions closes games created before cutoff that were never
+// finished, freeing their PINs.
+func (u *quizSessionUseCase) FinishStaleSessions(ctx context.Context, cutoff time.Time) (int64, error) {
+	return u.sessionRepo.FinishStale(ctx, cutoff)
 }

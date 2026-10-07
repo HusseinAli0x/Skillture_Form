@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import client from '../api/client';
 import { apiErrorMessage, apiErrorStatus } from '../lib/apiError';
 import { Button } from '../components/ui';
-import { brandAssets } from '../components/brand';
+import { useBrandAsset } from '../lib/useSiteContent';
 import GameShell from '../components/game/GameShell';
 import { useDocumentTitle } from '../lib/useDocumentTitle';
 
@@ -19,6 +19,7 @@ const QuizJoinHandler: React.FC = () => {
   useDocumentTitle('Waiting for the host');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const handImg = useBrandAsset('hand');
   const [error, setError] = useState<string | null>(null);
   const [attempts, setAttempts] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -62,7 +63,7 @@ const QuizJoinHandler: React.FC = () => {
     <GameShell pattern="soft" title="Skillture Quiz">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-5 pb-12 text-center">
         <img
-          src={brandAssets.hand}
+          src={handImg}
           alt=""
           width={1600}
           height={1066}

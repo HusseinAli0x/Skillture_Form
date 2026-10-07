@@ -121,4 +121,52 @@ describe('useGameSocket', () => {
     act(() => vi.advanceTimersByTime(10_000));
     expect(last().url).toBe('ws://x/?token=new');
   });
+
+  describe('with an async URL (single-use host tickets)', () => {
+    it('waits for the URL, then connects', async () => {
+      let resolve!: (u: string) => void;
+      const url = vi.fn(() => new Promise<string>(r => (resolve = r)));
+      renderHook(() => useGameSocket({ url, onMessage: vi.fn() }));
+      expect(FakeSocket.instances).toHaveLength(0);
+      await act(async () => resolve('ws://x/ticket-1'));
+      expect(last().url).toBe('ws://x/ticket-1');
+    });
+
+    it('asks for a NEW URL on every reconnect', async () => {
+      let n = 0;
+      const url = vi.fn(async () => `ws://x/?ticket=${++n}`);
+      renderHook(() => useGameSocket({ url, onMessage: vi.fn() }));
+      await act(async () => undefined);
+      expect(last().url).toBe('ws://x/?ticket=1');
+      act(() => last().open());
+      act(() => last().drop());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(url).toHaveBeenCalledTimes(2);
+      expect(last().url).toBe('ws://x/?ticket=2');
+    });
+
+    it('counts a failed ticket fetch as a failed attempt and gives up', async () => {
+      const url = vi.fn(async () => {
+        throw new Error('404');
+      });
+      const { result } = renderHook(() => useGameSocket({ url, onMessage: vi.fn(), maxAttempts: 2 }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(url).toHaveBeenCalledTimes(2);
+      expect(result.current).toBe('failed');
+      expect(FakeSocket.instances).toHaveLength(0);
+    });
+
+    it('does not open a socket if unmounted while the URL was loading', async () => {
+      let resolve!: (u: string) => void;
+      const url = vi.fn(() => new Promise<string>(r => (resolve = r)));
+      const { unmount } = renderHook(() => useGameSocket({ url, onMessage: vi.fn() }));
+      unmount();
+      await act(async () => resolve('ws://x/late'));
+      expect(FakeSocket.instances).toHaveLength(0);
+    });
+  });
 });

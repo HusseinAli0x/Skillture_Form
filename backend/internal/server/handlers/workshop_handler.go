@@ -47,23 +47,40 @@ type workshop struct {
 	Registration *string         `json:"registration_url"`
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
+
+	// Built-in registration (see workshop_registration.go).
+	RegistrationOpen bool `json:"registration_open"`
+	Capacity         *int `json:"capacity"`
+	// Registered is how many people have signed up so far.
+	Registered int `json:"registered"`
+	// SpotsLeft is nil when the workshop has no seat limit.
+	SpotsLeft *int `json:"spots_left"`
+	// RegistrationStatus is what the public page needs to decide whether to
+	// show the form: "open", "full", "closed" (switched off) or "ended".
+	RegistrationStatus string `json:"registration_status"`
 }
 
 const workshopSelectCols = `id, title, description, extra_info, image_path, event_date, event_time,
-	track, location, speaker, attendees, outcome, recap, gallery, registration_url, created_at, updated_at`
+	track, location, speaker, attendees, outcome, recap, gallery, registration_url, created_at, updated_at,
+	registration_open, capacity,
+	(SELECT COUNT(*) FROM workshop_registrations r WHERE r.workshop_id = workshops.id),
+	(event_date < CURRENT_DATE)`
 
 func scanWorkshop(row pgx.Row) (workshop, error) {
 	var w workshop
 	var eventDate time.Time
 	var extraInfo, outcome, recap *json.RawMessage
 	var gallery []byte
+	var isPast bool
 	if err := row.Scan(
 		&w.ID, &w.Title, &w.Description, &extraInfo, &w.ImagePath, &eventDate, &w.EventTime,
 		&w.Track, &w.Location, &w.Speaker, &w.Attendees, &outcome, &recap, &gallery, &w.Registration,
 		&w.CreatedAt, &w.UpdatedAt,
+		&w.RegistrationOpen, &w.Capacity, &w.Registered, &isPast,
 	); err != nil {
 		return w, err
 	}
+	w.SpotsLeft, w.RegistrationStatus = registrationState(isPast, w.RegistrationOpen, w.Capacity, w.Registered)
 	if outcome != nil {
 		w.Outcome = *outcome
 	}
@@ -271,7 +288,15 @@ type workshopWriteRequest struct {
 	Recap        map[string]string `json:"recap"`
 	Gallery      []string          `json:"gallery"`
 	Registration *string           `json:"registration_url"`
+
+	// Built-in registration. RegistrationOpen defaults to true when omitted so
+	// existing clients keep working; Capacity nil means no seat limit.
+	RegistrationOpen *bool `json:"registration_open"`
+	Capacity         *int  `json:"capacity"`
 }
+
+// maxWorkshopCapacity is a sanity bound, not a business rule.
+const maxWorkshopCapacity = 100000
 
 const maxGalleryImages = 12
 
@@ -294,6 +319,10 @@ func (req *workshopWriteRequest) normalize() {
 	if req.Gallery == nil {
 		req.Gallery = []string{}
 	}
+	if req.RegistrationOpen == nil {
+		open := true
+		req.RegistrationOpen = &open
+	}
 }
 
 func (req workshopWriteRequest) validate() error {
@@ -302,6 +331,9 @@ func (req workshopWriteRequest) validate() error {
 	}
 	if req.Attendees != nil && *req.Attendees < 0 {
 		return fmt.Errorf("attendees cannot be negative")
+	}
+	if req.Capacity != nil && (*req.Capacity < 1 || *req.Capacity > maxWorkshopCapacity) {
+		return fmt.Errorf("capacity must be between 1 and %d, or left empty for no limit", maxWorkshopCapacity)
 	}
 	if req.Registration != nil && !isHTTPURL(*req.Registration) {
 		return fmt.Errorf("registration_url must be an http(s) URL")
@@ -342,11 +374,11 @@ func (h *WorkshopHandler) Create(c *gin.Context) {
 	_, err := h.pool.Exec(c.Request.Context(), `
 		INSERT INTO workshops (id, title, description, extra_info, image_path, event_date, event_time,
 		                       track, location, speaker, attendees, outcome, recap, gallery, registration_url,
-		                       created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW())
+		                       registration_open, capacity, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW())
 	`, id, req.Title, req.Description, nullableMap(req.ExtraInfo), req.ImagePath, req.EventDate, req.EventTime,
 		req.Track, req.Location, req.Speaker, req.Attendees, nullableMap(req.Outcome), nullableMap(req.Recap),
-		req.Gallery, req.Registration)
+		req.Gallery, req.Registration, *req.RegistrationOpen, req.Capacity)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create workshop"})
 		return
@@ -367,6 +399,9 @@ func (h *WorkshopHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
 		return
 	}
+	// Omitted means "leave as it is" on an update (normalize would default it
+	// to open, which is right only for a new workshop).
+	registrationOpen := req.RegistrationOpen
 	req.normalize()
 	if err := req.validate(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -378,11 +413,12 @@ func (h *WorkshopHandler) Update(c *gin.Context) {
 		SET title = $1, description = $2, extra_info = $3, image_path = $4,
 		    event_date = $5, event_time = $6, track = $7, location = $8, speaker = $9,
 		    attendees = $10, outcome = $11, recap = $12, gallery = $13, registration_url = $14,
+		    registration_open = COALESCE($15, registration_open), capacity = $16,
 		    updated_at = NOW()
-		WHERE id = $15
+		WHERE id = $17
 	`, req.Title, req.Description, nullableMap(req.ExtraInfo), req.ImagePath, req.EventDate, req.EventTime,
 		req.Track, req.Location, req.Speaker, req.Attendees, nullableMap(req.Outcome), nullableMap(req.Recap),
-		req.Gallery, req.Registration, id)
+		req.Gallery, req.Registration, registrationOpen, req.Capacity, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update workshop"})
 		return

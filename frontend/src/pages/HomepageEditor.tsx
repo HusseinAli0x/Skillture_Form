@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { ExternalLink } from 'lucide-react';
 import client from '../api/client';
 import { useToastStore } from '../context/ToastStore';
@@ -196,8 +197,12 @@ const HomepageEditor: React.FC = () => {
       />
 
       <p className="rounded-lg border border-border bg-panel px-4 py-3 text-sm text-muted leading-relaxed">
-        These texts are the <strong className="text-text font-semibold">English</strong> homepage. The Arabic homepage uses
-        fixed translations written into the site, so changes here do not appear when a visitor switches to Arabic.
+        These texts are the <strong className="text-text font-semibold">English</strong> homepage. The Arabic homepage text
+        is edited in{' '}
+        <Link to="/admin/site" className="text-primary underline underline-offset-2">
+          Site content
+        </Link>
+        , so changes here do not appear when a visitor switches to Arabic.
       </p>
 
       {isLoading ? (

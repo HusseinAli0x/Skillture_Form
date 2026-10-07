@@ -130,6 +130,8 @@ export interface Quiz {
   status: QuizStatus;
   created_at: string;
   updated_at: string;
+  /** Made by a visitor on the public site rather than by an admin. */
+  by_visitor?: boolean;
 }
 
 // enums.QuizQuestionType is a string enum.

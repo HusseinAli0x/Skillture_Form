@@ -3,6 +3,11 @@ package quiz
 import (
 	"context"
 	"errors"
+	"fmt"
+	"regexp"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"skillture/backend/internal/domain/entities"
 	domainErrors "skillture/backend/internal/domain/errors"
@@ -53,8 +58,15 @@ func NewQuizPlayerUseCase(
 //   - Session must not be finished
 //   - Nickname must be unique within the session
 func (u *quizPlayerUseCase) JoinSession(ctx context.Context, sessionID uuid.UUID, name string, avatarID *int16, avatarURL *string) (*entities.QuizPlayer, error) {
-	if name == "" {
-		return nil, errors.New("player name is required")
+	// Anyone with a PIN can call this, so everything a player supplies is
+	// bounded here: it is stored, and broadcast to every screen in the room.
+	name, err := cleanPlayerName(name)
+	if err != nil {
+		return nil, err
+	}
+	avatarURL, err = cleanAvatarURL(avatarURL)
+	if err != nil {
+		return nil, err
 	}
 
 	session, err := u.sessionRepo.GetByID(ctx, sessionID)
@@ -69,14 +81,28 @@ func (u *quizPlayerUseCase) JoinSession(ctx context.Context, sessionID uuid.UUID
 	if session.IsFinished() {
 		return nil, domainErrors.ErrSessionFinished
 	}
+	joined, err := u.playerRepo.CountBySessionID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if joined >= MaxPlayersPerSession {
+		return nil, domainErrors.ErrSessionFull
+	}
+
+	// The secret is returned to the player once; only its hash is stored.
+	secret, secretHash, err := entities.NewPlayerSecret()
+	if err != nil {
+		return nil, fmt.Errorf("JoinSession: %w", err)
+	}
 
 	player := &entities.QuizPlayer{
-		ID:        uuid.New(),
-		SessionID: sessionID,
-		Name:      name,
-		Score:     0,
-		AvatarID:  avatarID,
-		AvatarURL: avatarURL,
+		ID:         uuid.New(),
+		SessionID:  sessionID,
+		Name:       name,
+		Score:      0,
+		AvatarID:   avatarID,
+		AvatarURL:  avatarURL,
+		SecretHash: &secretHash,
 	}
 
 	if err := u.playerRepo.Create(ctx, player); err != nil {
@@ -90,6 +116,7 @@ func (u *quizPlayerUseCase) JoinSession(ctx context.Context, sessionID uuid.UUID
 		return nil, err
 	}
 
+	player.Secret = secret
 	return player, nil
 }
 
@@ -101,4 +128,46 @@ func (u *quizPlayerUseCase) GetPlayer(ctx context.Context, playerID uuid.UUID) (
 // GetLeaderboard returns all players in a session sorted by score DESC.
 func (u *quizPlayerUseCase) GetLeaderboard(ctx context.Context, sessionID uuid.UUID) ([]*entities.QuizPlayer, error) {
 	return u.playerRepo.ListBySessionID(ctx, sessionID)
+}
+
+// Limits on what a joining player may send.
+const (
+	// MaxPlayerNameLen is in characters, not bytes: Arabic names are 2 bytes each.
+	MaxPlayerNameLen = 24
+	// MaxAvatarDataURLLen bounds an uploaded avatar. The client shrinks photos
+	// to a 160px JPEG of a few kilobytes; this leaves generous headroom.
+	MaxAvatarDataURLLen = 100_000
+	// MaxPlayersPerSession bounds a single game's roster.
+	MaxPlayersPerSession = 200
+)
+
+// An avatar is an inline raster image. Anything else — notably an http(s) URL,
+// which every viewer's browser would then fetch from a host the player picked —
+// is refused.
+var avatarDataURL = regexp.MustCompile(`^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*$`)
+
+func cleanPlayerName(raw string) (string, error) {
+	name := strings.Join(strings.Fields(raw), " ")
+	if name == "" {
+		return "", fmt.Errorf("%w: player name is required", domainErrors.ErrInvalidInput)
+	}
+	if utf8.RuneCountInString(name) > MaxPlayerNameLen {
+		return "", fmt.Errorf("%w: player name must be at most %d characters", domainErrors.ErrInvalidInput, MaxPlayerNameLen)
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			return "", fmt.Errorf("%w: player name contains invalid characters", domainErrors.ErrInvalidInput)
+		}
+	}
+	return name, nil
+}
+
+func cleanAvatarURL(raw *string) (*string, error) {
+	if raw == nil || *raw == "" {
+		return nil, nil
+	}
+	if len(*raw) > MaxAvatarDataURLLen || !avatarDataURL.MatchString(*raw) {
+		return nil, fmt.Errorf("%w: avatar must be a small inline image", domainErrors.ErrInvalidInput)
+	}
+	return raw, nil
 }

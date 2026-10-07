@@ -1,10 +1,11 @@
 import React from 'react';
-import { Calendar, Clock, Copy, ExternalLink, MapPin, Pencil, Search, Trash2, User, Users, X } from 'lucide-react';
-import { IconButton, Input, Select } from '../../ui';
+import { Calendar, Clock, Copy, ExternalLink, MapPin, Pencil, Search, Ticket, Trash2, User, Users, X } from 'lucide-react';
+import { Button, IconButton, Input, Select } from '../../ui';
 import {
   TRACKS,
   needsRecap,
   phaseOf,
+  registeredCompact,
   type Phase,
   type Track,
   type Workshop,
@@ -105,10 +106,14 @@ interface RowProps {
   onEdit: (w: Workshop) => void;
   onDuplicate: (w: Workshop) => void;
   onDelete: (w: Workshop) => void;
+  onRegistrants: (w: Workshop) => void;
 }
 
-const Row: React.FC<RowProps> = ({ workshop: w, onEdit, onDuplicate, onDelete }) => {
+const Row: React.FC<RowProps> = ({ workshop: w, onEdit, onDuplicate, onDelete, onRegistrants }) => {
   const phase = phaseOf(w);
+  const registered = w.registered ?? 0;
+  const seatsFull = Boolean(w.capacity) && registered >= (w.capacity ?? 0);
+  const signupsOff = phase === 'upcoming' && w.registration_open === false;
   const recap = needsRecap(w);
   return (
     <li className="group flex flex-col sm:flex-row sm:items-stretch gap-1 sm:gap-4 py-3 border-t border-border first:border-t-0">
@@ -146,6 +151,16 @@ const Row: React.FC<RowProps> = ({ workshop: w, onEdit, onDuplicate, onDelete })
                 Add results
               </span>
             )}
+            {phase === 'upcoming' && seatsFull && (
+              <span className="text-[11px] font-medium px-1.5 py-0.5 rounded border border-warning-border bg-warning-soft text-warning">
+                Full
+              </span>
+            )}
+            {signupsOff && (
+              <span className="text-[11px] font-medium px-1.5 py-0.5 rounded border border-border-strong text-muted">
+                Sign-ups off
+              </span>
+            )}
           </div>
           <p className="font-semibold text-text sm:truncate">{w.title.en}</p>
           <p lang="ar" dir="rtl" className="text-xs text-muted truncate w-fit max-w-full">
@@ -172,8 +187,13 @@ const Row: React.FC<RowProps> = ({ workshop: w, onEdit, onDuplicate, onDelete })
                 <span className="truncate max-w-[10rem]">{w.speaker}</span>
               </span>
             )}
+            {(phase === 'upcoming' || registered > 0) && (
+              <span className="inline-flex items-center gap-1" title="People who registered on the website">
+                <Ticket aria-hidden="true" className="w-3.5 h-3.5" /> {registeredCompact(registered, w.capacity)}
+              </span>
+            )}
             {w.attendees != null && (
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1" title="Attendees">
                 <Users aria-hidden="true" className="w-3.5 h-3.5" /> {w.attendees}
               </span>
             )}
@@ -182,6 +202,15 @@ const Row: React.FC<RowProps> = ({ workshop: w, onEdit, onDuplicate, onDelete })
         </div>
       </button>
       <div className="flex items-center justify-end gap-0.5 shrink-0 border-t border-border pt-1 sm:border-0 sm:pt-0">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="me-1.5"
+          aria-label={`Registrants for ${w.title.en}`}
+          onClick={() => onRegistrants(w)}
+        >
+          <Users aria-hidden="true" className="w-3.5 h-3.5" /> Registrants
+        </Button>
         <a
           href={`/workshops/${w.id}`}
           target="_blank"

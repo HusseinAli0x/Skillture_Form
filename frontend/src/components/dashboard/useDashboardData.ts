@@ -57,7 +57,9 @@ export function useDashboardData() {
           client.get<Quiz[]>('/api/v1/quizzes'),
         ]);
         loadedForms = list<Form>(fRes.data);
-        loadedQuizzes = list<Quiz>(qRes.data);
+        // Games visitors made on the public site are not the admin's to count,
+        // and would add a request each to the activity panels below.
+        loadedQuizzes = list<Quiz>(qRes.data).filter(q => !q.by_visitor);
       } catch {
         if (!cancelled) setState('error');
         return;

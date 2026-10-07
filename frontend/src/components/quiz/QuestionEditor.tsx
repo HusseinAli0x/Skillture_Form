@@ -12,6 +12,8 @@ import {
   type QuestionState,
 } from './questionState';
 import { newId } from '../../lib/id';
+import { hostEn, type HostStrings } from '../../lib/hostSiteStrings';
+import { fill } from './quizText';
 
 /** Number inputs hand back '' while being cleared, which parseInt turns into NaN. */
 const toNumber = (raw: string, fallback: number) => {
@@ -33,6 +35,8 @@ interface Props {
   issues?: QuestionIssue[];
   /** Put the cursor in the question text on mount (a question that was just added). */
   autoFocus?: boolean;
+  /** Wording; English unless the public builder passes its own language. */
+  text?: HostStrings['editor'];
 }
 
 /**
@@ -52,6 +56,7 @@ const QuestionEditor: React.FC<Props> = ({
   onDuplicate,
   issues = [],
   autoFocus = false,
+  text: t = hostEn.editor,
 }) => {
   const isCorrect = (optionId: string) => question.correctOptionId === optionId;
   const root = useRef<HTMLDivElement>(null);
@@ -87,7 +92,7 @@ const QuestionEditor: React.FC<Props> = ({
   const addOption = () => {
     focusIndex.current = question.options.length;
     onChange({
-      options: [...question.options, { id: newId(), value: `Option ${question.options.length + 1}` }],
+      options: [...question.options, { id: newId(), value: fill(t.option, { n: question.options.length + 1 }) }],
     });
   };
 
@@ -112,15 +117,15 @@ const QuestionEditor: React.FC<Props> = ({
     >
       <div className="flex items-center justify-between gap-3 border-b border-border bg-hover-overlay px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-primary px-2 font-display text-base font-extrabold text-ink">
+          <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-primary px-2 font-display text-base font-extrabold text-bg">
             {index + 1}
           </span>
-          <span className="sr-only">Question {index + 1}</span>
+          <span className="sr-only">{fill(t.question, { n: index + 1 })}</span>
           <div className="flex items-center gap-1">
-            <IconButton label="Move question up" disabled={index === 0} onClick={() => onMove('up')}>
+            <IconButton label={t.moveUp} disabled={index === 0} onClick={() => onMove('up')}>
               <ArrowUp className="h-4 w-4" />
             </IconButton>
-            <IconButton label="Move question down" disabled={index === total - 1} onClick={() => onMove('down')}>
+            <IconButton label={t.moveDown} disabled={index === total - 1} onClick={() => onMove('down')}>
               <ArrowDown className="h-4 w-4" />
             </IconButton>
           </div>
@@ -128,11 +133,11 @@ const QuestionEditor: React.FC<Props> = ({
 
         <div className="flex items-center gap-1">
           {onDuplicate && (
-            <IconButton label="Duplicate question" tone="primary" onClick={onDuplicate}>
+            <IconButton label={t.duplicate} tone="primary" onClick={onDuplicate}>
               <Copy className="h-4 w-4" />
             </IconButton>
           )}
-          <IconButton label="Remove question" tone="danger" disabled={total === 1} onClick={onRemove}>
+          <IconButton label={t.remove} tone="danger" disabled={total === 1} onClick={onRemove}>
             <Trash2 className="h-4 w-4" />
           </IconButton>
         </div>
@@ -141,13 +146,13 @@ const QuestionEditor: React.FC<Props> = ({
       <div className="space-y-5 p-5">
         <div>
           <Label htmlFor={fieldId('text')} required>
-            Question Text
+            {t.questionText}
           </Label>
           <Input
             id={fieldId('text')}
             value={question.question}
             onChange={e => onChange({ question: e.target.value })}
-            placeholder="Enter your question..."
+            placeholder={t.questionPlaceholder}
             invalid={!!issue('text')}
             autoFocus={autoFocus}
             className="!px-3 !py-2.5 font-display !text-lg font-semibold"
@@ -155,26 +160,26 @@ const QuestionEditor: React.FC<Props> = ({
           {problem('text')}
         </div>
 
-        <div role="radiogroup" aria-label="Question type" className="grid grid-cols-3 gap-1 rounded-xl border border-border bg-bg p-1">
-          {(Object.keys(QUESTION_TYPE_LABELS) as QuizQuestionType[]).map(t => (
+        <div role="radiogroup" aria-label={t.questionType} className="grid grid-cols-3 gap-1 rounded-xl border border-border bg-bg p-1">
+          {(Object.keys(QUESTION_TYPE_LABELS) as QuizQuestionType[]).map(type => (
             <button
-              key={t}
+              key={type}
               type="button"
               role="radio"
-              aria-checked={question.type === t}
-              onClick={() => setType(t)}
+              aria-checked={question.type === type}
+              onClick={() => setType(type)}
               className={`rounded-lg px-2 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                question.type === t ? 'bg-primary text-ink' : 'text-muted hover:bg-hover-overlay-strong hover:text-text'
+                question.type === type ? 'bg-primary text-bg' : 'text-muted hover:bg-hover-overlay-strong hover:text-text'
               }`}
             >
-              {QUESTION_TYPE_LABELS[t]}
+              {t.types[type]}
             </button>
           ))}
         </div>
 
         <div className="rounded-xl border border-border bg-hover-overlay p-4">
           <Label required className="mb-3">
-            Answers
+            {t.answers}
           </Label>
 
           {question.type === 'mcq' && (
@@ -188,10 +193,10 @@ const QuestionEditor: React.FC<Props> = ({
                       onClick={() => onChange({ correctOptionId: opt.id })}
                       role="radio"
                       aria-checked={isCorrect(opt.id)}
-                      aria-label={`Mark option ${optIdx + 1} correct`}
-                      title="Mark as the correct answer"
+                      aria-label={fill(t.markCorrect, { n: optIdx + 1 })}
+                      title={t.markCorrectTitle}
                       className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                        isCorrect(opt.id) ? 'border-white' : 'border-transparent opacity-80 hover:opacity-100'
+                        isCorrect(opt.id) ? 'border-text' : 'border-transparent opacity-80 hover:opacity-100'
                       }`}
                       style={{ backgroundColor: style.bg, color: '#050909' }}
                     >
@@ -214,12 +219,12 @@ const QuestionEditor: React.FC<Props> = ({
                           }
                         }
                       }}
-                      placeholder={`Option ${optIdx + 1}`}
-                      aria-label={`Option ${optIdx + 1}`}
+                      placeholder={fill(t.option, { n: optIdx + 1 })}
+                      aria-label={fill(t.option, { n: optIdx + 1 })}
                       className={`flex-1 !px-3 !py-2 ${isCorrect(opt.id) ? '!border-primary' : ''}`}
                     />
                     {question.options.length > 2 && (
-                      <IconButton label={`Remove option ${optIdx + 1}`} tone="danger" onClick={() => removeOption(opt.id)}>
+                      <IconButton label={fill(t.removeOption, { n: optIdx + 1 })} tone="danger" onClick={() => removeOption(opt.id)}>
                         <Trash2 className="h-4 w-4" />
                       </IconButton>
                     )}
@@ -232,8 +237,8 @@ const QuestionEditor: React.FC<Props> = ({
                   onClick={addOption}
                   className="mt-1 flex items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:text-primary-hover"
                 >
-                  <Plus className="h-4 w-4" /> Add Option
-                  <span className="text-muted">(or press Enter in the last answer)</span>
+                  <Plus className="h-4 w-4" aria-hidden="true" /> {t.addOption}
+                  <span className="text-muted">{t.addOptionHint}</span>
                 </button>
               )}
               {problem('options')}
@@ -251,7 +256,7 @@ const QuestionEditor: React.FC<Props> = ({
                     onClick={() => onChange({ correctOptionId: opt.id })}
                     aria-pressed={isCorrect(opt.id)}
                     className={`flex flex-1 items-center justify-center gap-2 rounded-lg border-2 py-3 text-sm font-semibold transition-colors ${
-                      isCorrect(opt.id) ? 'border-white text-ink' : 'border-border text-muted hover:border-border-strong hover:text-text'
+                      isCorrect(opt.id) ? 'border-text text-ink' : 'border-border text-muted hover:border-border-strong hover:text-text'
                     }`}
                     style={isCorrect(opt.id) ? { backgroundColor: style.bg } : undefined}
                   >
@@ -268,12 +273,12 @@ const QuestionEditor: React.FC<Props> = ({
               <Input
                 value={question.correctOptionId}
                 onChange={e => onChange({ correctOptionId: e.target.value })}
-                placeholder="Type the exact correct answer here..."
-                aria-label="Correct answer"
+                placeholder={t.shortPlaceholder}
+                aria-label={t.correctAnswer}
                 invalid={!!issue('answer')}
                 className="!px-3 !py-2"
               />
-              <p className="mt-2 text-xs text-muted">Players type their answer. It must match exactly, ignoring capitals and extra spaces.</p>
+              <p className="mt-2 text-xs text-muted">{t.shortHint}</p>
             </div>
           )}
           {problem('answer')}
@@ -281,7 +286,7 @@ const QuestionEditor: React.FC<Props> = ({
 
         <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
           <div>
-            <Label htmlFor={fieldId('time')}>Time (sec)</Label>
+            <Label htmlFor={fieldId('time')}>{t.time}</Label>
             <div className="flex items-center gap-2">
               <Input
                 id={fieldId('time')}
@@ -292,7 +297,7 @@ const QuestionEditor: React.FC<Props> = ({
                 onChange={e => onChange({ timeLimit: toNumber(e.target.value, 15) })}
                 className="!w-24 !px-3 !py-2"
               />
-              <div className="hidden gap-1 sm:flex" aria-label="Time presets" role="group">
+              <div className="hidden gap-1 sm:flex" aria-label={t.timePresets} role="group">
                 {TIME_PRESETS.map(s => (
                   <button
                     key={s}
@@ -311,7 +316,7 @@ const QuestionEditor: React.FC<Props> = ({
             {problem('time')}
           </div>
           <div>
-            <Label htmlFor={fieldId('points')}>Points</Label>
+            <Label htmlFor={fieldId('points')}>{t.points}</Label>
             <Input
               id={fieldId('points')}
               type="number"

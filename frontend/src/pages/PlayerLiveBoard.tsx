@@ -168,6 +168,7 @@ const Board: React.FC<{ playerId: string }> = ({ playerId }) => {
       try {
         const res = await client.post<Reply>(`/api/v1/sessions/${sessionId}/answer`, {
           player_id: playerId,
+          secret: recallPlayer(playerId)?.secret,
           question_id: q.id,
           answer,
           time_taken_ms: Math.round(performance.now() - answerStartRef.current),
@@ -274,7 +275,7 @@ const Board: React.FC<{ playerId: string }> = ({ playerId }) => {
   // --- socket --------------------------------------------------------------
   const status = useGameSocket({
     enabled: !!sessionId,
-    url: () => playerSocketUrl(sessionId, playerId),
+    url: () => playerSocketUrl(sessionId, playerId, recallPlayer(playerId)?.secret),
     onMessage: msg => {
       switch (msg.type) {
         case 'question':

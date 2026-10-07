@@ -120,7 +120,24 @@ curl -s -X DELETE $BASE/admin/delete/<id-of-admin> -H "Authorization: Bearer $TO
 
 Then confirm the old login now fails with 401.
 
-## 6. Day-to-day
+## 6. What the public can do
+
+The site is built so visitors can act without accounts, so these endpoints are open and protected by
+rate limits and validation instead of logins:
+
+| Visitors can | Limit (per IP) |
+|---|---|
+| create and host quiz games | 20 new games/hour, 30 sessions/hour, 30 games stored per browser |
+| register for a workshop | 60 per 10 minutes |
+| send a contact message | 5 per 10 minutes |
+| look up a game PIN | 120 per minute |
+
+Behind Cloudflare these limits see the real visitor address (§2). They are held in memory, so a
+restart of the container resets them — acceptable for one container, and the reason a second API
+replica would need a shared store first. Visitor-created games that nobody hosted for about six
+months are deleted automatically.
+
+## 7. Day-to-day
 
 **Update**
 
@@ -142,7 +159,7 @@ Migrations are embedded in the binary and run on boot.
 **Renewal** is automatic. Caddy renews about 30 days before expiry as long as ports 80/443 stay
 reachable and the container keeps running.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|

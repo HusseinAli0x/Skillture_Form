@@ -8,6 +8,8 @@ interface Props {
   children: React.ReactNode;
   /** Tailwind max-width class for the panel. */
   maxWidth?: string;
+  /** Accessible name of the close button, for non-English pages. */
+  closeLabel?: string;
 }
 
 const FOCUSABLE =
@@ -17,7 +19,7 @@ const FOCUSABLE =
  * Overlay dialog: Escape and backdrop close it, Tab stays inside it, the page
  * behind does not scroll, and focus returns to whatever opened it.
  */
-const Modal: React.FC<Props> = ({ title, onClose, children, maxWidth = 'max-w-md' }) => {
+const Modal: React.FC<Props> = ({ title, onClose, children, maxWidth = 'max-w-md', closeLabel = 'Close' }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
@@ -95,7 +97,7 @@ const Modal: React.FC<Props> = ({ title, onClose, children, maxWidth = 'max-w-md
             <h2 id={titleId} className="font-semibold text-text text-lg">
               {title}
             </h2>
-            <IconButton label="Close" onClick={onClose}>
+            <IconButton label={closeLabel} onClick={onClose}>
               <X className="w-4 h-4" />
             </IconButton>
           </div>

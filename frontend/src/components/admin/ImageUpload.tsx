@@ -29,6 +29,8 @@ interface Props {
   alt?: string;
   /** Allow clearing the image. Default true. */
   removable?: boolean;
+  /** `contain` shows the whole image (logos); `cover` fills the frame. Default cover. */
+  fit?: 'cover' | 'contain';
 }
 
 /**
@@ -51,6 +53,7 @@ const ImageUpload: React.FC<Props> = ({
   emptyLabel = 'Drop an image here',
   alt = '',
   removable = true,
+  fit = 'cover',
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -128,7 +131,7 @@ const ImageUpload: React.FC<Props> = ({
           ].join(' ')}
         >
           {shown ? (
-            <img src={shown} alt={alt} className="absolute inset-0 w-full h-full object-cover" />
+            <img src={shown} alt={alt} className={`absolute inset-0 w-full h-full ${fit === 'contain' ? 'object-contain p-3' : 'object-cover'}`} />
           ) : (
             <button
               type="button"

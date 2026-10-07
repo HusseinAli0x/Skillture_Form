@@ -199,8 +199,8 @@ func loadLoggingConfig() LoggingConfig {
 func loadCORSConfig() CORSConfig {
 	return CORSConfig{
 		AllowedOrigins:   getEnvSlice("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
-		AllowedHeaders:   getEnvSlice("CORS_ALLOWED_HEADERS", "Content-Type,Authorization,X-Request-ID"),
-		AllowedMethods:   getEnvSlice("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS"),
+		AllowedHeaders:   withHostKeyHeader(getEnvSlice("CORS_ALLOWED_HEADERS", "Content-Type,Authorization,X-Request-ID,X-Host-Key")),
+		AllowedMethods:   getEnvSlice("CORS_ALLOWED_METHODS", "GET,POST,PUT,PATCH,DELETE,OPTIONS"),
 		AllowCredentials: getEnvBool("CORS_ALLOW_CREDENTIALS", true),
 		MaxAge:           getEnvInt("CORS_MAX_AGE", 86400),
 	}
@@ -481,4 +481,16 @@ func getEnvSlice(key, defaultValue string) []string {
 		}
 	}
 	return result
+}
+
+// withHostKeyHeader makes sure visitors' host-key header is always allowed. A
+// CORS_ALLOWED_HEADERS written before visitors could host games would otherwise
+// quietly block hosting from any separate-origin deployment.
+func withHostKeyHeader(headers []string) []string {
+	for _, h := range headers {
+		if strings.EqualFold(h, "X-Host-Key") {
+			return headers
+		}
+	}
+	return append(headers, "X-Host-Key")
 }

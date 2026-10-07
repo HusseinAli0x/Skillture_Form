@@ -1,6 +1,11 @@
 package entities
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -29,6 +34,44 @@ type QuizPlayer struct {
 	// picked a glyph instead, or hasn't picked yet. Mutually exclusive with
 	// AvatarID in practice, but nothing enforces that beyond the join usecase.
 	AvatarURL *string `db:"avatar_url" json:"avatar_url,omitempty"`
+
+	// SecretHash is the SHA-256 of the secret handed to the player when they
+	// joined (see VerifySecret). Never serialised. Nil for players who joined
+	// before secrets existed.
+	SecretHash *string `db:"secret_hash" json:"-"`
+	// Secret is the plain secret. It is set only on the player returned by
+	// JoinSession — the one response that carries it — and is never read back
+	// from the database, so leaderboards and broadcasts never contain it.
+	Secret string `db:"-" json:"secret,omitempty"`
+}
+
+// NewPlayerSecret returns a fresh random secret and the hash to store for it.
+func NewPlayerSecret() (secret, hash string, err error) {
+	raw := make([]byte, 24)
+	if _, err := rand.Read(raw); err != nil {
+		return "", "", err
+	}
+	secret = base64.RawURLEncoding.EncodeToString(raw)
+	return secret, HashPlayerSecret(secret), nil
+}
+
+// HashPlayerSecret is the storage form of a player secret.
+func HashPlayerSecret(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:])
+}
+
+// VerifySecret reports whether the presented secret belongs to this player.
+// A player stored without a secret (joined before migration 0011) is accepted,
+// so a game in progress during an upgrade keeps working.
+func (p *QuizPlayer) VerifySecret(presented string) bool {
+	if p.SecretHash == nil {
+		return true
+	}
+	if presented == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(HashPlayerSecret(presented)), []byte(*p.SecretHash)) == 1
 }
 
 // TableName returns the PostgreSQL table name

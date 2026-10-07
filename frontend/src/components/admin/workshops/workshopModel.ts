@@ -31,6 +31,13 @@ export interface Workshop {
   recap?: Bilingual;
   gallery?: string[];
   registration_url?: string | null;
+  /** On-site sign-ups switched on (the API treats a missing value as on). */
+  registration_open?: boolean;
+  /** Seat limit; null or absent means unlimited. */
+  capacity?: number | null;
+  registered?: number;
+  spots_left?: number | null;
+  registration_status?: 'open' | 'full' | 'closed' | 'ended';
 }
 
 /** Everything the form edits, as strings so inputs stay controlled. */
@@ -53,6 +60,9 @@ export interface WorkshopForm {
   recap_en: string;
   recap_ar: string;
   registration_url: string;
+  registration_open: boolean;
+  /** Seat limit as typed; empty means unlimited. */
+  capacity: string;
   gallery: string[];
 }
 
@@ -75,6 +85,8 @@ export const EMPTY_WORKSHOP_FORM: WorkshopForm = {
   recap_en: '',
   recap_ar: '',
   registration_url: '',
+  registration_open: true,
+  capacity: '',
   gallery: [],
 };
 
@@ -97,6 +109,8 @@ export const workshopToForm = (w: Workshop): WorkshopForm => ({
   recap_en: w.recap?.en || '',
   recap_ar: w.recap?.ar || '',
   registration_url: w.registration_url || '',
+  registration_open: w.registration_open ?? true,
+  capacity: w.capacity == null ? '' : String(w.capacity),
   gallery: w.gallery || [],
 });
 
@@ -119,9 +133,19 @@ export const duplicateForm = (w: Workshop): WorkshopForm => ({
 // backend stores an absent/empty map as NULL.
 const bilingual = (en: string, ar: string) => (en.trim() || ar.trim() ? { en: en.trim(), ar: ar.trim() } : {});
 
+export const MAX_CAPACITY = 100000;
+
+/** "12 / 40 registered", or "12 registered" with no seat limit: the compact form for list rows. */
+export const registeredCompact = (registered: number, capacity?: number | null): string =>
+  capacity ? `${registered} / ${capacity} registered` : `${registered} registered`;
+
+/** "12 of 40 seats taken", or "12 registered" with no seat limit. */
+export const registeredLabel = (registered: number, capacity?: number | null): string =>
+  capacity ? `${registered} of ${capacity} seats taken` : `${registered} registered`;
+
 export const isHttpUrl = (v: string) => /^https?:\/\/\S+$/i.test(v);
 
-/** Body for POST/PUT /api/v1/admin/workshops. Unchanged from the original editor. */
+/** Body for POST/PUT /api/v1/admin/workshops. */
 export function formToPayload(form: WorkshopForm) {
   return {
     title: { en: form.title_en.trim(), ar: form.title_ar.trim() },
@@ -141,6 +165,8 @@ export function formToPayload(form: WorkshopForm) {
     recap: bilingual(form.recap_en, form.recap_ar),
     gallery: form.gallery,
     registration_url: form.registration_url.trim() || null,
+    registration_open: form.registration_open,
+    capacity: form.capacity.trim() ? Number(form.capacity) : null,
   };
 }
 
@@ -159,6 +185,7 @@ export const WORKSHOP_SERVER_FIELDS: Record<string, string> = {
   recap: 'recap',
   gallery: 'gallery',
   registration_url: 'registration_url',
+  capacity: 'capacity',
   image_path: 'image_path',
 };
 
@@ -176,6 +203,10 @@ export function validateWorkshopForm(form: WorkshopForm): FieldErrors {
   const att = form.attendees.trim();
   if (att && !(Number.isInteger(Number(att)) && Number(att) >= 0)) {
     errors.attendees = 'Use a whole number, 0 or more.';
+  }
+  const cap = form.capacity.trim();
+  if (cap && !(Number.isInteger(Number(cap)) && Number(cap) >= 1 && Number(cap) <= MAX_CAPACITY)) {
+    errors.capacity = `Use a whole number from 1 to ${MAX_CAPACITY.toLocaleString('en-US')}, or leave it empty for no limit.`;
   }
   if (form.gallery.length > MAX_GALLERY) errors.gallery = `A gallery holds at most ${MAX_GALLERY} photos.`;
   return errors;

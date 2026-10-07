@@ -56,6 +56,15 @@ browser only ever talks to one origin. `docker-compose.yml` runs that image next
    - Admin dashboard: <http://localhost:5175/admin/dashboard>
    - Backend API: <http://localhost:5175/api/v1> (the API port itself is not published)
 
+### What visitors and admins can do
+
+- **Anyone can host a quiz game** — no account. Each browser owns the games it creates
+  ([`docs/GAME.md`](docs/GAME.md#who-can-host)).
+- **Visitors register for workshops** with a name and email; organisers see and export the list
+  ([`docs/WORKSHOP_REGISTRATION.md`](docs/WORKSHOP_REGISTRATION.md)).
+- **Admins edit the whole public site** — wording in both languages, every photo and logo, the
+  contact email and social links — from *Site content* ([`docs/SITE_CONTENT.md`](docs/SITE_CONTENT.md)).
+
 ### Going live on a domain (skilltrue.club)
 
 `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build` serves the app on

@@ -4,7 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import type { PublicWorkshop } from '../../api/publicTypes';
 import { useLanguageStore } from '../../context/LanguageStore';
 import { localized } from '../../lib/i18n';
-import { siteStrings } from '../../lib/siteStrings';
+import { useSiteStrings } from '../../lib/useSiteContent';
 
 const dateParts = (iso: string, locale: string) => {
   const d = new Date(`${iso}T00:00:00`);
@@ -23,7 +23,7 @@ const dateParts = (iso: string, locale: string) => {
  */
 const WorkshopRow: React.FC<{ workshop: PublicWorkshop; upcoming?: boolean }> = ({ workshop: w, upcoming = false }) => {
   const locale = useLanguageStore(s => s.locale);
-  const S = siteStrings[locale];
+  const S = useSiteStrings();
   const outcome = localized(w.outcome, '', locale);
   const { day, month } = dateParts(w.event_date, locale);
   const track = w.track ? S.tracks[w.track] : null;
@@ -32,11 +32,28 @@ const WorkshopRow: React.FC<{ workshop: PublicWorkshop; upcoming?: boolean }> = 
     .filter(Boolean)
     .join(' · ');
 
+  // A row is one big link to the workshop, but "Register" is a second link
+  // inside it (to the form on that page). Nested anchors are invalid, so the
+  // title link is stretched over the row and Register sits above it.
+  const status = upcoming ? w.registration_status : undefined;
+  const action =
+    status === 'open' ? (
+      <Link
+        to={`/workshops/${w.id}#register`}
+        className="relative z-10 inline-flex items-center min-h-11 font-semibold text-primary underline underline-offset-4 decoration-1 hover:text-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        {S.workshop.registration.register}
+      </Link>
+    ) : status === 'full' ? (
+      <span className="inline-flex items-center min-h-7 rounded-full border border-border-strong px-3 text-xs font-semibold">
+        {S.workshop.registration.full}
+      </span>
+    ) : !upcoming && w.attendees != null ? (
+      <span className="text-muted">{S.ourWork.attendeesCount(w.attendees)}</span>
+    ) : null;
+
   return (
-    <Link
-      to={`/workshops/${w.id}`}
-      className="group grid grid-cols-[4.5rem_1fr_auto] md:grid-cols-[6rem_1fr_9rem_9rem_1.5rem] gap-x-5 gap-y-1 items-start py-6 border-t border-border hover:bg-hover-overlay transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
-    >
+    <div className="group relative grid grid-cols-[4.5rem_1fr_auto] md:grid-cols-[6rem_1fr_9rem_9rem_1.5rem] gap-x-5 gap-y-1 items-start py-6 border-t border-border hover:bg-hover-overlay transition-colors">
       <div>
         <div className="numeral text-4xl md:text-5xl">{day}</div>
         <div className="mt-1.5 text-xs text-muted">{month}</div>
@@ -44,7 +61,12 @@ const WorkshopRow: React.FC<{ workshop: PublicWorkshop; upcoming?: boolean }> = 
 
       <div className="min-w-0">
         <h3 className="text-xl md:text-2xl leading-snug text-pretty group-hover:underline underline-offset-4 decoration-1">
-          {localized(w.title, '', locale)}
+          <Link
+            to={`/workshops/${w.id}`}
+            className="after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-[-2px] focus-visible:after:outline-primary"
+          >
+            {localized(w.title, '', locale)}
+          </Link>
         </h3>
         {outcome && (
           <p className="mt-2 text-base font-medium leading-relaxed text-pretty">
@@ -55,16 +77,22 @@ const WorkshopRow: React.FC<{ workshop: PublicWorkshop; upcoming?: boolean }> = 
       </div>
 
       <div className="hidden md:block text-sm text-muted pt-1.5">{track}</div>
-      <div className="hidden md:block text-sm pt-1.5">
-        {upcoming && w.registration_url ? (
-          <span className="font-semibold text-primary">{S.workshop.register}</span>
-        ) : w.attendees != null ? (
-          <span className="text-muted">{S.ourWork.attendeesCount(w.attendees)}</span>
-        ) : null}
-      </div>
+      {action && (
+        <div
+          className={`col-start-2 row-start-2 md:col-start-auto md:row-start-auto md:block text-sm md:pt-1.5 ${
+            status === 'open' || status === 'full' ? '' : 'hidden'
+          }`}
+        >
+          {action}
+        </div>
+      )}
+      {!action && <div className="hidden md:block" aria-hidden="true" />}
 
-      <ArrowRight className="w-5 h-5 mt-1.5 justify-self-end transition-transform group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1" />
-    </Link>
+      <ArrowRight
+        aria-hidden="true"
+        className="col-start-3 row-start-1 md:col-start-auto md:row-start-auto w-5 h-5 mt-1.5 justify-self-end transition-transform group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1"
+      />
+    </div>
   );
 };
 

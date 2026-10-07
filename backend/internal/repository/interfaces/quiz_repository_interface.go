@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"skillture/backend/internal/domain/entities"
 	"skillture/backend/internal/domain/enums"
@@ -12,6 +13,8 @@ import (
 // QuizFilter holds optional filter criteria for listing quizzes
 type QuizFilter struct {
 	Status *enums.QuizStatus // optional: filter by lifecycle status
+	// OwnerKeyHash limits the list to quizzes created by one visitor.
+	OwnerKeyHash *string
 }
 
 // QuizRepository defines persistence operations for the Quiz aggregate
@@ -26,4 +29,10 @@ type QuizRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	// List retrieves quizzes matching the optional filter.
 	List(ctx context.Context, filter QuizFilter) ([]*entities.Quiz, error)
+	// CountByOwner returns how many quizzes a visitor has created.
+	CountByOwner(ctx context.Context, ownerKeyHash string) (int, error)
+	// DeleteStaleVisitorQuizzes removes visitor-created quizzes created before
+	// cutoff that have not been hosted since. Admin-created quizzes are never
+	// touched. Returns the number deleted.
+	DeleteStaleVisitorQuizzes(ctx context.Context, cutoff time.Time) (int64, error)
 }

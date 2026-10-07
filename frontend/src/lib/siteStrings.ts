@@ -1,4 +1,5 @@
 import type { Locale } from '../context/LanguageStore';
+import { hostAr, hostEn, type HostStrings } from './hostSiteStrings';
 
 /**
  * Copy for the public pages added after the original landing page: Our Work,
@@ -63,6 +64,50 @@ export interface SiteStrings {
     prev: string;
     next: string;
     bookSimilar: string;
+    registration: {
+      title: string;
+      intro: string;
+      name: string;
+      namePlaceholder: string;
+      email: string;
+      emailPlaceholder: string;
+      submit: string;
+      submitting: string;
+      privacy: string;
+      spotsLeft: (n: number) => string;
+      errName: string;
+      errNameLong: string;
+      errEmail: string;
+      errEmailInvalid: string;
+      errEmailLong: string;
+      successTitle: string;
+      successBody: string;
+      successAs: string;
+      another: string;
+      fullTitle: string;
+      fullBody: string;
+      closedTitle: string;
+      closedBody: string;
+      contactUs: string;
+      externalOr: string;
+      external: string;
+      register: string;
+      full: string;
+      errors: {
+        nameRequired: string;
+        nameInvalid: string;
+        nameTooLong: string;
+        emailInvalid: string;
+        notFound: string;
+        ended: string;
+        closed: string;
+        full: string;
+        already: string;
+        rateLimited: string;
+        network: string;
+        server: string;
+      };
+    };
   };
   home: {
     pin: { title: string; hint: string; placeholder: string; button: string; label: string; error: string };
@@ -98,6 +143,8 @@ export interface SiteStrings {
       emailDirect: string;
     };
   };
+  /** Hosting a game without an account (lib/hostSiteStrings.ts). */
+  host: HostStrings;
 }
 
 export const siteStrings: Record<Locale, SiteStrings> = {
@@ -179,6 +226,51 @@ export const siteStrings: Record<Locale, SiteStrings> = {
       prev: 'Previous photo',
       next: 'Next photo',
       bookSimilar: 'Book a session like this',
+      registration: {
+        title: 'Register for this workshop',
+        intro: 'Save your place with your name and email. It takes under a minute.',
+        name: 'Full name',
+        namePlaceholder: 'Your full name',
+        email: 'Email',
+        emailPlaceholder: 'you@example.com',
+        submit: 'Register',
+        submitting: 'Registering…',
+        privacy: 'We use your name and email only to organise this workshop.',
+        spotsLeft: n => (n === 1 ? 'Only 1 spot left' : `${n} spots left`),
+        errName: 'Please enter your name.',
+        errNameLong: 'That name is too long. Please keep it under 120 characters.',
+        errEmail: 'Please enter your email so we can reach you about this workshop.',
+        errEmailInvalid: 'That email does not look right. Check for a missing @ or domain.',
+        errEmailLong: 'That email is too long. Please use an address under 254 characters.',
+        successTitle: 'You are registered',
+        successBody: 'Your place is saved. Here is what we have for you.',
+        successAs: 'Registered as',
+        another: 'Register someone else',
+        fullTitle: 'This workshop is full',
+        fullBody:
+          'Every seat has been taken. Tell us about your group and we can plan a session for you, or look out for the next workshop.',
+        closedTitle: 'Registration is closed',
+        closedBody: 'This workshop is not taking sign-ups right now. Get in touch if you would like to attend.',
+        contactUs: 'Contact us',
+        externalOr: 'or',
+        external: 'register on the organiser’s site',
+        register: 'Register now',
+        full: 'Full',
+        errors: {
+          nameRequired: 'Please enter your name.',
+          nameInvalid: 'That name cannot be used. Please check it and try again.',
+          nameTooLong: 'That name is too long. Please keep it under 120 characters.',
+          emailInvalid: 'That email does not look right. Check for a missing @ or domain.',
+          notFound: 'We could not find this workshop. It may have been removed.',
+          ended: 'This workshop has already taken place, so registration is closed.',
+          closed: 'Registration for this workshop has just closed.',
+          full: 'Sorry, the last seat was just taken. This workshop is now full.',
+          already: 'This email is already registered for this workshop. You are all set.',
+          rateLimited: 'Too many attempts from your connection. Please wait a few minutes and try again.',
+          network: 'We could not reach the server. Check your connection and try again.',
+          server: 'Something went wrong on our side. Your details are still here. Please try again in a moment.',
+        },
+      },
     },
     home: {
       pin: {
@@ -240,6 +332,7 @@ export const siteStrings: Record<Locale, SiteStrings> = {
         emailDirect: 'Or write to us at',
       },
     },
+    host: hostEn,
   },
   ar: {
     common: {
@@ -317,6 +410,50 @@ export const siteStrings: Record<Locale, SiteStrings> = {
       prev: 'الصورة السابقة',
       next: 'الصورة التالية',
       bookSimilar: 'احجز جلسة مثل هذه',
+      registration: {
+        title: 'سجّل في هذه الورشة',
+        intro: 'احجز مكانك باسمك وبريدك الإلكتروني. لن يستغرق الأمر أكثر من دقيقة.',
+        name: 'الاسم الكامل',
+        namePlaceholder: 'اسمك الكامل',
+        email: 'البريد الإلكتروني',
+        emailPlaceholder: 'you@example.com',
+        submit: 'سجّل',
+        submitting: 'جارٍ التسجيل…',
+        privacy: 'نستخدم اسمك وبريدك الإلكتروني فقط لتنظيم هذه الورشة.',
+        spotsLeft: n => (n === 1 ? 'بقي مقعد واحد فقط' : n === 2 ? 'بقي مقعدان فقط' : n <= 10 ? `بقيت ${n} مقاعد` : `بقي ${n} مقعداً`),
+        errName: 'يرجى إدخال اسمك.',
+        errNameLong: 'الاسم طويل جداً. يرجى ألا يتجاوز 120 حرفاً.',
+        errEmail: 'يرجى إدخال بريدك الإلكتروني لنتمكّن من التواصل معك بشأن الورشة.',
+        errEmailInvalid: 'يبدو أن البريد الإلكتروني غير صحيح. تأكّد من وجود @ واسم النطاق.',
+        errEmailLong: 'البريد الإلكتروني طويل جداً. يرجى ألا يتجاوز 254 حرفاً.',
+        successTitle: 'تم تسجيلك',
+        successBody: 'تم حفظ مكانك. هذه هي بياناتك وتفاصيل الورشة.',
+        successAs: 'سُجّل باسم',
+        another: 'سجّل شخصاً آخر',
+        fullTitle: 'اكتمل العدد في هذه الورشة',
+        fullBody: 'تم حجز جميع المقاعد. أخبرنا عن مجموعتك وسنخطّط لجلسة مناسبة لكم، أو تابع الورشة القادمة.',
+        closedTitle: 'التسجيل مغلق',
+        closedBody: 'هذه الورشة لا تستقبل تسجيلات حالياً. تواصل معنا إن رغبت في الحضور.',
+        contactUs: 'تواصل معنا',
+        externalOr: 'أو',
+        external: 'سجّل عبر موقع الجهة المنظّمة',
+        register: 'سجّل الآن',
+        full: 'اكتمل العدد',
+        errors: {
+          nameRequired: 'يرجى إدخال اسمك.',
+          nameInvalid: 'لا يمكن استخدام هذا الاسم. تحقّق منه وحاول مرة أخرى.',
+          nameTooLong: 'الاسم طويل جداً. يرجى ألا يتجاوز 120 حرفاً.',
+          emailInvalid: 'يبدو أن البريد الإلكتروني غير صحيح. تأكّد من وجود @ واسم النطاق.',
+          notFound: 'تعذّر العثور على هذه الورشة. ربما تمت إزالتها.',
+          ended: 'انتهت هذه الورشة بالفعل، لذا أُغلق التسجيل.',
+          closed: 'تم إغلاق التسجيل في هذه الورشة للتو.',
+          full: 'عذراً، تم حجز آخر مقعد للتو. اكتمل العدد في هذه الورشة.',
+          already: 'هذا البريد الإلكتروني مسجّل بالفعل في هذه الورشة. لا حاجة لأي إجراء إضافي.',
+          rateLimited: 'محاولات كثيرة من اتصالك. يرجى الانتظار بضع دقائق ثم المحاولة مرة أخرى.',
+          network: 'تعذّر الوصول إلى الخادم. تحقّق من اتصالك وحاول مرة أخرى.',
+          server: 'حدث خطأ من جانبنا. بياناتك ما زالت هنا. يرجى المحاولة مرة أخرى بعد قليل.',
+        },
+      },
     },
     home: {
       pin: {
@@ -378,5 +515,6 @@ export const siteStrings: Record<Locale, SiteStrings> = {
         emailDirect: 'أو راسلنا على',
       },
     },
+    host: hostAr,
   },
 };

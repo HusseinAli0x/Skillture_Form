@@ -12,7 +12,6 @@ import (
 var (
 	ErrInvalidSessionStatus = errors.New("invalid quiz session status")
 	ErrMissingQuizID        = errors.New("quiz ID is missing")
-	ErrMissingHostID        = errors.New("host ID is missing")
 	ErrMissingSessionPIN    = errors.New("session PIN is missing")
 )
 
@@ -22,10 +21,11 @@ var (
 type QuizSession struct {
 	ID     uuid.UUID `db:"id"                  json:"id"`
 	QuizID uuid.UUID `db:"quiz_id"             json:"quiz_id"`
-	// Nullable: quiz_sessions.host_id is ON DELETE SET NULL so that removing an
-	// admin account does not erase the games they ran. A session always has a
-	// host when it is created — see IsValid.
-	HostID            *uuid.UUID              `db:"host_id"             json:"host_id,omitempty"`
+	// Set for games an admin hosted; NULL for games hosted by a visitor with a
+	// host key (and, via ON DELETE SET NULL, once the admin account is gone).
+	// Control of a session is decided by who owns the quiz, not by this column,
+	// and it is not exposed: session lookups are public.
+	HostID            *uuid.UUID              `db:"host_id"             json:"-"`
 	PIN               string                  `db:"pin"                 json:"pin"`
 	Status            enums.QuizSessionStatus `db:"status"              json:"status"`
 	CurrentQuestionID *uuid.UUID              `db:"current_question_id" json:"current_question_id,omitempty"`
@@ -58,9 +58,6 @@ func (qs *QuizSession) IsFinished() bool {
 func (qs *QuizSession) IsValid() error {
 	if qs.QuizID == uuid.Nil {
 		return ErrMissingQuizID
-	}
-	if qs.HostID == nil || *qs.HostID == uuid.Nil {
-		return ErrMissingHostID
 	}
 	if qs.PIN == "" {
 		return ErrMissingSessionPIN
