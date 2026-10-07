@@ -42,3 +42,8 @@ go.work.sum
 .idea/
 .vscode/
 .DS_Store
+
+# Local artifacts
+*.log
+.DS_Store
+/res/
